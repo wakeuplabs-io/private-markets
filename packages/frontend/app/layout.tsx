@@ -1,18 +1,32 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { DM_Sans, Lato } from "next/font/google";
 import "./globals.css";
+import { WalletProvider } from "./context";
 
-const inter = Inter({ subsets: ["latin"] });
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-dm-sans"
+});
+
+const lato = Lato({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-lato"
+});
 
 export const metadata: Metadata = {
-  title: "ZKPassport SDK Example",
-  description: "Example of using the ZKPassport SDK for identity verification",
+  title: "Aztec Prediction Markets",
+  description: "Private betting with zero-knowledge proofs on cross-chain markets",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className="dark">
+      <body className={`${dmSans.variable} ${lato.variable} font-sans antialiased`}>
+        <WalletProvider>
+          {children}
+        </WalletProvider>
+      </body>
     </html>
   );
 }
