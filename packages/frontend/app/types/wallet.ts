@@ -1,3 +1,6 @@
+import type { AzguardClient } from "@azguardwallet/client";
+import type { PXE } from "@aztec/aztec.js";
+
 export type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 export type WalletType = 'aztec' | 'ethereum' | 'metamask'
@@ -10,6 +13,9 @@ export interface WalletInfo {
     eth?: string
     usdc?: string
   }
+  azguardClient?: AzguardClient
+  pxe?: PXE
+  accounts?: string[]
 }
 
 export interface WalletState {
@@ -21,4 +27,9 @@ export interface WalletState {
 export interface ConnectWalletOptions {
   type: WalletType
   chainId?: number
+}
+
+export interface ConnectResult {
+  client: AzguardClient
+  pxe?: PXE
 }

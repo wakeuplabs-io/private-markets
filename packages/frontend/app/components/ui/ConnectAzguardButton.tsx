@@ -1,15 +1,15 @@
 // components/ui/ConnectAzguardButton.tsx
 "use client";
 
-import { useAzguardConnect } from "@/hooks/useAzguardConnect";
+import { useWallet } from "@/context";
 import { Button } from "@/components/ui/Button";
 
 export default function ConnectAzguardButton() {
-  const { state, connect, disconnect, reset } = useAzguardConnect();
+  const { status, wallet, error, connectWallet, disconnectWallet, resetWallet, isConnecting, isConnected } = useWallet();
 
-  if (state.status === "connected") {
-    const hasAccounts = state.client.accounts.length > 0;
-    const primaryAccount = hasAccounts ? state.client.accounts[0] : null;
+  if (isConnected && wallet) {
+    const hasAccounts = wallet.accounts && wallet.accounts.length > 0;
+    const primaryAccount = hasAccounts ? wallet.accounts![0] : wallet.address;
 
     return (
       <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card/50 backdrop-blur-sm">
@@ -21,16 +21,16 @@ export default function ConnectAzguardButton() {
               Address: {primaryAccount.slice(0, 8)}...{primaryAccount.slice(-6)}
             </div>
           )}
-          {state.client.accounts.length > 1 && (
+          {wallet.accounts && wallet.accounts.length > 1 && (
             <div className="text-muted-foreground text-xs">
-              +{state.client.accounts.length - 1} more accounts
+              +{wallet.accounts.length - 1} more accounts
             </div>
           )}
         </div>
         <Button
           variant="ghost"
           size="sm"
-          onClick={disconnect}
+          onClick={disconnectWallet}
           className="ml-auto"
         >
           Disconnect
@@ -39,15 +39,15 @@ export default function ConnectAzguardButton() {
     );
   }
 
-  if (state.status === "error") {
+  if (status === "error") {
     return (
       <div className="flex flex-col gap-2 p-3 rounded-lg border border-red-200 bg-red-50">
         <div className="text-sm font-semibold text-red-800">Connection Error</div>
-        <div className="text-xs text-red-600">{state.error}</div>
+        <div className="text-xs text-red-600">{error}</div>
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => reset()}
+          onClick={() => resetWallet()}
           className="self-start"
         >
           Try Again
@@ -58,13 +58,13 @@ export default function ConnectAzguardButton() {
 
   return (
     <Button
-      onClick={connect}
-      disabled={state.status === "connecting"}
+      onClick={() => connectWallet('aztec')}
+      disabled={isConnecting}
       variant="default"
       size="md"
       className="font-semibold"
     >
-      {state.status === "connecting" ? "Connecting..." : "Log In"}
+      {isConnecting ? "Connecting..." : "Log In"}
     </Button>
   );
 }

@@ -10,7 +10,10 @@
     "build": "npm run build --workspace=packages/frontend",
     "build:frontend": "npm run build --workspace=packages/frontend",
     "start": "npm run start --workspace=packages/frontend",
-    "start:frontend": "npm run start --workspace=packages/frontend"
+    "start:frontend": "npm run start --workspace=packages/frontend",
+    "avm:deploy:token": "npm run deploy:token --workspace=packages/avm",
+    "avm:deploy:vault": "npm run deploy:vault --workspace=packages/avm",
+    "avm:call:bet": "npm run call:bet --workspace=packages/avm"
   },
   "keywords": [],
   "author": "",
