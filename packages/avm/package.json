@@ -1,0 +1,20 @@
+{
+  "name": "@private-markets/avm",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "deploy:token": "node --import tsx/esm scripts/deploy_token.ts",
+    "deploy:vault": "node --import tsx/esm scripts/deploy_vault.ts",
+    "call:bet": "node --import tsx/esm scripts/call_bet.ts"
+  },
+  "dependencies": {
+    "@aztec/aztec.js": "^1.2.0",
+    "@aztec/accounts": "^1.2.0",
+    "@aztec/noir-contracts.js": "^1.2.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "@types/node": "^22.9.0"
+  }
+}
