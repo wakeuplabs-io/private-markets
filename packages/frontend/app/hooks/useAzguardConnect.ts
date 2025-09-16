@@ -18,31 +18,26 @@ export function useAzguardConnect() {
     try {
       setState({ status: "connecting" });
 
-      // Check if Azguard is available
       if (!(await isAzguardAvailable())) {
         throw new Error(
           "Azguard Wallet no está instalado. Por favor instala Azguard Wallet y recarga la página."
         );
       }
 
-      // Create Azguard client
       const client = await createAzguardClient();
       if (!client) {
-        throw new Error("No se pudo crear el cliente de Azguard Wallet.");
+        throw new Error("Could not create Azguard Wallet client.");
       }
 
-      // Connect to Azguard with dApp metadata
       const connection = await connectToAzguard(client);
       if (!connection) {
-        throw new Error("Falló la conexión con Azguard Wallet.");
+        throw new Error("Connection failed.");
       }
 
-      // Check if client is connected
       if (!connection.client.connected) {
-        throw new Error("Azguard Wallet no se conectó correctamente.");
+        throw new Error("Azguard Wallet did not connect correctly.");
       }
 
-      // Optional: Create PXE client for direct Aztec interactions
       let pxe: PXE | undefined;
       try {
         const pxeUrl = process.env.NEXT_PUBLIC_PXE_URL ?? "http://localhost:8080";
@@ -50,7 +45,6 @@ export function useAzguardConnect() {
         await waitForPXE(pxe);
       } catch (pxeError) {
         console.warn("PXE connection failed, continuing without direct PXE:", pxeError);
-        // Don't fail the connection if PXE is not available
       }
 
       setState({
@@ -72,8 +66,6 @@ export function useAzguardConnect() {
   const disconnect = useCallback(async () => {
     try {
       if (state.status === "connected") {
-        // Note: Official client might not have disconnect method yet
-        // For now, we'll just reset the state
         console.log("Disconnecting from Azguard...");
       }
     } catch (error) {
