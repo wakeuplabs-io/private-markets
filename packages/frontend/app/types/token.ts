@@ -5,6 +5,7 @@ export interface TokenInfo {
   symbol: string;
   decimals: number;
   address: AztecAddress;
+  privateBalance?: bigint;
 }
 
 export type TokenInfoState =
@@ -18,6 +19,8 @@ export interface ITokenService {
   getTokenName(address: string): Promise<string>;
   getTokenSymbol(address: string): Promise<string>;
   getTokenDecimals(address: string): Promise<number>;
+  getPrivateBalance(address: string, owner: AztecAddress): Promise<bigint>;
+  mintToPrivate(address: string, recipient: AztecAddress, amount: bigint): Promise<string>;
 }
 
 export interface TokenDisplayProps {
@@ -25,4 +28,23 @@ export interface TokenDisplayProps {
   loading?: boolean;
   error?: string;
   className?: string;
+}
+
+export interface TokenActions {
+  mintToPrivate: (recipient: AztecAddress, amount: bigint) => Promise<string>;
+  refreshBalance: () => Promise<void>;
+}
+
+export type TokenActionsState = {
+  isMinting: boolean;
+  isRefreshing: boolean;
+  mintError?: string;
+  balanceError?: string;
+  lastTxHash?: string;
+};
+
+export interface TokenWithActions {
+  tokenInfo?: TokenInfo;
+  actions: TokenActions;
+  state: TokenActionsState;
 }

@@ -120,10 +120,29 @@ export function TokenInfoBadge({
     return null;
   }
 
+  const formatBalance = (balance: bigint, decimals: number): string => {
+    const divisor = BigInt(10 ** decimals);
+    const integerPart = balance / divisor;
+    const fractionalPart = balance % divisor;
+
+    if (fractionalPart === BigInt(0)) {
+      return integerPart.toString();
+    }
+
+    const fractionalStr = fractionalPart.toString().padStart(decimals, '0');
+    const trimmedFractional = fractionalStr.replace(/0+$/, '');
+
+    if (trimmedFractional === '') {
+      return integerPart.toString();
+    }
+
+    return `${integerPart}.${trimmedFractional}`;
+  };
+
   return (
     <div className={cn(
       "px-3 py-1.5 rounded-lg bg-card/70 border border-border backdrop-blur-sm",
-      "flex items-center gap-2",
+      "flex items-center gap-3",
       className
     )}>
       <div className="flex flex-col">
@@ -134,6 +153,20 @@ export function TokenInfoBadge({
           {tokenInfo.name}
         </span>
       </div>
+
+      {/* Private Balance Display */}
+      <div className="flex flex-col items-end">
+        <span className="text-xs text-muted-foreground leading-none">
+          Private Balance
+        </span>
+        <span className="text-sm font-medium text-foreground leading-none mt-0.5">
+          {tokenInfo.privateBalance !== undefined
+            ? formatBalance(tokenInfo.privateBalance, tokenInfo.decimals)
+            : "Not connected"
+          }
+        </span>
+      </div>
+
       <div className="w-2 h-2 rounded-full bg-green-500" />
     </div>
   );

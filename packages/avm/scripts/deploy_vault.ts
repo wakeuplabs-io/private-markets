@@ -28,7 +28,6 @@ async function main(): Promise<void> {
 
   const [deployer] = await getInitialTestAccountsWallets(pxe);
 
-  // Load token address saved from deploy_token
   const addressesPath = path.join(__dirname, "addresses.json");
   let addresses: Addresses = {};
 

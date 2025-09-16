@@ -1,18 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AztecAddress } from "@aztec/aztec.js";
 import type { TokenInfoState } from "@/types/token";
 import { tokenService } from "@/services/tokenService";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
+import { useWallet } from "@/context";
 
 /**
  * Hook for managing token information
  * Provides token data, loading states, and error handling
  */
-export function useTokenInfo(contractAddress?: string) {
+export function useTokenInfo(contractAddress?: string, includePrivateBalance = false) {
   const [state, setState] = useState<TokenInfoState>({ status: "idle" });
+  const { status: walletStatus, wallet, isConnected } = useWallet();
 
   const address = contractAddress || CONTRACT_ADDRESSES.TOKEN;
+
+  const ownerAddress = isConnected && wallet && wallet.accounts && wallet.accounts.length > 0
+    ? wallet.accounts[0].split(":")[2]
+    : null;
 
   const fetchTokenInfo = useCallback(async (): Promise<void> => {
     if (!address) {
@@ -27,18 +34,29 @@ export function useTokenInfo(contractAddress?: string) {
 
     try {
       const tokenInfo = await tokenService.getTokenInfo(address);
+
+      if (includePrivateBalance && ownerAddress) {
+        try {
+          const aztecOwnerAddress = AztecAddress.fromString(ownerAddress);
+          const privateBalance = await tokenService.getPrivateBalance(address, aztecOwnerAddress);
+          tokenInfo.privateBalance = privateBalance;
+        } catch (balanceError) {
+          console.warn("Failed to fetch private balance:", balanceError);
+          tokenInfo.privateBalance = undefined;
+        }
+      }
+
       setState({
         status: "success",
         data: tokenInfo
       });
     } catch (error) {
-      console.error("Failed to fetch token info:", error);
       setState({
         status: "error",
         error: error instanceof Error ? error.message : "Failed to fetch token information"
       });
     }
-  }, [address]);
+  }, [address, includePrivateBalance, ownerAddress]);
 
   const retry = useCallback(() => {
     fetchTokenInfo();
@@ -53,6 +71,12 @@ export function useTokenInfo(contractAddress?: string) {
       fetchTokenInfo();
     }
   }, [address, fetchTokenInfo, state.status]);
+
+  useEffect(() => {
+    if (address && includePrivateBalance && isConnected && walletStatus === "connected") {
+      fetchTokenInfo();
+    }
+  }, [isConnected, walletStatus, address, includePrivateBalance, fetchTokenInfo]);
 
   const isLoading = state.status === "loading";
   const isError = state.status === "error";
@@ -73,6 +97,6 @@ export function useTokenInfo(contractAddress?: string) {
   };
 }
 
-export function useDefaultTokenInfo() {
-  return useTokenInfo(CONTRACT_ADDRESSES.TOKEN);
+export function useDefaultTokenInfo(includePrivateBalance = true) {
+  return useTokenInfo(CONTRACT_ADDRESSES.TOKEN, includePrivateBalance);
 }

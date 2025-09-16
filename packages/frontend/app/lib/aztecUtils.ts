@@ -36,7 +36,7 @@ export function bigintToString(value: bigint): string {
 
     const bytes = [];
     for (let i = 0; i < paddedHex.length; i += 2) {
-      const byte = parseInt(paddedHex.substr(i, 2), 16);
+      const byte = parseInt(paddedHex.substring(i, i + 2), 16);
       if (byte !== 0) {
         bytes.push(byte);
       }
@@ -73,21 +73,23 @@ export function stringToField(str: string): bigint {
 }
 
 /**
- * Debug function to log Field conversion details
+ * Debug function to log Field conversion details (development only)
  */
 export function debugField(field: unknown, label = "Field"): void {
-  console.log(`${label}:`, field);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`${label}:`, field);
 
-  if (field && typeof field === 'object' && field !== null && 'value' in field) {
-    const fieldObj = field as { value: unknown };
-    if (typeof fieldObj.value === 'bigint') {
-      const hex = fieldObj.value.toString(16);
-      const converted = bigintToString(fieldObj.value);
-      console.log(`${label} conversion:`, {
-        bigint: fieldObj.value,
-        hex,
-        string: converted
-      });
+    if (field && typeof field === 'object' && field !== null && 'value' in field) {
+      const fieldObj = field as { value: unknown };
+      if (typeof fieldObj.value === 'bigint') {
+        const hex = fieldObj.value.toString(16);
+        const converted = bigintToString(fieldObj.value);
+        console.log(`${label} conversion:`, {
+          bigint: fieldObj.value,
+          hex,
+          string: converted
+        });
+      }
     }
   }
 }

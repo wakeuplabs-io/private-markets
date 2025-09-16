@@ -4,7 +4,9 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 import ConnectAzguardButton from '@/components/ui/ConnectAzguardButton'
 import { TokenInfoBadge } from '@/components/ui/TokenInfo'
+import TokenActionsDropdown from '@/components/ui/TokenActionsDropdown'
 import { useDefaultTokenInfo } from '@/hooks/useTokenInfo'
+import { useWallet } from '@/context'
 
 interface HeaderProps {
   className?: string
@@ -13,7 +15,11 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({
   className
 }) => {
-  const { tokenInfo, isLoading, error } = useDefaultTokenInfo();
+  const { status: walletStatus, isConnected } = useWallet();
+  const tokenInfoResult = useDefaultTokenInfo();
+
+  const connectionKey = `${walletStatus}-${isConnected}`;
+  const { tokenInfo, isLoading, error } = tokenInfoResult;
 
   return (
     <header
@@ -35,6 +41,12 @@ const Header: React.FC<HeaderProps> = ({
             tokenInfo={tokenInfo}
             loading={isLoading}
             error={error}
+            key={connectionKey}
+          />
+          <TokenActionsDropdown
+            onSuccess={() => {
+              // This will trigger a refresh of the token info when cache is cleared
+            }}
           />
           <ConnectAzguardButton />
         </div>

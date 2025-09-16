@@ -45,7 +45,6 @@ class AztecService {
     try {
       const pxe = createPXEClient(NETWORK_CONFIG.PXE_URL);
       await waitForPXE(pxe);
-      console.log("Connected to PXE at", NETWORK_CONFIG.PXE_URL);
       return pxe;
     } catch (error) {
       console.error("Failed to connect to PXE:", error);
@@ -62,7 +61,6 @@ class AztecService {
   disconnect(): void {
     this.pxeClient = null;
     this.connectionPromise = null;
-    console.log("🔌 Disconnected from PXE");
   }
 
 

@@ -49,11 +49,6 @@ export async function connectToAzguard(client: AzguardClient): Promise<AzguardCo
 
 
     try {
-      console.log(`Connecting to Azguard with:`, {
-        dappMetadata,
-        requiredPermissions: permissions,
-      });
-
       await client.connect(dappMetadata, permissions);
       return {
         client,

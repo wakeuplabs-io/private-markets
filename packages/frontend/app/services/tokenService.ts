@@ -113,6 +113,46 @@ class TokenService implements ITokenService {
     }
   }
 
+  /**
+   * Get private token balance for a specific owner
+   */
+  async getPrivateBalance(address: string, owner: AztecAddress): Promise<bigint> {
+    try {
+      const contract = await this.getTokenContract(address);
+      const balance = await contract.methods.balance_of_private(owner).simulate();
+      return balance;
+    } catch (error) {
+      console.error("Failed to get private balance:", error);
+      throw new Error("Failed to fetch private token balance");
+    }
+  }
+
+  /**
+   * Mint tokens to private balance
+   * @param address Token contract address
+   * @param recipient Recipient's Aztec address
+   * @param amount Amount to mint (in token's smallest unit)
+   * @returns Transaction hash
+   */
+  async mintToPrivate(address: string, recipient: AztecAddress, amount: bigint): Promise<string> {
+    try {
+      const contract = await this.getTokenContract(address);
+      const wallet = await this.getWallet();
+
+      const from = wallet.getAddress();
+
+      const tx = await contract.methods
+        .mint_to_private(from, recipient, amount)
+        .send()
+        .wait();
+
+      return tx.txHash.toString();
+    } catch (error) {
+      console.error("Failed to mint to private:", error);
+      throw new Error(`Failed to mint tokens to private: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
 
   clearCache(): void {
     this.contractCache.clear();
