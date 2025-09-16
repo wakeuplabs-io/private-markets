@@ -4,7 +4,13 @@
   "description": "**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "npm run dev --workspace=packages/frontend",
+    "dev:frontend": "npm run dev --workspace=packages/frontend",
+    "build": "npm run build --workspace=packages/frontend",
+    "build:frontend": "npm run build --workspace=packages/frontend",
+    "start": "npm run start --workspace=packages/frontend",
+    "start:frontend": "npm run start --workspace=packages/frontend"
   },
   "keywords": [],
   "author": "",
