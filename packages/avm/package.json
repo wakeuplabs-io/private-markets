@@ -5,7 +5,8 @@
   "scripts": {
     "deploy:token": "node --import tsx/esm scripts/deploy_token.ts",
     "deploy:vault": "node --import tsx/esm scripts/deploy_vault.ts",
-    "call:bet": "node --import tsx/esm scripts/call_bet.ts"
+    "call:bet": "node --import tsx/esm scripts/call_bet.ts",
+    "mint:azguard": "node --import tsx/esm scripts/mint_to_azguard.ts"
   },
   "dependencies": {
     "@aztec/aztec.js": "^1.2.0",

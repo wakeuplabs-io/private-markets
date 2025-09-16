@@ -19,7 +19,7 @@ const Header: React.FC<HeaderProps> = ({
   const tokenInfoResult = useDefaultTokenInfo();
 
   const connectionKey = `${walletStatus}-${isConnected}`;
-  const { tokenInfo, isLoading, error } = tokenInfoResult;
+  const { tokenInfo, isLoading, error, refetch } = tokenInfoResult;
 
   return (
     <header
@@ -45,7 +45,8 @@ const Header: React.FC<HeaderProps> = ({
           />
           <TokenActionsDropdown
             onSuccess={() => {
-              // This will trigger a refresh of the token info when cache is cleared
+              // Refresh token info after successful mint
+              refetch();
             }}
           />
           <ConnectAzguardButton />

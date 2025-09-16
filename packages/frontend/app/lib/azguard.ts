@@ -43,7 +43,7 @@ export async function connectToAzguard(client: AzguardClient): Promise<AzguardCo
         // "aztec:1337" - devnet,
         // "aztec:31337" - sandbox
         chains: ["aztec:31337"],
-        methods: ["send_transaction", "add_private_authwit", "call"],
+        methods: ["send_transaction", "add_private_authwit", "call", "simulate_views", "register_contract"],
       },
     ]
 

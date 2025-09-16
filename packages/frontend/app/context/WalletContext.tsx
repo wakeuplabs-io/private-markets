@@ -2,9 +2,11 @@
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react'
 import { createPXEClient, waitForPXE, type PXE } from "@aztec/aztec.js"
-import { createAzguardClient, connectToAzguard, isAzguardAvailable, type ConnectResult } from "@/lib/azguard"
+import { createAzguardClient, connectToAzguard, isAzguardAvailable } from "@/lib/azguard"
 import type { AzguardClient } from "@azguardwallet/client"
 import { WalletState, WalletInfo, WalletType } from '@/types'
+import { tokenService } from "@/services/tokenService"
+import { CONTRACT_ADDRESSES } from "@/config/contracts"
 
 interface WalletContextType extends WalletState {
   connectWallet: (type: WalletType) => Promise<void>
@@ -132,6 +134,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
         console.warn("PXE connection failed, continuing without direct PXE:", pxeError);
       }
 
+
       const walletInfo: WalletInfo = {
         address: connection.client.accounts[0] || '',
         type: 'aztec',
@@ -139,6 +142,10 @@ export function WalletProvider({ children }: WalletProviderProps) {
         azguardClient: connection.client,
         pxe: pxe,
         accounts: connection.client.accounts
+      }
+
+      if (CONTRACT_ADDRESSES.TOKEN) {
+        tokenService.setAzguardClient(connection.client, CONTRACT_ADDRESSES.TOKEN);
       }
 
       dispatch({ type: 'CONNECT_SUCCESS', payload: walletInfo })
@@ -149,6 +156,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
   }
 
   const disconnectWallet = () => {
+    tokenService.clearAzguardClient();
     dispatch({ type: 'DISCONNECT' })
   }
 
