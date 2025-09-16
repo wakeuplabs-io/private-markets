@@ -14,7 +14,7 @@ import VaultArtifact from "../vault/target/vault-BetVault.json";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PXE_URL = process.env.PXE_URL || "http://localhost:8079";
+const PXE_URL = process.env.PXE_URL || "http://localhost:8080";
 
 interface Addresses {
   vaultAddress: string;
@@ -42,13 +42,13 @@ async function main(): Promise<void> {
   const nonce = 1n;
   const msg = Array(7).fill(new Uint8Array(31));
 
-  console.log("📤 Sending bet...");
+  console.log(">> Sending bet...");
   const tx = await vault.methods
     .bet(marketId, outcome, amount, commitment, betId, nonce, user.getAddress(), msg)
     .send()
     .wait();
 
-  console.log("✅ Bet tx sent! Hash:", tx.txHash);
+  console.log("[OK] Bet tx sent! Hash:", tx.txHash);
 }
 
 main().catch((err) => {

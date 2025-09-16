@@ -8,6 +8,7 @@ import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
 
 const PXE_URL = process.env.PXE_URL || "http://localhost:8080";
+const MINTER_ADDRESS = process.env.MINTER_ADDRESS;
 
 async function main(): Promise<void> {
   const pxe: PXE = createPXEClient(PXE_URL);
@@ -24,10 +25,18 @@ async function main(): Promise<void> {
     18
   ).send().deployed();
 
-  console.log("✅ Token deployed at:", contract.address.toString());
+  console.log("[OK] Token deployed at:", contract.address.toString());
 
-  const minterAddress = AztecAddress.fromString("0x0f55a101b1c11195e1349acdc34087f7896a62a4e96ddd73cbe16279c1f8e145");
-  console.log("\n🔧 Setting minter to:", minterAddress.toString());
+  const minterAddress = MINTER_ADDRESS
+    ? AztecAddress.fromString(MINTER_ADDRESS)
+    : deployer.getAddress();
+
+  console.log("\n>> Setting minter to:", minterAddress.toString());
+  if (MINTER_ADDRESS) {
+    console.log("   (from MINTER_ADDRESS env var)");
+  } else {
+    console.log("   (using deployer address as default)");
+  }
 
   try {
     const setMinterTx = await contract.methods
@@ -35,12 +44,12 @@ async function main(): Promise<void> {
       .send()
       .wait();
 
-    console.log("✅ Minter set successfully, tx hash:", setMinterTx.txHash.toString());
+    console.log("[OK] Minter set successfully, tx hash:", setMinterTx.txHash.toString());
   } catch (error) {
-    console.error("❌ Failed to set minter:", error);
+    console.error("[ERROR] Failed to set minter:", error);
   }
 
-  console.log("\n🧪 Testing mint_to_private...");
+  console.log("\n>> Testing mint_to_private...");
   const deployerAddress = deployer.getAddress();
   const mintAmount = 10000000000000n;
 
@@ -50,18 +59,17 @@ async function main(): Promise<void> {
       .send()
       .wait();
 
-    console.log("✅ Mint successful, tx hash:", mintTx.txHash.toString());
+    console.log("[OK] Mint successful, tx hash:", mintTx.txHash.toString());
 
     const privateBalance = await contract.methods
       .balance_of_private(deployerAddress)
       .simulate();
 
-    console.log("✅ Private balance:", privateBalance.toString());
-    console.log("✅ Expected amount:", mintAmount.toString());
-    console.log("✅ Balance matches:", privateBalance === mintAmount ? "YES" : "NO");
+    console.log("[OK] Private balance:", privateBalance.toString());
+    console.log("[OK] Expected amount:", mintAmount.toString());
 
   } catch (error) {
-    console.error("❌ Mint test failed:", error);
+    console.error("[ERROR] Mint test failed:", error);
   }
 }
 

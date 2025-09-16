@@ -22,15 +22,15 @@ async function main(): Promise<void> {
   const contract = await TokenContract.at(AztecAddress.fromString(contractAddress), deployer);
 
   // Register Azguard address with PXE so it can read private notes
-  console.log("📝 Registering Azguard address with PXE...");
+  console.log(">> Registering Azguard address with PXE...");
   try {
     await pxe.registerSender(AztecAddress.fromString(azguardAddress));
-    console.log("✅ Azguard address registered with PXE");
+    console.log("[OK] Azguard address registered with PXE");
   } catch (error) {
-    console.warn("⚠️ Failed to register Azguard address (may already be registered):", error);
+    console.warn("[WARN] Failed to register Azguard address (may already be registered):", error);
   }
 
-  console.log("🎯 Minting to Azguard wallet...");
+  console.log(">> Minting to Azguard wallet...");
   const mintAmount = 5000000000000n;
   console.log("deployer address:", deployer.getAddress().toString());
   try {
@@ -60,9 +60,9 @@ async function main(): Promise<void> {
       .send()
       .wait();
 
-    console.log("✅ Mint successful, tx hash:", mintTx.txHash.toString());
-    console.log("✅ Mint successful, tx hash:", mintTxOwner.txHash.toString());
-    console.log("✅ Mint successful, tx hash:", mintTxAlice.txHash.toString());
+    console.log("[OK] Mint successful, tx hash:", mintTx.txHash.toString());
+    console.log("[OK] Mint successful, tx hash:", mintTxOwner.txHash.toString());
+    console.log("[OK] Mint successful, tx hash:", mintTxAlice.txHash.toString());
     // Check balance
     const balance = await contract.methods
       .balance_of_private(AztecAddress.fromString(azguardAddress))
@@ -76,13 +76,13 @@ async function main(): Promise<void> {
       .balance_of_private(alice.getAddress())
       .simulate();
 
-    console.log("✅ Azguard private balance:", balance.toString());
-    console.log("✅ Owner private balance:", balanceOwner.toString());
-    console.log("✅ Alice private balance:", balanceAlice.toString());
-    console.log("✅ Expected amount:", mintAmount.toString());
+    console.log("[OK] Azguard private balance:", balance.toString());
+    console.log("[OK] Owner private balance:", balanceOwner.toString());
+    console.log("[OK] Alice private balance:", balanceAlice.toString());
+    console.log("[OK] Expected amount:", mintAmount.toString());
 
   } catch (error) {
-    console.error("❌ Mint failed:", error);
+    console.error("[ERROR] Mint failed:", error);
   }
 }
 
