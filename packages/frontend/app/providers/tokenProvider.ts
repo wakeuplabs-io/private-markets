@@ -13,14 +13,21 @@ export interface ITokenProvider {
 }
 
 class AzguardTokenProvider implements ITokenProvider {
+  private registrationPromise: Promise<void> | null = null;
+  private isRegistered: boolean = false;
+
   constructor(
     private azguardClient: AzguardClient,
     private contractAddress: string
   ) {
-    this.registerContract();
+    this.registrationPromise = this.registerContract();
   }
 
   private async registerContract(): Promise<void> {
+    if (this.isRegistered) {
+      return;
+    }
+
     try {
       const [result] = await this.azguardClient.execute([
         {
@@ -31,16 +38,41 @@ class AzguardTokenProvider implements ITokenProvider {
       ]);
 
       if (result.status !== "ok") {
-        console.warn("Contract registration failed:", result);
+        console.error("Contract registration failed:", result);
+        throw new Error(`Contract registration failed: ${JSON.stringify(result)}`);
       }
+
+      this.isRegistered = true;
     } catch (error) {
-      console.warn("Contract registration error:", error);
+      console.error("Contract registration error:", error);
+      this.isRegistered = false;
+      throw error;
+    }
+  }
+
+  private async ensureRegistered(): Promise<void> {
+    if (this.registrationPromise) {
+      try {
+        await this.registrationPromise;
+        this.registrationPromise = null;
+      } catch (error) {
+        console.warn("Initial registration failed, attempting re-registration:", error);
+        this.registrationPromise = null;
+        this.isRegistered = false;
+      }
+    }
+
+    if (!this.isRegistered) {
+      this.registrationPromise = this.registerContract();
+      await this.registrationPromise;
+      this.registrationPromise = null;
     }
   }
 
   private async simulateView(method: string, args: string[]): Promise<unknown> {
-    const account = this.azguardClient.accounts[0];
+    await this.ensureRegistered();
 
+    const account = this.azguardClient.accounts[0];
     const [result] = await this.azguardClient.execute([
       {
         kind: "simulate_views",
@@ -56,9 +88,11 @@ class AzguardTokenProvider implements ITokenProvider {
       },
     ]);
 
+
     if (result.status !== "ok") {
       const errorMessage = result.status === "failed" ? result.error : "Operation was skipped";
-      throw new Error(`Simulate failed: ${errorMessage}`);
+      console.error(`${method} simulation failed:`, errorMessage);
+      throw new Error(`Simulate ${method} failed: ${errorMessage}`);
     }
 
     const simulateResult = result.result as { decoded: unknown[] };
