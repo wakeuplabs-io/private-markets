@@ -6,6 +6,7 @@ import { createAzguardClient, connectToAzguard, isAzguardAvailable } from "@/lib
 import type { AzguardClient } from "@azguardwallet/client"
 import { WalletState, WalletInfo, WalletType } from '@/types'
 import { tokenService } from "@/services/tokenService"
+import { vaultService } from "@/services/vaultService"
 import { CONTRACT_ADDRESSES } from "@/config/contracts"
 
 interface WalletContextType extends WalletState {
@@ -148,6 +149,8 @@ export function WalletProvider({ children }: WalletProviderProps) {
         tokenService.setAzguardClient(connection.client, CONTRACT_ADDRESSES.TOKEN);
       }
 
+      vaultService.setAzguardClient(connection.client);
+
       dispatch({ type: 'CONNECT_SUCCESS', payload: walletInfo })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to connect wallet'
@@ -157,6 +160,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
   const disconnectWallet = () => {
     tokenService.clearAzguardClient();
+    vaultService.clearAzguardClient();
     dispatch({ type: 'DISCONNECT' })
   }
 

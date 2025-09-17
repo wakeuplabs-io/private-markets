@@ -8,6 +8,8 @@ import { Market } from '@/types'
 interface MarketGridProps {
   markets: Market[]
   onOptionClick?: (marketId: string, option: import('@/types').MarketOption) => void
+  onConnectWallet?: () => void
+  isWalletConnected?: boolean
   className?: string
   emptyState?: React.ReactNode
 }
@@ -15,6 +17,8 @@ interface MarketGridProps {
 const MarketGrid: React.FC<MarketGridProps> = ({
   markets,
   onOptionClick,
+  onConnectWallet,
+  isWalletConnected,
   className,
   emptyState
 }) => {
@@ -52,6 +56,8 @@ const MarketGrid: React.FC<MarketGridProps> = ({
           key={market.id}
           market={market}
           onOptionClick={onOptionClick}
+          onConnectWallet={onConnectWallet}
+          isWalletConnected={isWalletConnected}
         />
       ))}
     </div>

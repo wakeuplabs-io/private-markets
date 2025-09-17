@@ -99,9 +99,7 @@ class TokenService implements ITokenService {
     }
   }
 
-
   clearCache(): void {
-    // Delegate to PXE provider if needed
     if (!this.provider) {
       const pxeProvider = new PXETokenProvider("");
       pxeProvider.clearCache();

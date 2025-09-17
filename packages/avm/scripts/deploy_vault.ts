@@ -1,7 +1,6 @@
 import {
   createPXEClient,
   waitForPXE,
-  Contract,
   AztecAddress,
   type PXE,
 } from "@aztec/aztec.js";
@@ -10,14 +9,43 @@ import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-
-import VaultArtifact from "../vault/target/vault-BetVault.json";
 import { BetVaultContract } from "../vault/artifacts/BetVault";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PXE_URL = process.env.PXE_URL || "http://localhost:8080";
+const MINTER_ADDRESS = process.env.MINTER_ADDRESS;
+
+function bigintToString(bigintValue: bigint): string {
+  const hex = bigintValue.toString(16);
+  let result = '';
+  for (let i = 0; i < hex.length; i += 2) {
+    const byte = parseInt(hex.slice(i, i + 2), 16);
+    if (byte !== 0) {
+      result += String.fromCharCode(byte);
+    }
+  }
+  return result;
+}
+
+function fieldToString(field: unknown): string {
+  if (field && typeof field === 'object' && field !== null && 'value' in field) {
+    const fieldObj = field as { value: unknown };
+    if (typeof fieldObj.value === 'bigint') {
+      return bigintToString(fieldObj.value);
+    }
+  }
+
+  if (typeof field === 'string') return field;
+  if (typeof field === 'bigint') return bigintToString(field);
+
+  if (field && typeof field === 'object' && field !== null && 'toString' in field && typeof field.toString === 'function') {
+    return field.toString();
+  }
+
+  return String(field);
+}
 
 interface Addresses {
   tokenAddress?: string;
@@ -32,7 +60,6 @@ async function main(): Promise<void> {
   const [deployer] = await getInitialTestAccountsWallets(pxe);
   console.log("Deployer address:", deployer.getAddress().toString());
 
-  // Parse command line arguments
   const providedTokenAddress = process.argv[2];
 
   const addressesPath = path.join(__dirname, "addresses.json");
@@ -45,7 +72,6 @@ async function main(): Promise<void> {
     console.warn("No addresses.json found, creating new one");
   }
 
-  // Handle token deployment or use existing
   let finalTokenAddress: string;
 
   if (providedTokenAddress) {
@@ -64,10 +90,75 @@ async function main(): Promise<void> {
 
     finalTokenAddress = tokenContract.address.toString();
     console.log("[OK] New token deployed at:", finalTokenAddress);
+
+    const minterAddress = MINTER_ADDRESS
+      ? AztecAddress.fromString(MINTER_ADDRESS)
+      : deployer.getAddress();
+
+    console.log("\n>> Setting minter to:", minterAddress.toString());
+    if (MINTER_ADDRESS) {
+      console.log("   (from MINTER_ADDRESS env var)");
+    } else {
+      console.log("   (using deployer address as default)");
+    }
+
+    try {
+      const setMinterTx = await tokenContract.methods
+        .set_minter(minterAddress, true)
+        .send()
+        .wait();
+
+      console.log("[OK] Minter set successfully, tx hash:", setMinterTx.txHash.toString());
+    } catch (error) {
+      console.error("[ERROR] Failed to set minter:", error);
+    }
+
+    console.log("\n>> Testing mint_to_private...");
+    const deployerAddress = deployer.getAddress();
+    const mintAmount = 10000000000000n;
+
+    try {
+      const mintTx = await tokenContract.methods
+        .mint_to_private(deployerAddress, deployerAddress, mintAmount)
+        .send()
+        .wait();
+
+      console.log("[OK] Mint successful, tx hash:", mintTx.txHash.toString());
+
+      const privateBalance = await tokenContract.methods
+        .balance_of_private(deployerAddress)
+        .simulate();
+
+      console.log("[OK] Private balance:", privateBalance.toString());
+      console.log("[OK] Expected amount:", mintAmount.toString());
+
+    } catch (error) {
+      console.error("[ERROR] Mint test failed:", error);
+    }
+  }
+
+  console.log("\n>> Reading token information from contract...");
+  try {
+    const tokenContract = await TokenContract.at(
+      AztecAddress.fromString(finalTokenAddress),
+      deployer
+    );
+
+    const [name, symbol, decimals] = await Promise.all([
+      tokenContract.methods.public_get_name().simulate(),
+      tokenContract.methods.public_get_symbol().simulate(),
+      tokenContract.methods.public_get_decimals().simulate()
+    ]);
+
+    console.log("[OK] Token name:", fieldToString(name));
+    console.log("[OK] Token symbol:", fieldToString(symbol));
+    console.log("[OK] Token decimals:", decimals.toString());
+  } catch (error) {
+    console.error("[ERROR] Failed to read token information:", error);
   }
 
   // Deploy vault with token address
-  console.log(">> Deploying vault with token address:", finalTokenAddress);
+  console.log("\n>> Deploying vault with token address:", finalTokenAddress);
 
   const contract = await BetVaultContract.deploy(
     deployer,

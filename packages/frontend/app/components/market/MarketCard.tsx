@@ -8,12 +8,16 @@ import { Market, MarketOption } from '@/types'
 interface MarketCardProps {
   market: Market
   onOptionClick?: (marketId: string, option: MarketOption) => void
+  onConnectWallet?: () => void
+  isWalletConnected?: boolean
   className?: string
 }
 
 const MarketCard: React.FC<MarketCardProps> = ({
   market,
   onOptionClick,
+  onConnectWallet,
+  isWalletConnected = false,
   className
 }) => {
   const formatDate = (date: Date) => {
@@ -29,6 +33,14 @@ const MarketCard: React.FC<MarketCardProps> = ({
     return `${percentage}% chance`
   }
 
+  const handleOptionClick = (option: MarketOption) => {
+    if (!isWalletConnected) {
+      onConnectWallet?.()
+    } else {
+      onOptionClick?.(market.id, option)
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -37,9 +49,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
         className
       )}
     >
-      {/* Header Row: Image + Title */}
       <div className="flex items-start gap-3">
-        {/* Market Image */}
         <div className="w-12 h-12 rounded bg-muted/50 overflow-hidden flex-shrink-0">
           {market.imageUrl ? (
             <img
@@ -54,15 +64,12 @@ const MarketCard: React.FC<MarketCardProps> = ({
           )}
         </div>
 
-        {/* Title */}
         <h3 className="font-heading font-bold text-lg text-foreground leading-tight flex-1">
           {market.question}
         </h3>
       </div>
 
-      {/* Metadata Row: Date + Chance */}
       <div className="flex items-center gap-2">
-        {/* Date Pill */}
         <div className="flex items-center gap-2 bg-background px-2 py-1 rounded">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-foreground">
             <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1"/>
@@ -85,20 +92,17 @@ const MarketCard: React.FC<MarketCardProps> = ({
         </div>
       </div>
 
-      {/* Buttons Row */}
       <div className="flex items-center gap-3">
-        {/* Yes Button */}
         <Button
           className="flex-1 h-12 bg-[hsl(var(--yes-button))] hover:bg-[hsl(var(--yes-button))]/90 text-background font-bold text-base rounded-full"
-          onClick={() => onOptionClick?.(market.id, 'yes')}
+          onClick={() => handleOptionClick('yes')}
         >
           Yes
         </Button>
 
-        {/* No Button */}
         <Button
           className="flex-1 h-12 bg-[hsl(var(--no-button))] hover:bg-[hsl(var(--no-button))]/90 text-foreground font-bold text-base rounded-full"
-          onClick={() => onOptionClick?.(market.id, 'no')}
+          onClick={() => handleOptionClick('no')}
         >
           No
         </Button>
