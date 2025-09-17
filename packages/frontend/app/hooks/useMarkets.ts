@@ -19,40 +19,58 @@ const mockMarkets: Market[] = [
     marketId: 'market_001',
     question: 'Will it rain tomorrow in Madrid?',
     description: 'Weather prediction for Madrid on the next day',
+    imageUrl: 'https://images.unsplash.com/photo-1527766833261-b09c3163a791?w=48&h=48&fit=crop&crop=center',
+    chancePercentage: 29,
     options: {
       yes: 'Yes, it will rain',
       no: 'No, it will not rain'
     },
     status: 'open',
     createdAt: new Date('2024-01-15'),
-    closingDate: new Date('2024-01-25T18:00:00'),
+    closingDate: new Date('2025-01-25T18:00:00'),
     disclaimer: 'Weather predictions are based on meteorological data'
   },
   {
     id: '2',
     marketId: 'market_002',
-    question: 'Will Bitcoin reach $100,000 by end of 2024?',
+    question: 'Will Bitcoin reach $100,000 by end of 2025?',
+    imageUrl: 'https://images.unsplash.com/photo-1605792657660-596af9009e82?w=48&h=48&fit=crop&crop=center',
+    chancePercentage: 67,
     options: {
       yes: 'Yes, BTC ≥ $100k',
       no: 'No, BTC < $100k'
     },
     status: 'open',
     createdAt: new Date('2024-01-10'),
-    closingDate: new Date('2024-12-31T23:59:59')
+    closingDate: new Date('2025-12-31T23:59:59')
   },
   {
     id: '3',
     marketId: 'market_003',
-    question: 'Will Ethereum merge successfully complete?',
+    question: 'Will Ethereum reach $5,000 this year?',
+    imageUrl: 'https://images.unsplash.com/photo-1622630998477-20aa696ecb05?w=48&h=48&fit=crop&crop=center',
+    chancePercentage: 42,
     options: {
-      yes: 'Merge successful',
-      no: 'Merge fails/delayed'
+      yes: 'ETH ≥ $5k',
+      no: 'ETH < $5k'
     },
-    status: 'resolved',
+    status: 'open',
     createdAt: new Date('2024-01-01'),
-    closingDate: new Date('2024-01-20T12:00:00'),
-    resolvedAt: new Date('2024-01-20T12:30:00'),
-    winningOption: 'yes'
+    closingDate: new Date('2025-12-20T12:00:00')
+  },
+  {
+    id: '4',
+    marketId: 'market_004',
+    question: 'Will Tesla stock hit $300 by Q2 2025?',
+    imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=48&h=48&fit=crop&crop=center',
+    chancePercentage: 78,
+    options: {
+      yes: 'TSLA ≥ $300',
+      no: 'TSLA < $300'
+    },
+    status: 'open',
+    createdAt: new Date('2024-01-05'),
+    closingDate: new Date('2025-06-30T23:59:59')
   }
 ]
 
@@ -84,9 +102,7 @@ const apiCreateMarket = async (data: CreateMarketData): Promise<Market> => {
 }
 
 const apiResolveMarket = async (marketId: string, winningOption: 'yes' | 'no'): Promise<void> => {
-  // Simulate API call
   await new Promise(resolve => setTimeout(resolve, 1500))
-  console.log(`Market ${marketId} resolved with winner: ${winningOption}`)
 }
 
 export function useMarkets(): UseMarketsReturn {

@@ -1,5 +1,7 @@
-import { createPXEClient, waitForPXE, type PXE } from "@aztec/aztec.js";
+import { createPXEClient, waitForPXE, type PXE, AztecAddress, Wallet } from "@aztec/aztec.js";
+import { getSchnorrAccount } from "@aztec/accounts/schnorr";
 import { NETWORK_CONFIG } from "@/config/contracts";
+import { walletConnection } from "@/lib/walletSdk";
 
 /**
  * Aztec service for managing PXE connections
@@ -9,6 +11,7 @@ class AztecService {
   private static instance: AztecService;
   private pxeClient: PXE | null = null;
   private connectionPromise: Promise<PXE> | null = null;
+  private connectedWallet: Wallet | null = null;
 
   private constructor() {}
 
@@ -68,6 +71,14 @@ class AztecService {
     if (this.pxeClient) return "connected";
     if (this.connectionPromise) return "connecting";
     return "disconnected";
+  }
+
+  getConnectedWallet(): Wallet | null {
+    return this.connectedWallet;
+  }
+
+  clearConnectedWallet(): void {
+    this.connectedWallet = null;
   }
 }
 

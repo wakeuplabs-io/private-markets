@@ -11,7 +11,7 @@ export function useTokenInfo(contractAddress?: string, includePrivateBalance = f
   const { isConnected, wallet } = useWallet();
 
   const address = contractAddress || CONTRACT_ADDRESSES.TOKEN;
-  const ownerAddress = isConnected && wallet?.accounts?.[0]?.split(":")[2];
+  const ownerAddress = isConnected && wallet?.address;
 
   const fetchTokenInfo = useCallback(async (): Promise<void> => {
     if (!address) {

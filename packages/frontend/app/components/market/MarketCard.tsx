@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { Market, MarketOption } from '@/types'
@@ -52,9 +53,11 @@ const MarketCard: React.FC<MarketCardProps> = ({
       <div className="flex items-start gap-3">
         <div className="w-12 h-12 rounded bg-muted/50 overflow-hidden flex-shrink-0">
           {market.imageUrl ? (
-            <img
+            <Image
               src={market.imageUrl}
               alt={market.question}
+              width={48}
+              height={48}
               className="w-full h-full object-cover"
             />
           ) : (

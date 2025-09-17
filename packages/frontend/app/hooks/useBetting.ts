@@ -14,9 +14,7 @@ interface UseBettingReturn {
   clearError: () => void
 }
 
-// Mock API functions - replace with actual zkPassport integration
 const apiPlaceBet = async (data: PlaceBetData): Promise<Bet> => {
-  // Simulate bet placement with zkPassport verification
   await new Promise(resolve => setTimeout(resolve, 2000))
 
   const bet: Bet = {
@@ -33,9 +31,7 @@ const apiPlaceBet = async (data: PlaceBetData): Promise<Bet> => {
 }
 
 const apiClaimReward = async (betId: string): Promise<void> => {
-  // Simulate claim process with zkPassport proof
   await new Promise(resolve => setTimeout(resolve, 3000))
-  console.log(`Reward claimed for bet ${betId}`)
 }
 
 export function useBetting(): UseBettingReturn {
@@ -48,13 +44,6 @@ export function useBetting(): UseBettingReturn {
     try {
       setIsPlacingBet(true)
       setError(null)
-
-      // Here you would integrate with the actual zkPassport flow
-      // This would include:
-      // 1. Identity verification
-      // 2. Zero-knowledge proof generation
-      // 3. Cross-chain transaction to Arbitrum
-      // 4. Private bet recording on Aztec
 
       const newBet = await apiPlaceBet(data)
       setBets(prev => [newBet, ...prev])
@@ -70,11 +59,6 @@ export function useBetting(): UseBettingReturn {
     try {
       setIsClaiming(true)
       setError(null)
-
-      // Here you would:
-      // 1. Generate zero-knowledge proof of winning bet
-      // 2. Submit claim transaction to Arbitrum
-      // 3. Update bet status
 
       await apiClaimReward(betId)
 

@@ -1,31 +1,20 @@
-// components/ui/ConnectAzguardButton.tsx
 "use client";
 
 import { useWallet } from "@/context";
 import { Button } from "@/components/ui/Button";
 
-export default function ConnectAzguardButton() {
+export default function ConnectButton() {
   const { status, wallet, error, connectWallet, disconnectWallet, resetWallet, isConnecting, isConnected } = useWallet();
 
   if (isConnected && wallet) {
-    const hasAccounts = wallet.accounts && wallet.accounts.length > 0;
-    const primaryAccount = hasAccounts ? wallet.accounts![0] : wallet.address;
-
     return (
       <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card/50 backdrop-blur-sm">
         <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
         <div className="text-sm">
-          <div className="font-semibold text-foreground">Connected to Azguard</div>
-          {primaryAccount && (
-            <div className="text-muted-foreground text-xs">
-              Address: {primaryAccount.slice(0, 8)}...{primaryAccount.slice(-6)}
-            </div>
-          )}
-          {wallet.accounts && wallet.accounts.length > 1 && (
-            <div className="text-muted-foreground text-xs">
-              +{wallet.accounts.length - 1} more accounts
-            </div>
-          )}
+          <div className="font-semibold text-foreground">Connected via {wallet.connector}</div>
+          <div className="text-muted-foreground text-xs">
+            Address: {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
+          </div>
         </div>
         <Button
           variant="ghost"
@@ -58,13 +47,13 @@ export default function ConnectAzguardButton() {
 
   return (
     <Button
-      onClick={() => connectWallet('aztec')}
+      onClick={() => connectWallet('obsidion')}
       disabled={isConnecting}
       variant="default"
       size="md"
       className="font-semibold"
     >
-      {isConnecting ? "Connecting..." : "Log In"}
+      {isConnecting ? "Connecting..." : "Connect Wallet"}
     </Button>
   );
 }

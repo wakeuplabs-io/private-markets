@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { cn } from '@/lib/utils'
-import ConnectAzguardButton from '@/components/ui/ConnectAzguardButton'
+import ConnectButton from '@/components/ui/ConnectButton'
 import { TokenInfoBadge } from '@/components/ui/TokenInfo'
 import TokenActionsDropdown from '@/components/ui/TokenActionsDropdown'
 import { useDefaultTokenInfo } from '@/hooks/useTokenInfo'
@@ -15,11 +15,22 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({
   className
 }) => {
-  const { status: walletStatus, isConnected } = useWallet();
+  const { status: walletStatus, isConnected, disconnectWallet } = useWallet();
   const tokenInfoResult = useDefaultTokenInfo();
 
   const connectionKey = `${walletStatus}-${isConnected}`;
   const { tokenInfo, isLoading, error, refetch } = tokenInfoResult;
+
+  const clearLocalStorage = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
+  const handleDisconnect = () => {
+    disconnectWallet();
+  };
 
   return (
     <header
@@ -45,11 +56,24 @@ const Header: React.FC<HeaderProps> = ({
           />
           <TokenActionsDropdown
             onSuccess={() => {
-              // Refresh token info after successful mint
               refetch();
             }}
           />
-          <ConnectAzguardButton />
+          <button
+            onClick={handleDisconnect}
+            className="px-3 py-1.5 text-xs bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 rounded-md transition-colors"
+            title="Disconnect wallet"
+          >
+            Disconnect
+          </button>
+          <button
+            onClick={clearLocalStorage}
+            className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-md transition-colors"
+            title="Clear localStorage and reload"
+          >
+            Clear Cache
+          </button>
+          <ConnectButton />
         </div>
       </div>
     </header>

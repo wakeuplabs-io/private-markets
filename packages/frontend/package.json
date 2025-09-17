@@ -15,6 +15,7 @@
     "@aztec/accounts": "1.2.0",
     "@aztec/aztec.js": "1.2.0",
     "@aztec/noir-contracts.js": "1.2.0",
+    "@nemi-fi/wallet-sdk": "^1.0.0",
     "clsx": "^2.1.1",
     "next": "15.1.0",
     "react": "19.0.0",

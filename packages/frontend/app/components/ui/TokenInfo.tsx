@@ -97,10 +97,20 @@ export function TokenInfoBadge({
   if (loading) {
     return (
       <div className={cn(
-        "px-2 py-1 rounded-md bg-muted/50 animate-pulse",
+        "flex items-center gap-4 animate-pulse",
         className
       )}>
-        <div className="h-3 w-10 bg-muted rounded"></div>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-muted" />
+          <div className="flex flex-col gap-1">
+            <div className="h-3 w-12 bg-muted rounded"></div>
+            <div className="h-2 w-16 bg-muted rounded"></div>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <div className="h-2 w-10 bg-muted rounded"></div>
+          <div className="h-3 w-8 bg-muted rounded"></div>
+        </div>
       </div>
     );
   }
@@ -108,10 +118,11 @@ export function TokenInfoBadge({
   if (error) {
     return (
       <div className={cn(
-        "px-2 py-1 rounded-md bg-destructive/10 text-destructive text-xs",
+        "flex items-center gap-2 text-destructive text-xs",
         className
       )}>
-        Token Error
+        <div className="w-2 h-2 rounded-full bg-destructive" />
+        <span>Token Error</span>
       </div>
     );
   }
@@ -141,33 +152,33 @@ export function TokenInfoBadge({
 
   return (
     <div className={cn(
-      "px-3 py-1.5 rounded-lg bg-card/70 border border-border backdrop-blur-sm",
-      "flex items-center gap-3",
+      "flex items-center gap-4",
       className
     )}>
-      <div className="flex flex-col">
-        <span className="text-sm font-semibold text-foreground leading-none">
-          {tokenInfo.symbol}
-        </span>
-        <span className="text-xs text-muted-foreground leading-none mt-0.5">
-          {tokenInfo.name}
-        </span>
+      <div className="flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full bg-green-500" />
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold text-foreground leading-none">
+            {tokenInfo.symbol}
+          </span>
+          <span className="text-xs text-muted-foreground leading-none mt-0.5">
+            {tokenInfo.name}
+          </span>
+        </div>
       </div>
 
       {/* Private Balance Display */}
       <div className="flex flex-col items-end">
         <span className="text-xs text-muted-foreground leading-none">
-          Private Balance
+          Balance
         </span>
         <span className="text-sm font-medium text-foreground leading-none mt-0.5">
           {tokenInfo.privateBalance !== undefined
             ? formatBalance(tokenInfo.privateBalance, tokenInfo.decimals)
-            : "Not connected"
+            : "--"
           }
         </span>
       </div>
-
-      <div className="w-2 h-2 rounded-full bg-green-500" />
     </div>
   );
 }
