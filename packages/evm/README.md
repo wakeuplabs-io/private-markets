@@ -48,13 +48,12 @@ WormholeReceiver (VAA processing + bet forwarding)
 ## 🎯 Key Features
 
 ### Market Types
-- **Public Markets**: Explicit admin address for resolution
-- **Private Markets**: Admin identity hidden with `adminHash = Poseidon(adminSecret)`
+- **Public Markets**: All markets have explicit admin addresses for resolution (private market functionality was removed for simplicity)
 
 ### Betting System
 - **Cross-chain Bets**: Received via Wormhole from Aztec
 - **Replay Protection**: Unique `betId` prevents duplicate processing
-- **Commitment Scheme**: Users bet with `commitment = Poseidon(marketId, secret)`
+- **Commitment Scheme**: Users bet with `commitment = keccak256(marketId, secret)` for privacy preservation
 
 ### Resolution & Claims
 - **Merkle Tree Payouts**: Off-chain builder calculates winners and creates Merkle tree
@@ -63,10 +62,12 @@ WormholeReceiver (VAA processing + bet forwarding)
 
 ## 🔒 Security Features
 
-- **Fork Detection** - Prevents operation if copied to wrong network
-- **Emitter Authorization** - Only accepts VAAs from registered Aztec contracts
-- **Replay Protection** - Tracks processed bet IDs to prevent double processing
+- **Fork Detection** - Prevents operation if copied to wrong network using chain ID validation
+- **Emitter Authorization** - Only accepts VAAs from registered Aztec contracts via `setRegisteredSender()`
+- **Replay Protection** - Tracks processed bet IDs and delivery hashes to prevent double processing
 - **Chain Validation** - Uses both Wormhole and EVM chain IDs for verification
+- **Ownership Architecture** - Deployer → WormholeReceiver → PredictionMarketCore → Treasury
+- **Standard Wormhole Integration** - Uses `IWormholeReceiver` interface with `onlyRelayer` access control
 - **Commitment Privacy** - Users maintain privacy through secret-based commitments
 
 ## ⚙️ Chain Configuration
@@ -94,12 +95,17 @@ forge install
 
 ### Environment Setup
 ```bash
-# Copy environment template
+# Copy environment template (if exists)
 cp .env.example .env
 
-# Edit .env with your values
+# Create .env with required values
 PRIVATE_KEY=your_private_key_here
 ARBITRUM_SEPOLIA_RPC_URL=https://sepolia-rollup.arbitrum.io/rpc
+
+# Optional overrides (uses official addresses by default)
+WORMHOLE_ADDRESS=0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35
+WORMHOLE_RELAYER_ADDRESS=0x7B1bD7a6b4E61c2a123AC6BC2cbfC614437D0470
+AZTEC_EMITTER_ADDRESS=0x... # Required for production, has default for local testing
 ```
 
 ### Local Deployment (Anvil)
@@ -113,24 +119,23 @@ forge script script/DeployPredictionMarket.s.sol --fork-url http://localhost:854
 
 ### Arbitrum Sepolia Deployment
 ```bash
-# Deploy to testnet
-forge script script/DeployPredictionMarket.s.sol \
+# Deploy to testnet (requires AZTEC_EMITTER_ADDRESS for production)
+AZTEC_EMITTER_ADDRESS=0x... forge script script/DeployPredictionMarket.s.sol \
     --fork-url $ARBITRUM_SEPOLIA_RPC_URL \
     --broadcast
 ```
 
-**⚠️ Note**: Get testnet ETH from [Arbitrum Sepolia Faucet](https://faucet.quicknode.com/arbitrum/sepolia)
+**⚠️ Notes**:
+- Get testnet ETH from [Arbitrum Sepolia Faucet](https://faucet.quicknode.com/arbitrum/sepolia)
+- Set `AZTEC_EMITTER_ADDRESS` to your deployed Aztec contract address for production
 
 ## 🔧 Contract Interactions
 
 ### Market Creation
 ```solidity
-// Public market
-bytes32 marketId = predictionMarketCore.createMarket("Will BTC hit $100k?", 2);
-
-// Private market
-bytes32 adminHash = keccak256(abi.encodePacked("secret"));
-bytes32 marketId = predictionMarketCore.createPrivateMarket("Private question", 2, adminHash);
+// Create market (all markets are public)
+uint256 marketId = predictionMarketCore.createMarket("Will BTC hit $100k?");
+// Returns auto-incremental ID: 1, 2, 3, etc.
 ```
 
 ### Processing Bets (via Wormhole)
@@ -209,17 +214,22 @@ This EVM package is designed to integrate with:
 
 ## ⚠️ Common Issues
 
-**"Invalid fork: expected chainID mismatch"**
-- Verify you're on the correct network (Arbitrum Sepolia: 421614)
+**"ChainIdMismatch"**
+- Verify you're on the correct network (Local: 31337, Arbitrum Sepolia: 421614)
+- Contract detects when running on wrong chain for security
 
-**"Invalid emitter: source not recognized"**
-- Register the Aztec emitter with `registerEmitter(56, aztecEmitterAddress)`
+**"Not registered sender"**
+- Register the Aztec emitter with `setRegisteredSender(56, aztecEmitterAddress)`
+- Only registered Aztec contracts can send bets via Wormhole
 
-**"Bet already processed"**
-- Each bet needs a unique `betId` to prevent replay attacks
+**"Only the Wormhole relayer can call this function"**
+- `receiveWormholeMessages()` can only be called by the WormholeRelayer contract
+
+**"Bet already processed" / "MessageAlreadyProcessed"**
+- Each bet needs a unique `betId` and `deliveryHash` to prevent replay attacks
 
 **"Market not resolved yet"**
-- Claims can only be made after `setWinnersRoot()` is called
+- Claims can only be made after `setWinnersRoot()` is called by market admin
 
 ## 📚 Additional Resources
 

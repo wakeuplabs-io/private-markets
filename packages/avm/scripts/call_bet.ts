@@ -1,38 +1,20 @@
-import {
-  createPXEClient,
-  waitForPXE,
-  Contract,
-  type PXE,
-} from "@aztec/aztec.js";
-import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
+import { Contract, AztecAddress } from "@aztec/aztec.js";
 import VaultArtifact from "../vault/target/vault-BetVault.json";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const PXE_URL = process.env.PXE_URL || "http://localhost:8080";
-
-interface Addresses {
-  vaultAddress: string;
-  tokenAddress?: string;
-  wormholeAddress?: string;
-}
+import { aztecSetup } from "./lib/aztec-setup.js";
 
 async function main(): Promise<void> {
-  const pxe: PXE = createPXEClient(PXE_URL);
-  await waitForPXE(pxe);
+  await aztecSetup.setupPXE();
+  const user = await aztecSetup.getOrCreateWallet("user");
 
-  const [user] = await getInitialTestAccountsWallets(pxe);
+  // Load vault address from contract registry
+  const vaultAddress = aztecSetup.loadContractAddress("vault");
 
-  const addressesPath = path.join(__dirname, "addresses.json");
-  const addressesData = fs.readFileSync(addressesPath, "utf8");
-  const { vaultAddress }: Addresses = JSON.parse(addressesData);
+  if (!vaultAddress) {
+    throw new Error("No vault address found. Please deploy the vault first using deploy_vault.ts");
+  }
 
-  const vault = await Contract.at(vaultAddress, VaultArtifact, user);
+  console.log("Using vault at:", vaultAddress);
+  const vault = await Contract.at(AztecAddress.fromString(vaultAddress), VaultArtifact, user);
 
   const marketId = 1n;
   const outcome = 0;
@@ -43,9 +25,12 @@ async function main(): Promise<void> {
   const msg = Array(7).fill(new Uint8Array(31));
 
   console.log(">> Sending bet...");
+
+  const txOptions = await aztecSetup.getTxOptions(user.getAddress());
+
   const tx = await vault.methods
     .bet(marketId, outcome, amount, commitment, betId, nonce, user.getAddress(), msg)
-    .send()
+    .send(txOptions)
     .wait();
 
   console.log("[OK] Bet tx sent! Hash:", tx.txHash);

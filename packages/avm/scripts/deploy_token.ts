@@ -1,31 +1,27 @@
-import {
-  AztecAddress,
-  createPXEClient,
-  waitForPXE,
-  type PXE,
-} from "@aztec/aztec.js";
-import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
+import { AztecAddress } from "@aztec/aztec.js";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
+import { aztecSetup } from "./lib/aztec-setup.js";
 
-const PXE_URL = process.env.PXE_URL || "http://localhost:8080";
 const MINTER_ADDRESS = process.env.MINTER_ADDRESS;
 
 async function main(): Promise<void> {
-  const pxe: PXE = createPXEClient(PXE_URL);
-  await waitForPXE(pxe);
-
-  const [deployer] = await getInitialTestAccountsWallets(pxe);
+  await aztecSetup.setupPXE();
+  const deployer = await aztecSetup.getOrCreateWallet("deployer");
   console.log("Deployer address:", deployer.getAddress().toString());
 
+  const deployTxOptions = await aztecSetup.getTxOptions(deployer.getAddress());
   const contract = await TokenContract.deploy(
     deployer,
     deployer.getAddress(),
     "Aztec USD",
     "AUSD",
     18
-  ).send().deployed();
+  ).send(deployTxOptions).deployed();
 
   console.log("[OK] Token deployed at:", contract.address.toString());
+
+  // Save contract address
+  aztecSetup.saveContractAddress("token", contract.address.toString());
 
   const minterAddress = MINTER_ADDRESS
     ? AztecAddress.fromString(MINTER_ADDRESS)
@@ -39,9 +35,11 @@ async function main(): Promise<void> {
   }
 
   try {
+    const txOptions = await aztecSetup.getTxOptions(deployer.getAddress());
+
     const setMinterTx = await contract.methods
       .set_minter(minterAddress, true)
-      .send()
+      .send(txOptions)
       .wait();
 
     console.log("[OK] Minter set successfully, tx hash:", setMinterTx.txHash.toString());
@@ -54,9 +52,11 @@ async function main(): Promise<void> {
   const mintAmount = 10000000000000n;
 
   try {
+    const txOptions = await aztecSetup.getTxOptions(deployer.getAddress());
+
     const mintTx = await contract.methods
-      .mint_to_private(deployerAddress, deployerAddress, mintAmount)
-      .send()
+      .mint_to_private(deployerAddress, mintAmount)
+      .send(txOptions)
       .wait();
 
     console.log("[OK] Mint successful, tx hash:", mintTx.txHash.toString());

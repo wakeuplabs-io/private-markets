@@ -1,0 +1,14 @@
+{
+  "deployer": {
+    "privateKey": "0x...",
+    "salt": "0x..."
+  },
+  "user": {
+    "privateKey": "0x...",
+    "salt": "0x..."
+  },
+  "azguard": {
+    "privateKey": "0x...",
+    "salt": "0x..."
+  }
+}
