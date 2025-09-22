@@ -1,67 +1,75 @@
-import {
-  AztecAddress,
-  createPXEClient,
-  waitForPXE,
-  type PXE,
-} from "@aztec/aztec.js";
-import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
+import { AztecAddress } from "@aztec/aztec.js";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
+import { aztecSetup } from "./lib/aztec-setup.js";
 
-const PXE_URL = process.env.PXE_URL || "http://localhost:8080";
+const MINTER_ADDRESS = process.env.MINTER_ADDRESS;
 
 async function main(): Promise<void> {
-  const pxe: PXE = createPXEClient(PXE_URL);
-  await waitForPXE(pxe);
-
-  const [deployer] = await getInitialTestAccountsWallets(pxe);
+  await aztecSetup.setupPXE();
+  const deployer = await aztecSetup.getOrCreateWallet("deployer");
   console.log("Deployer address:", deployer.getAddress().toString());
 
+  const deployTxOptions = await aztecSetup.getTxOptions(deployer.getAddress());
   const contract = await TokenContract.deploy(
     deployer,
     deployer.getAddress(),
     "Aztec USD",
     "AUSD",
     18
-  ).send().deployed();
+  ).send(deployTxOptions).deployed();
 
-  console.log("✅ Token deployed at:", contract.address.toString());
+  console.log("[OK] Token deployed at:", contract.address.toString());
 
-  const minterAddress = AztecAddress.fromString("0x0f55a101b1c11195e1349acdc34087f7896a62a4e96ddd73cbe16279c1f8e145");
-  console.log("\n🔧 Setting minter to:", minterAddress.toString());
+  // Save contract address
+  aztecSetup.saveContractAddress("token", contract.address.toString());
 
-  try {
-    const setMinterTx = await contract.methods
-      .set_minter(minterAddress, true)
-      .send()
-      .wait();
+  const minterAddress = MINTER_ADDRESS
+    ? AztecAddress.fromString(MINTER_ADDRESS)
+    : deployer.getAddress();
 
-    console.log("✅ Minter set successfully, tx hash:", setMinterTx.txHash.toString());
-  } catch (error) {
-    console.error("❌ Failed to set minter:", error);
+  console.log("\n>> Setting minter to:", minterAddress.toString());
+  if (MINTER_ADDRESS) {
+    console.log("   (from MINTER_ADDRESS env var)");
+  } else {
+    console.log("   (using deployer address as default)");
   }
 
-  console.log("\n🧪 Testing mint_to_private...");
+  try {
+    const txOptions = await aztecSetup.getTxOptions(deployer.getAddress());
+
+    const setMinterTx = await contract.methods
+      .set_minter(minterAddress, true)
+      .send(txOptions)
+      .wait();
+
+    console.log("[OK] Minter set successfully, tx hash:", setMinterTx.txHash.toString());
+  } catch (error) {
+    console.error("[ERROR] Failed to set minter:", error);
+  }
+
+  console.log("\n>> Testing mint_to_private...");
   const deployerAddress = deployer.getAddress();
   const mintAmount = 10000000000000n;
 
   try {
+    const txOptions = await aztecSetup.getTxOptions(deployer.getAddress());
+
     const mintTx = await contract.methods
-      .mint_to_private(deployerAddress, deployerAddress, mintAmount)
-      .send()
+      .mint_to_private(deployerAddress, mintAmount)
+      .send(txOptions)
       .wait();
 
-    console.log("✅ Mint successful, tx hash:", mintTx.txHash.toString());
+    console.log("[OK] Mint successful, tx hash:", mintTx.txHash.toString());
 
     const privateBalance = await contract.methods
       .balance_of_private(deployerAddress)
       .simulate();
 
-    console.log("✅ Private balance:", privateBalance.toString());
-    console.log("✅ Expected amount:", mintAmount.toString());
-    console.log("✅ Balance matches:", privateBalance === mintAmount ? "YES" : "NO");
+    console.log("[OK] Private balance:", privateBalance.toString());
+    console.log("[OK] Expected amount:", mintAmount.toString());
 
   } catch (error) {
-    console.error("❌ Mint test failed:", error);
+    console.error("[ERROR] Mint test failed:", error);
   }
 }
 

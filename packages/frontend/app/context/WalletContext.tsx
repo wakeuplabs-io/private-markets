@@ -1,22 +1,21 @@
 'use client'
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react'
-import { createPXEClient, waitForPXE, type PXE } from "@aztec/aztec.js"
-import { createAzguardClient, connectToAzguard, isAzguardAvailable } from "@/lib/azguard"
-import type { AzguardClient } from "@azguardwallet/client"
-import { WalletState, WalletInfo, WalletType } from '@/types'
+import { walletService, type WalletInfo } from "@/services/walletService"
 import { tokenService } from "@/services/tokenService"
+import { vaultService } from "@/services/vaultService"
 import { CONTRACT_ADDRESSES } from "@/config/contracts"
+import type { WalletConnector } from "@/lib/walletSdk"
 
-interface WalletContextType extends WalletState {
-  connectWallet: (type: WalletType) => Promise<void>
+interface WalletContextType {
+  status: 'disconnected' | 'connecting' | 'connected' | 'error'
+  wallet: WalletInfo | null
+  error: string | null
+  connectWallet: (connector: WalletConnector) => Promise<void>
   disconnectWallet: () => void
   resetWallet: () => void
   isConnected: boolean
   isConnecting: boolean
-  // Aztec-specific properties
-  azguardClient?: AzguardClient
-  pxe?: PXE
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
@@ -27,7 +26,12 @@ type WalletAction =
   | { type: 'CONNECT_ERROR'; payload: string }
   | { type: 'DISCONNECT' }
   | { type: 'RESET' }
-  | { type: 'UPDATE_BALANCE'; payload: { eth?: string; usdc?: string } }
+
+type WalletState = {
+  status: 'disconnected' | 'connecting' | 'connected' | 'error'
+  wallet: WalletInfo | null
+  error: string | null
+}
 
 const initialState: WalletState = {
   status: 'disconnected',
@@ -71,19 +75,6 @@ function walletReducer(state: WalletState, action: WalletAction): WalletState {
         wallet: null,
         error: null
       }
-    case 'UPDATE_BALANCE':
-      return {
-        ...state,
-        wallet: state.wallet
-          ? {
-              ...state.wallet,
-              balance: {
-                ...state.wallet.balance,
-                ...action.payload
-              }
-            }
-          : null
-      }
     default:
       return state
   }
@@ -96,56 +87,15 @@ interface WalletProviderProps {
 export function WalletProvider({ children }: WalletProviderProps) {
   const [state, dispatch] = useReducer(walletReducer, initialState)
 
-  const connectWallet = async (type: WalletType) => {
-    if (type !== 'aztec') {
-      dispatch({ type: 'CONNECT_ERROR', payload: 'Only Aztec wallet (Azguard) is supported' })
-      return
-    }
-
+  const connectWallet = async (connector: WalletConnector) => {
     try {
       dispatch({ type: 'CONNECT_START' })
 
-      if (!(await isAzguardAvailable())) {
-        throw new Error(
-          "Azguard Wallet no está instalado. Por favor instala Azguard Wallet y recarga la página."
-        );
-      }
-
-      const client = await createAzguardClient();
-      if (!client) {
-        throw new Error("Could not create Azguard Wallet client.");
-      }
-
-      const connection = await connectToAzguard(client);
-      if (!connection) {
-        throw new Error("Connection failed.");
-      }
-
-      if (!connection.client.connected) {
-        throw new Error("Azguard Wallet did not connect correctly.");
-      }
-
-      let pxe: PXE | undefined;
-      try {
-        const pxeUrl = process.env.NEXT_PUBLIC_PXE_URL ?? "http://localhost:8080";
-        pxe = createPXEClient(pxeUrl);
-        await waitForPXE(pxe);
-      } catch (pxeError) {
-        console.warn("PXE connection failed, continuing without direct PXE:", pxeError);
-      }
-
-
-      const walletInfo: WalletInfo = {
-        address: connection.client.accounts[0] || '',
-        type: 'aztec',
-        chainId: 56,
-        azguardClient: connection.client,
-        pxe: pxe,
-        accounts: connection.client.accounts
-      }
+      // Connect using wallet service
+      const walletInfo = await walletService.connectWithPersistence(connector)
 
       if (CONTRACT_ADDRESSES.TOKEN) {
-        tokenService.setAzguardClient(connection.client, CONTRACT_ADDRESSES.TOKEN);
+        tokenService.initialize(CONTRACT_ADDRESSES.TOKEN)
       }
 
       dispatch({ type: 'CONNECT_SUCCESS', payload: walletInfo })
@@ -156,7 +106,9 @@ export function WalletProvider({ children }: WalletProviderProps) {
   }
 
   const disconnectWallet = () => {
-    tokenService.clearAzguardClient();
+    walletService.disconnect()
+    tokenService.clearCache()
+    vaultService.clearCache()
     dispatch({ type: 'DISCONNECT' })
   }
 
@@ -170,9 +122,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
     disconnectWallet,
     resetWallet,
     isConnected: state.status === 'connected',
-    isConnecting: state.status === 'connecting',
-    azguardClient: state.wallet?.azguardClient,
-    pxe: state.wallet?.pxe
+    isConnecting: state.status === 'connecting'
   }
 
   return (

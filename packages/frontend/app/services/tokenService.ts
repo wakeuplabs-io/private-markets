@@ -1,12 +1,12 @@
 import { AztecAddress } from "@aztec/aztec.js";
 import type { TokenInfo, ITokenService } from "@/types/token";
 import { fieldToString } from "@/lib/aztecUtils";
-import type { AzguardClient } from "@azguardwallet/client";
-import { AzguardTokenProvider, PXETokenProvider, type ITokenProvider } from "../providers/tokenProvider";
+import { WalletSdkTokenProvider, PXETokenProvider } from "../providers/tokenProvider";
+import { walletService } from "./walletService";
 
 class TokenService implements ITokenService {
   private static instance: TokenService;
-  private provider: ITokenProvider | null = null;
+  private walletSdkProvider: WalletSdkTokenProvider | null = null;
 
   private constructor() {}
 
@@ -17,17 +17,13 @@ class TokenService implements ITokenService {
     return TokenService.instance;
   }
 
-  setAzguardClient(azguardClient: AzguardClient, contractAddress: string): void {
-    this.provider = new AzguardTokenProvider(azguardClient, contractAddress);
+  initialize(contractAddress: string): void {
+    this.walletSdkProvider = new WalletSdkTokenProvider(contractAddress);
   }
 
-  clearAzguardClient(): void {
-    this.provider = null;
-  }
-
-  private getProvider(address: string): ITokenProvider {
-    if (this.provider) {
-      return this.provider;
+  private getProvider(address: string) {
+    if (walletService.isConnected() && this.walletSdkProvider) {
+      return this.walletSdkProvider;
     }
     return new PXETokenProvider(address);
   }
@@ -41,13 +37,17 @@ class TokenService implements ITokenService {
         provider.getTokenDecimals(),
       ]);
 
-      return {
+      const tokenInfo: TokenInfo = {
         name: fieldToString(name),
         symbol: fieldToString(symbol),
         decimals,
         address: AztecAddress.fromString(address),
       };
+
+      return tokenInfo;
+
     } catch (error) {
+      console.error('[TOKEN] Failed to fetch token information:', error);
       throw new Error(`Failed to fetch token information: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -57,7 +57,8 @@ class TokenService implements ITokenService {
       const provider = this.getProvider(address);
       const name = await provider.getTokenName();
       return fieldToString(name);
-    } catch {
+    } catch (error) {
+      console.error('[TOKEN] Failed to fetch token name:', error);
       throw new Error("Failed to fetch token name");
     }
   }
@@ -67,7 +68,8 @@ class TokenService implements ITokenService {
       const provider = this.getProvider(address);
       const symbol = await provider.getTokenSymbol();
       return fieldToString(symbol);
-    } catch {
+    } catch (error) {
+      console.error('[TOKEN] Failed to fetch token symbol:', error);
       throw new Error("Failed to fetch token symbol");
     }
   }
@@ -76,7 +78,8 @@ class TokenService implements ITokenService {
     try {
       const provider = this.getProvider(address);
       return await provider.getTokenDecimals();
-    } catch {
+    } catch (error) {
+      console.error('[TOKEN] Failed to fetch token decimals:', error);
       throw new Error("Failed to fetch token decimals");
     }
   }
@@ -85,28 +88,46 @@ class TokenService implements ITokenService {
     try {
       const provider = this.getProvider(address);
       return await provider.getPrivateBalance(owner);
-    } catch {
+    } catch (error) {
+      console.error('[TOKEN] Failed to fetch private token balance:', error);
       throw new Error("Failed to fetch private token balance");
     }
   }
 
   async mintToPrivate(address: string, recipient: AztecAddress, amount: bigint): Promise<string> {
     try {
+      if (!walletService.isConnected()) {
+        throw new Error("Wallet must be connected to perform mint operations");
+      }
+
       const provider = this.getProvider(address);
-      return await provider.mintToPrivate(recipient, amount);
+      const txHash = await provider.mintToPrivate(recipient, amount);
+
+      return txHash;
+
     } catch (error) {
+      console.error('[TOKEN] Failed to mint tokens to private:', error);
       throw new Error(`Failed to mint tokens to private: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-
   clearCache(): void {
-    // Delegate to PXE provider if needed
-    if (!this.provider) {
-      const pxeProvider = new PXETokenProvider("");
-      pxeProvider.clearCache();
+    if (this.walletSdkProvider) {
+      this.walletSdkProvider.clearCache();
     }
   }
+
+  getCurrentProviderType(): 'wallet-sdk' | 'pxe' {
+    if (walletService.isConnected() && this.walletSdkProvider) {
+      return 'wallet-sdk';
+    }
+    return 'pxe';
+  }
+
+  isWalletSdkAvailable(): boolean {
+    return walletService.isConnected() && this.walletSdkProvider !== null;
+  }
+
 }
 
 export const tokenService = TokenService.getInstance();

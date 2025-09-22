@@ -1,8 +1,12 @@
-import { Contract, AztecAddress, type Wallet } from "@aztec/aztec.js";
+import { AztecAddress, Contract, type Wallet } from "@aztec/aztec.js";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
+import { Contract as WalletSdkContract } from "@nemi-fi/wallet-sdk/eip1193";
 import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
+import { ensureWalletConnected } from "../lib/walletSdk";
 import { aztecService } from "../services/aztecService";
-import type { AzguardClient } from "@azguardwallet/client";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyAccount = any;
 
 export interface ITokenProvider {
   getTokenName(): Promise<unknown>;
@@ -12,123 +16,110 @@ export interface ITokenProvider {
   mintToPrivate(recipient: AztecAddress, amount: bigint): Promise<string>;
 }
 
-class AzguardTokenProvider implements ITokenProvider {
-  constructor(
-    private azguardClient: AzguardClient,
-    private contractAddress: string
-  ) {
-    this.registerContract();
+class Token extends WalletSdkContract.fromAztec(TokenContract) {}
+
+export class WalletSdkTokenProvider implements ITokenProvider {
+  private tokenContract: Token | null = null;
+  private pxeProvider: PXETokenProvider;
+
+  constructor(private contractAddress: string) {
+    // Create PXE provider as fallback for read operations
+    this.pxeProvider = new PXETokenProvider(contractAddress);
   }
 
-  private async registerContract(): Promise<void> {
-    try {
-      const [result] = await this.azguardClient.execute([
-        {
-          kind: "register_contract",
-          chain: "aztec:31337",
-          address: this.contractAddress,
-        },
-      ]);
-
-      if (result.status !== "ok") {
-        console.warn("Contract registration failed:", result);
-      }
-    } catch (error) {
-      console.warn("Contract registration error:", error);
-    }
+  // Helper method for adding timeout to any promise
+  private withTimeout<T>(promise: Promise<T>, timeoutMs: number = 120000): Promise<T> {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Operation timeout after ${timeoutMs/1000}s`)), timeoutMs)
+    );
+    return Promise.race([promise, timeoutPromise]);
   }
 
-  private async simulateView(method: string, args: string[]): Promise<unknown> {
-    const account = this.azguardClient.accounts[0];
-
-    const [result] = await this.azguardClient.execute([
-      {
-        kind: "simulate_views",
-        account: account,
-        calls: [
-          {
-            kind: "call",
-            contract: this.contractAddress,
-            method: method,
-            args: args,
-          },
-        ],
-      },
-    ]);
-
-    if (result.status !== "ok") {
-      const errorMessage = result.status === "failed" ? result.error : "Operation was skipped";
-      throw new Error(`Simulate failed: ${errorMessage}`);
+  private async getTokenContract(): Promise<Token> {
+    if (this.tokenContract) {
+      return this.tokenContract;
     }
 
-    const simulateResult = result.result as { decoded: unknown[] };
-    return simulateResult.decoded[0];
-  }
+    const account = await ensureWalletConnected();
+    const address = AztecAddress.fromString(this.contractAddress);
+    this.tokenContract = await Token.at(address, account as AnyAccount);
 
-  private extractValue(result: unknown): string {
-    if (result && typeof result === 'object' && 'value' in result) {
-      return String((result as { value: string }).value);
-    }
-    return String(result || '');
+    return this.tokenContract;
   }
 
   async getTokenName(): Promise<unknown> {
-    const name = await this.simulateView("public_get_name", []);
-    const nameValue = this.extractValue(name);
-    return BigInt(nameValue);
+    try {
+      const contract = await this.getTokenContract();
+      const name = await contract.methods.public_get_name().simulate();
+      return name;
+    } catch (error) {
+      console.warn('[TOKEN] WalletSDK failed for token name, using PXE fallback:', error);
+      return await this.pxeProvider.getTokenName();
+    }
   }
 
   async getTokenSymbol(): Promise<unknown> {
-    const symbol = await this.simulateView("public_get_symbol", []);
-    const symbolValue = this.extractValue(symbol);
-    return BigInt(symbolValue);
+    try {
+      const contract = await this.getTokenContract();
+      const symbol = await contract.methods.public_get_symbol().simulate();
+      return symbol;
+    } catch (error) {
+      console.warn('[TOKEN] WalletSDK failed for token symbol, using PXE fallback:', error);
+      return await this.pxeProvider.getTokenSymbol();
+    }
   }
 
   async getTokenDecimals(): Promise<number> {
-    const decimals = await this.simulateView("public_get_decimals", []);
-    return Number(this.extractValue(decimals));
+    try {
+      const contract = await this.getTokenContract();
+      const decimals = await contract.methods.public_get_decimals().simulate();
+      return Number(decimals);
+    } catch (error) {
+      console.warn('[TOKEN] WalletSDK failed for token decimals, using PXE fallback:', error);
+      return await this.pxeProvider.getTokenDecimals();
+    }
   }
 
   async getPrivateBalance(owner: AztecAddress): Promise<bigint> {
-    const balance = await this.simulateView("balance_of_private", [owner.toString()]);
-    const balanceValue = this.extractValue(balance);
-    return BigInt(balanceValue || '0');
+    try {
+      const contract = await this.getTokenContract();
+      const balance = await this.withTimeout(
+        contract.methods.balance_of_private(owner).simulate(),
+        120000
+      );
+      return BigInt(balance.toString());
+    } catch (error) {
+      console.warn('[TOKEN] WalletSDK failed for private balance, using PXE fallback:', error);
+      return await this.pxeProvider.getPrivateBalance(owner);
+    }
   }
 
   async mintToPrivate(recipient: AztecAddress, amount: bigint): Promise<string> {
-    const accounts = this.azguardClient.accounts;
-    if (accounts.length === 0) {
-      throw new Error("No accounts available in Azguard wallet");
+    try {
+      const contract = await this.getTokenContract();
+      const account = await ensureWalletConnected();
+      const from = account.getAddress();
+
+      const tx = await contract.methods
+        .mint_to_private(AztecAddress.fromString(from.toString()), recipient, amount)
+        .send()
+        .wait();
+
+      const txHash = tx.txHash.toString();
+      return txHash;
+    } catch (error) {
+      console.error('[TOKEN] Error minting to private:', error);
+      throw new Error(`Failed to mint tokens to private: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
 
-    const account = accounts[0];
-    const fromAddress = account.split(":")[2];
-
-    const [result] = await this.azguardClient.execute([
-      {
-        kind: "send_transaction",
-        account: account,
-        actions: [
-          {
-            kind: "call",
-            contract: this.contractAddress,
-            method: "mint_to_private",
-            args: [fromAddress, recipient.toString(), amount.toString()],
-          },
-        ],
-      },
-    ]);
-
-    if (result.status !== "ok") {
-      const errorMessage = result.status === "failed" ? result.error : "Transaction was skipped";
-      throw new Error(`Mint transaction failed: ${errorMessage}`);
-    }
-
-    return result.result as string;
+  clearCache(): void {
+    this.tokenContract = null;
+    this.pxeProvider.clearCache();
   }
 }
 
-class PXETokenProvider implements ITokenProvider {
+export class PXETokenProvider implements ITokenProvider {
   private contractCache = new Map<string, Contract>();
   private walletCache: Wallet | null = null;
 
@@ -197,5 +188,3 @@ class PXETokenProvider implements ITokenProvider {
     this.walletCache = null;
   }
 }
-
-export { AzguardTokenProvider, PXETokenProvider };

@@ -6,3 +6,22 @@ CLAUDE.md
 .claude
 
 **/target
+
+
+# Foundry files
+**/cache
+out-via-ir
+lcov.info
+
+# Config files
+.env
+
+# Avoid ignoring gitkeep
+!/**/.gitkeep
+
+# Keep the latest deployment only
+**/broadcast/*/*/*
+
+# Out dir
+**/out
+crytic-export
