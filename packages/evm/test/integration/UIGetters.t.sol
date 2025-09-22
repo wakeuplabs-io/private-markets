@@ -197,13 +197,14 @@ contract UIGettersTest is IntegrationBase {
         assertEq(yesTotal, 175 ether);
     }
 
-    function test_betProcessingAndClaimStatus_correctlyTracksStatusThroughoutMarketLifecycle() public {
+    function test_statusGetters_correctlyTrackBetAndClaimStatus() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Processed test");
+        uint256 marketId = predictionMarket.createMarket("Status test");
 
         bytes32 betId1 = keccak256("bet1");
         bytes32 betId2 = keccak256("bet2");
-        bytes32 commitment1 = keccak256("commitment1");
+        bytes32 secret1 = bytes32("commitment1");
+        bytes32 commitment1 = keccak256(abi.encodePacked(marketId, secret1));
 
         assertFalse(predictionMarket.isProcessed(betId1));
         assertFalse(predictionMarket.isProcessed(betId2));
@@ -218,12 +219,15 @@ contract UIGettersTest is IntegrationBase {
         assertTrue(predictionMarket.isProcessed(betId1));
         assertFalse(predictionMarket.isProcessed(betId2));
 
+        bytes32 leaf = keccak256(abi.encodePacked(commitment1, uint256(50 ether)));
+        bytes32 winnersRoot = leaf;
+        
         vm.prank(admin);
-        predictionMarket.setWinnersRoot(marketId, keccak256("winners"));
+        predictionMarket.setWinnersRoot(marketId, winnersRoot);
 
         bytes32[] memory proof = new bytes32[](0);
         vm.prank(user1);
-        predictionMarket.claim(marketId, 50 ether, proof, bytes32("commitment1"), user1);
+        predictionMarket.claim(marketId, 50 ether, proof, secret1, user1);
 
         assertTrue(predictionMarket.isClaimed(marketId, commitment1));
     }

@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {PredictionMarketGetters} from "./PredictionMarketGetters.sol";
 import {IPredictionMarket} from "../interfaces/IPredictionMarket.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 /**
  * @title PredictionMarketCore
@@ -162,7 +163,7 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
 
         // Verify Merkle proof
         bytes32 leaf = keccak256(abi.encodePacked(commitment, payout));
-        if (!_verifyMerkleProof(proof, winnersRoot, leaf)) revert InvalidMerkleProof();
+        if (!MerkleProof.verify(proof, winnersRoot, leaf)) revert InvalidMerkleProof();
 
         // Mark as claimed
         _state.claimed[marketId][commitment] = true;
@@ -175,25 +176,4 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
 
 
 
-    /**
-     * @dev Verifies a Merkle proof
-     * @param proof The Merkle proof
-     * @param root The Merkle root
-     * @param leaf The leaf to verify
-     * @return bool True if proof is valid
-     */
-    function _verifyMerkleProof(bytes32[] memory proof, bytes32 root, bytes32 leaf) internal pure returns (bool) {
-        bytes32 computedHash = leaf;
-
-        for (uint256 i = 0; i < proof.length; i++) {
-            bytes32 proofElement = proof[i];
-            if (computedHash <= proofElement) {
-                computedHash = keccak256(abi.encodePacked(computedHash, proofElement));
-            } else {
-                computedHash = keccak256(abi.encodePacked(proofElement, computedHash));
-            }
-        }
-
-        return computedHash == root;
-    }
 }

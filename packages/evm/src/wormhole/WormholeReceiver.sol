@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache 2
 pragma solidity ^0.8.20;
 
-import {BytesLib} from "wormhole-foundation/ethereum/contracts/libraries/external/BytesLib.sol";
 import {IWormhole} from "wormhole-foundation/ethereum/contracts/interfaces/IWormhole.sol";
+import {IWormholeRelayer} from "wormhole-foundation/relayer/ethereum/contracts/interfaces/relayer/IWormholeRelayer.sol";
+import {IWormholeReceiver} from "wormhole-foundation/relayer/ethereum/contracts/interfaces/relayer/IWormholeReceiver.sol";
 import {PredictionMarketGetters} from "../core/PredictionMarketGetters.sol";
 import {IPredictionMarket} from "../interfaces/IPredictionMarket.sol";
 
@@ -11,13 +12,10 @@ import {IPredictionMarket} from "../interfaces/IPredictionMarket.sol";
  * @dev Receives and processes VAAs from Aztec for prediction market bets
  * This contract runs on Arbitrum Sepolia and receives cross-chain messages from Aztec
  */
-contract WormholeReceiver is PredictionMarketGetters {
-    using BytesLib for bytes;
+contract WormholeReceiver is PredictionMarketGetters, IWormholeReceiver {
 
     // Custom Errors
     error ZeroPredictionMarketAddress();
-    error InvalidVAASignature(string reason);
-    error UnauthorizedEmitter();
     error ChainIdMismatch();
     error PayloadTooShort(uint256 provided, uint256 required);
     error InvalidMarketId();
@@ -25,6 +23,7 @@ contract WormholeReceiver is PredictionMarketGetters {
     error ZeroAmount();
     error InvalidCommitment();
     error ZeroEmitterAddress();
+    error MessageAlreadyProcessed(bytes32 deliveryHash);
 
     /**
      * @dev Event emitted when an emitter is registered
@@ -46,9 +45,22 @@ contract WormholeReceiver is PredictionMarketGetters {
     // Reference to the prediction market core contract
     IPredictionMarket public immutable PREDICTION_MARKET;
 
+    // Reference to the Wormhole Relayer contract
+    IWormholeRelayer public immutable wormholeRelayer;
+
+    // Address that can register senders (owner)
+    address public registrationOwner;
+
+    // Mapping to store registered senders for each chain
+    mapping(uint16 => bytes32) public registeredSenders;
+
+    // Track processed messages to prevent replay attacks
+    mapping(bytes32 => bool) public processedMessages;
+
     /**
      * @dev Constructor initializes parent PredictionMarketGetters and sets core contract
      * @param wormholeAddr Address of the Wormhole contract
+     * @param wormholeRelayerAddr Address of the Wormhole Relayer contract
      * @param chainId_ Wormhole Chain ID for this receiver (10003 = Arbitrum Sepolia)
      * @param evmChainId_ Native EVM Chain ID (421614 = Arbitrum Sepolia)
      * @param finality_ Number of confirmations required for finality
@@ -57,6 +69,7 @@ contract WormholeReceiver is PredictionMarketGetters {
      */
     constructor(
         address payable wormholeAddr,
+        address wormholeRelayerAddr,
         uint16 chainId_,
         uint256 evmChainId_,
         uint8 finality_,
@@ -64,56 +77,68 @@ contract WormholeReceiver is PredictionMarketGetters {
         address predictionMarketAddr
     ) PredictionMarketGetters(wormholeAddr, chainId_, evmChainId_, finality_, treasuryContractAddr) {
         if (predictionMarketAddr == address(0)) revert ZeroPredictionMarketAddress();
+        if (wormholeRelayerAddr == address(0)) revert ZeroPredictionMarketAddress(); // Reuse error for now
+
         PREDICTION_MARKET = IPredictionMarket(predictionMarketAddr);
+        wormholeRelayer = IWormholeRelayer(wormholeRelayerAddr);
+        registrationOwner = msg.sender;
     }
 
     /**
-     * @notice Verifies a VAA (Verified Action Approval) and processes the bet
-     * @dev Validates that a VAA is properly signed and forwards bet to PredictionMarketCore
-     * @param encodedVm A byte array containing a VAA signed by the guardians
+     * @dev Modifier to ensure only the Wormhole Relayer can call certain functions
      */
-    function processBetVaa(bytes memory encodedVm) external {
-        // Get the payload by verifying the VAA
-        bytes memory payload = _verify(encodedVm);
+    modifier onlyRelayer() {
+        require(msg.sender == address(wormholeRelayer), "Only the Wormhole relayer can call this function");
+        _;
+    }
 
-        // Extract and process bet data from the payload
+    /**
+     * @dev Modifier to check if the sender is registered for the source chain
+     * @param sourceChain The Wormhole chain ID of the source
+     * @param sourceAddress The address of the sender as bytes32
+     */
+    modifier isRegisteredSender(uint16 sourceChain, bytes32 sourceAddress) {
+        require(registeredSenders[sourceChain] == sourceAddress, "Not registered sender");
+        _;
+    }
+
+
+    /**
+     * @notice Standard Wormhole message receiver function
+     * @dev This is the recommended pattern from Wormhole documentation
+     * @param payload The message payload
+     * @param additionalMessages Additional messages (not used in this implementation)
+     * @param sourceAddress The address of the sender (as bytes32)
+     * @param sourceChain The chain ID of the sender
+     * @param deliveryHash The hash of the delivery
+     */
+    function receiveWormholeMessages(
+        bytes memory payload,
+        bytes[] memory additionalMessages, // additionalMessages - not used in this implementation
+        bytes32 sourceAddress,
+        uint16 sourceChain,
+        bytes32 deliveryHash
+    ) public payable override onlyRelayer isRegisteredSender(sourceChain, sourceAddress) {
+        // Prevent replay attacks
+        if (processedMessages[deliveryHash]) {
+            revert MessageAlreadyProcessed(deliveryHash);
+        }
+
+        // Mark message as processed
+        processedMessages[deliveryHash] = true;
+
+        // Process the bet payload
         _processBetPayload(payload);
     }
 
-    /**
-     * @dev Internal verification function for VAAs
-     * @param encodedVm A byte array containing a VAA signed by the guardians
-     * @return bytes The payload of the VAA if verification succeeds
-     */
-    function _verify(bytes memory encodedVm) internal view returns (bytes memory) {
-        // Parse and verify the VAA through Wormhole
-        (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(encodedVm);
-
-        // Ensure the VAA signature is valid
-        if (!valid) revert InvalidVAASignature(reason);
-
-        // Ensure the VAA is from a valid emitter
-        if (!verifyAuthorizedEmitter(vm)) revert UnauthorizedEmitter();
-
-        return vm.payload;
-    }
 
     /**
      * @dev Processes bet payload from Aztec
-     * Expected payload structure:
-     * - uint256 marketId (32 bytes)
-     * - bytes32 betId (32 bytes)
-     * - bool outcome (1 byte: 0x00 = No/false, 0x01 = Yes/true)
-     * - uint256 amount (32 bytes)
-     * - bytes32 commitment (32 bytes)
-     * Total: 129 bytes minimum
+     * Supports both abi.encode (standard Wormhole) and abi.encodePacked formats
      */
     function _processBetPayload(bytes memory payload) internal {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
-
-        // Ensure payload is long enough for bet data
-        if (payload.length < 129) revert PayloadTooShort(payload.length, 129);
 
         uint256 marketId;
         bytes32 betId;
@@ -121,22 +146,26 @@ contract WormholeReceiver is PredictionMarketGetters {
         uint256 amount;
         bytes32 commitment;
 
-        assembly {
-            // Extract marketId (first 32 bytes)
-            marketId := mload(add(payload, 32))
+        // Try to decode as abi.encode first (standard Wormhole format)
+        if (_tryDecodeAbiEncode(payload)) {
+            (marketId, betId, outcome, amount, commitment) = abi.decode(payload, (uint256, bytes32, bool, uint256, bytes32));
+        } else {
+            // Fallback to abi.encodePacked format (legacy)
+            if (payload.length < 129) revert PayloadTooShort(payload.length, 129);
 
-            // Extract betId (next 32 bytes)
-            betId := mload(add(payload, 64))
-
-            // Extract outcome (next 1 byte: 0x00 = false/No, 0x01 = true/Yes)
-            let outcomeRaw := byte(0, mload(add(payload, 96)))
-            outcome := gt(outcomeRaw, 0)
-
-            // Extract amount (next 32 bytes)
-            amount := mload(add(payload, 97))
-
-            // Extract commitment (next 32 bytes)
-            commitment := mload(add(payload, 129))
+            assembly {
+                // Extract marketId (first 32 bytes)
+                marketId := mload(add(payload, 32))
+                // Extract betId (next 32 bytes)
+                betId := mload(add(payload, 64))
+                // Extract outcome (next 1 byte: 0x00 = false/No, 0x01 = true/Yes)
+                let outcomeRaw := byte(0, mload(add(payload, 96)))
+                outcome := gt(outcomeRaw, 0)
+                // Extract amount (next 32 bytes)
+                amount := mload(add(payload, 97))
+                // Extract commitment (next 32 bytes)
+                commitment := mload(add(payload, 129))
+            }
         }
 
         // Validate extracted data
@@ -152,29 +181,43 @@ contract WormholeReceiver is PredictionMarketGetters {
     }
 
     /**
-     * @dev Verifies that a VAA is from a registered authorized emitter
-     * @param vm The parsed Wormhole VM structure
-     * @return bool True if the emitter is authorized
+     * @dev Try to detect if payload is abi.encode format
+     * abi.encode has specific length patterns and alignment
      */
-    function verifyAuthorizedEmitter(IWormhole.VM memory vm) internal view returns (bool) {
-        // Check if the emitter is registered for this chain
-        bytes32 registeredEmitter = getRegisteredEmitter(vm.emitterChainId);
+    function _tryDecodeAbiEncode(bytes memory payload) internal view returns (bool) {
+        // abi.encode for (uint256, bytes32, bool, uint256, bytes32) should be exactly 160 bytes
+        // 32 + 32 + 32 + 32 + 32 = 160 (bool is padded to 32 bytes)
+        if (payload.length != 160) return false;
 
-        // Return true if the emitter matches the registered one
-        return registeredEmitter == vm.emitterAddress;
+        // Additional validation: try to decode and see if it works
+        try this._testDecodeAbiEncode(payload) returns (bool) {
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     /**
-     * @notice Registers an emitter from another chain for verification
-     * @dev Only the owner can register emitters
-     * @param chainId_ The Wormhole chain ID of the emitter (e.g., 56 for Aztec)
-     * @param emitterAddress_ The emitter contract address as bytes32
+     * @dev External function for testing abi.decode (can't use try/catch with internal functions)
      */
-    function registerEmitter(uint16 chainId_, bytes32 emitterAddress_) external onlyOwner {
-        if (emitterAddress_ == bytes32(0)) revert ZeroEmitterAddress();
+    function _testDecodeAbiEncode(bytes memory payload) external pure returns (bool) {
+        abi.decode(payload, (uint256, bytes32, bool, uint256, bytes32));
+        return true;
+    }
 
-        _state.registeredEmitters[chainId_] = emitterAddress_;
 
-        emit EmitterRegistered(chainId_, emitterAddress_);
+    /**
+     * @notice Registers a sender from another chain for verification
+     * @dev Only the registration owner can register senders
+     * @param sourceChain The Wormhole chain ID of the sender (e.g., 56 for Aztec)
+     * @param sourceAddress The sender contract address as bytes32
+     */
+    function setRegisteredSender(uint16 sourceChain, bytes32 sourceAddress) external {
+        require(msg.sender == registrationOwner, "Not allowed to set registered sender");
+        if (sourceAddress == bytes32(0)) revert ZeroEmitterAddress();
+
+        registeredSenders[sourceChain] = sourceAddress;
+
+        emit EmitterRegistered(sourceChain, sourceAddress);
     }
 }
