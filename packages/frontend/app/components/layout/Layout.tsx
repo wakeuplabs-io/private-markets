@@ -14,13 +14,10 @@ const Layout: React.FC<LayoutProps> = ({
 }) => {
   return (
     <div className={cn('min-h-screen bg-background relative', className)}>
-      {/* Background Mesh */}
       <BackgroundMesh />
 
-      {/* Header */}
       <Header />
 
-      {/* Main Content */}
       <main className="relative z-0 flex-1">
         {children}
       </main>

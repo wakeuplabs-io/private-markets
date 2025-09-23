@@ -3,9 +3,10 @@ use dep::aztec::macros::aztec;
 #[aztec]
 pub contract BetVault {
     use dep::aztec::{
-        event::event_interface::{emit_event_in_private_log, PrivateLogContent},
+        event::event_interface::{emit_event_in_private, MessageDelivery},
         macros::{storage::storage, events::event, functions::{private, public, internal, view, initializer}},
-        prelude::{AztecAddress, Map, PublicMutable, PublicImmutable},
+        state_vars::{map::Map, public_mutable::PublicMutable, public_immutable::PublicImmutable},
+        protocol_types::address::AztecAddress,
     };
     use dep::token::Token;
     use dep::wormhole::Wormhole;
@@ -82,12 +83,11 @@ pub contract BetVault {
         BetVault::at(context.this_address())._mark_bet_processed(bet_id).enqueue(&mut context);
 
         let ev = BetPlaced { market_id, outcome, amount, bet_id, commitment };
-        emit_event_in_private_log(
+        emit_event_in_private(
             ev,
             &mut context,
-            context.this_address(),
             from,
-            PrivateLogContent.CONSTRAINED_ENCRYPTION
+            MessageDelivery::CONSTRAINED_ONCHAIN
         );
 
         let payload_amount = u128_be31(amount);

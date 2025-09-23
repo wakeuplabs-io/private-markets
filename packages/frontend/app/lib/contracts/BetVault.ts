@@ -13,7 +13,6 @@ import {
   type ContractInstanceWithAddress,
   type ContractMethod,
   type ContractStorageLayout,
-  type ContractNotes,
   decodeFromAbi,
   DeployMethod,
   EthAddress,
@@ -134,12 +133,12 @@ token_address: {
     }
 
 
-  public static get notes(): ContractNotes<'UintNote'> {
+  public static get notes() {
     return {
       UintNote: {
           id: new NoteSelector(0),
         }
-    } as ContractNotes<'UintNote'>;
+    };
   }
 
 

@@ -8,10 +8,8 @@ export default function Home() {
   return (
     <Layout>
       <div className="relative min-h-screen">
-        {/* Hero Section */}
         <div className="container mx-auto px-8 py-24">
           <div className="max-w-4xl mx-auto text-center">
-            {/* Main Heading */}
             <h1 className="text-6xl md:text-7xl font-bold text-foreground mb-6 leading-tight">
               PRIVATE{' '}
               <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
@@ -19,13 +17,11 @@ export default function Home() {
               </span>
             </h1>
 
-            {/* Subtitle */}
             <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed">
               Private betting with zero-knowledge proofs on cross-chain markets.
               Trade predictions while preserving your privacy.
             </p>
 
-            {/* Key Features */}
             <div className="grid md:grid-cols-3 gap-8 mb-12 max-w-4xl mx-auto">
               <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-6">
                 <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
@@ -58,7 +54,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Link href="/markets">
                 <Button
@@ -80,7 +75,6 @@ export default function Home() {
               </Button>
             </div>
 
-            {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-16 max-w-2xl mx-auto">
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-primary mb-1">100%</div>
@@ -102,7 +96,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Background Effects */}
         <div className="absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />

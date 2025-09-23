@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "compile": "cd vault && aztec-nargo compile",
+    "postprocess": "cd packages/avm && aztec-postprocess-contract",
+    "build": "npm run compile && npm run postprocess",
     "deploy:token": "node --import tsx/esm scripts/deploy_token.ts",
     "deploy:vault": "node --import tsx/esm scripts/deploy_vault.ts",
     "deploy:vault:with-token": "node --import tsx/esm scripts/deploy_vault.ts",

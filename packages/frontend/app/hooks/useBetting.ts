@@ -30,6 +30,7 @@ const apiPlaceBet = async (data: PlaceBetData): Promise<Bet> => {
   return bet
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const apiClaimReward = async (betId: string): Promise<void> => {
   await new Promise(resolve => setTimeout(resolve, 3000))
 }

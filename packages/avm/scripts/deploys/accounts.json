@@ -1,1 +1,6 @@
-{}
+{
+  "deployer": {
+    "address": "0x07ad992ffcf83a154156605c4afeba3fdd3edd124a71a6653b66914659407d4d",
+    "deployed": true
+  }
+}

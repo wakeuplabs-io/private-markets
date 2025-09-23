@@ -63,7 +63,7 @@ async function main(): Promise<void> {
 
     const privateBalance = await contract.methods
       .balance_of_private(deployerAddress)
-      .simulate();
+      .simulate({ from: deployer.getAddress() });
 
     console.log("[OK] Private balance:", privateBalance.toString());
     console.log("[OK] Expected amount:", mintAmount.toString());
