@@ -14,30 +14,18 @@ interface CreateMarketModalProps {
 
 interface FormErrors {
   question?: string
-  optionYes?: string
-  optionNo?: string
-  closingDate?: string
+  closingTime?: string
 }
 
-export function CreateMarketModal({ 
-  isOpen, 
-  onClose, 
-  onNext, 
-  initialData 
+export function CreateMarketModal({
+  isOpen,
+  onClose,
+  onNext,
+  initialData
 }: CreateMarketModalProps) {
   const [formData, setFormData] = useState<CreateMarketFormData>({
     question: initialData?.question || '',
-    optionYes: initialData?.optionYes || 'Yes',
-    optionNo: initialData?.optionNo || 'No',
-    closingDate: (() => {
-      if (initialData?.closingDate && !isNaN(initialData.closingDate.getTime())) {
-        return initialData.closingDate
-      }
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      return tomorrow
-    })(),
-    disclaimer: initialData?.disclaimer || ''
+    closingTime: initialData?.closingTime || new Date(Date.now() + 24 * 60 * 60 * 1000) // Default: 24 hours from now
   })
 
   const [errors, setErrors] = useState<FormErrors>({})
@@ -55,11 +43,14 @@ export function CreateMarketModal({
       newErrors.question = 'Question cannot exceed 200 characters'
     }
 
-    // Validate closing date
+    // Validate closing time
     const now = new Date()
-    const closingDate = new Date(formData.closingDate)
-    if (closingDate <= now) {
-      newErrors.closingDate = 'Closing date must be in the future'
+    const minClosingTime = new Date(now.getTime() + 5 * 60 * 1000) // At least 5 minutes from now
+
+    if (formData.closingTime <= now) {
+      newErrors.closingTime = 'Closing time must be in the future'
+    } else if (formData.closingTime < minClosingTime) {
+      newErrors.closingTime = 'Closing time must be at least 5 minutes from now'
     }
 
     setErrors(newErrors)
@@ -68,7 +59,7 @@ export function CreateMarketModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) {
       return
     }
@@ -85,43 +76,34 @@ export function CreateMarketModal({
     }
   }
 
-  const handleInputChange = (field: keyof CreateMarketFormData, value: string | Date) => {
+  const handleQuestionChange = (value: string) => {
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      question: value
     }))
 
-    // Clear specific error when typing
-    if (errors[field as keyof FormErrors]) {
+    // Clear error when typing
+    if (errors.question) {
       setErrors(prev => ({
         ...prev,
-        [field]: undefined
+        question: undefined
       }))
     }
   }
 
-  const formatDateForInput = (date: Date): string => {
-    try {
-      if (!date || isNaN(date.getTime())) {
-        const now = new Date()
-        return now.toISOString().slice(0, 16)
-      }
-      return date.toISOString().slice(0, 16)
-    } catch {
-      console.warn('Invalid date provided to formatDateForInput:', date)
-      const now = new Date()
-      return now.toISOString().slice(0, 16)
-    }
-  }
+  const handleClosingTimeChange = (value: string) => {
+    const date = new Date(value)
+    setFormData(prev => ({
+      ...prev,
+      closingTime: date
+    }))
 
-  const handleDateChange = (value: string) => {
-    try {
-      const date = new Date(value)
-      if (!isNaN(date.getTime())) {
-        handleInputChange('closingDate', date)
-      }
-    } catch {
-      console.warn('Invalid date string provided:', value)
+    // Clear error when changing
+    if (errors.closingTime) {
+      setErrors(prev => ({
+        ...prev,
+        closingTime: undefined
+      }))
     }
   }
 
@@ -130,10 +112,10 @@ export function CreateMarketModal({
       <div className="p-6">
         <div className="mb-4">
           <h2 className="text-xl font-bold text-foreground mb-1">
-            Set up new market
+            Create New Market
           </h2>
           <p className="text-sm text-muted-foreground">
-            Once created, markets cannot be edited or deleted
+            Create a binary prediction market (Yes/No outcomes)
           </p>
         </div>
 
@@ -145,56 +127,78 @@ export function CreateMarketModal({
             <textarea
               id="question"
               value={formData.question}
-              onChange={(e) => handleInputChange('question', e.target.value)}
-              placeholder="Example of question that will be resolved with Yes or No?"
+              onChange={(e) => handleQuestionChange(e.target.value)}
+              placeholder="Example: Will Bitcoin reach $100,000 by the end of 2025?"
               className={`w-full px-3 py-2 border rounded-lg resize-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-colors bg-input text-foreground placeholder-muted-foreground ${
                 errors.question
                   ? 'border-destructive bg-destructive/10'
                   : 'border-border'
               }`}
-              rows={2}
+              rows={3}
               maxLength={200}
             />
             {errors.question && (
-              <p className="text-sm text-destructive mt-1">{errors.question}</p>
+              <p className="text-destructive text-sm mt-1">{errors.question}</p>
             )}
+            <p className="text-xs text-muted-foreground mt-1">
+              {formData.question.length}/200 characters
+            </p>
           </div>
 
           <div>
-            <label htmlFor="closingDate" className="block text-sm font-medium text-foreground mb-2">
-              Closing date and time *
+            <label htmlFor="closingTime" className="block text-sm font-medium text-foreground mb-2">
+              Market Closing Time *
             </label>
             <input
-              id="closingDate"
+              id="closingTime"
               type="datetime-local"
-              value={formatDateForInput(formData.closingDate)}
-              onChange={(e) => handleDateChange(e.target.value)}
+              value={formData.closingTime.toISOString().slice(0, 16)}
+              onChange={(e) => handleClosingTimeChange(e.target.value)}
               className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-ring/20 focus:border-ring transition-colors bg-input text-foreground ${
-                errors.closingDate
+                errors.closingTime
                   ? 'border-destructive bg-destructive/10'
                   : 'border-border'
               }`}
-              min={formatDateForInput(new Date())}
+              min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)}
             />
-            {errors.closingDate && (
-              <p className="text-sm text-destructive mt-1">{errors.closingDate}</p>
+            {errors.closingTime && (
+              <p className="text-destructive text-sm mt-1">{errors.closingTime}</p>
             )}
+            <p className="text-xs text-muted-foreground mt-1">
+              When betting will close for this market. Must be in the future.
+            </p>
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4 border-t border-border">
+          <div className="bg-muted/30 border border-border rounded-lg p-4">
+            <h3 className="text-sm font-medium text-foreground mb-2">Market Details</h3>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <div className="flex justify-between">
+                <span>Options:</span>
+                <span>Yes / No (automatic)</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Market Type:</span>
+                <span>Binary Prediction</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Resolution:</span>
+                <span>Manual by admin</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-4">
             <Button
               type="button"
               variant="secondary"
               onClick={onClose}
               disabled={isSubmitting}
-              size="sm"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting}
-              size="sm"
             >
               {isSubmitting ? 'Creating...' : 'Create Market'}
             </Button>

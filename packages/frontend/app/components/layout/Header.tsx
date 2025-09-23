@@ -10,6 +10,21 @@ import { useDefaultTokenInfo } from '@/hooks/useTokenInfo'
 import { useWallet } from '@/context'
 import { useAdmin } from '@/hooks/useAdmin'
 import { AztecConnectionBadge } from '@/components/AztecConnectionStatus'
+import dynamic from 'next/dynamic'
+
+const EvmConnectButton = dynamic(
+  () => import('@/components/ui/EvmConnectButton').then(mod => ({ default: mod.EvmConnectButton })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center space-x-2">
+        <div className="px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md">
+          Loading...
+        </div>
+      </div>
+    )
+  }
+)
 
 interface HeaderProps {
   className?: string
@@ -73,6 +88,7 @@ const Header: React.FC<HeaderProps> = ({
 
         <div className="flex items-center space-x-4">
           <AztecConnectionBadge />
+          <EvmConnectButton />
           <TokenInfoBadge
             tokenInfo={tokenInfo}
             loading={isLoading}
@@ -87,9 +103,9 @@ const Header: React.FC<HeaderProps> = ({
           <button
             onClick={handleDisconnect}
             className="px-3 py-1.5 text-xs bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 rounded-md transition-colors"
-            title="Disconnect wallet"
+            title="Disconnect Aztec wallet"
           >
-            Disconnect
+            Disconnect Aztec
           </button>
           <button
             onClick={clearLocalStorage}

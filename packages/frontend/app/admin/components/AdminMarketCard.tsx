@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Image from 'next/image'
 import { AdminMarket } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -22,10 +23,10 @@ export const AdminMarketCard: React.FC<AdminMarketCardProps> = ({
 
   const getStatusColor = (status: AdminMarket['status']) => {
     switch (status) {
-      case "active":
+      case "open":
         return 'bg-green-500/20 text-green-400 border-green-500/30'
-      case "closed":
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      case "finalized":
+        return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
       case "resolved":
         return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
       default:
@@ -67,9 +68,11 @@ export const AdminMarketCard: React.FC<AdminMarketCardProps> = ({
           </div>
 
           {market.imageUrl && (
-            <img
+            <Image
               src={market.imageUrl}
               alt="Market"
+              width={48}
+              height={48}
               className="w-12 h-12 rounded-lg object-cover ml-3"
             />
           )}
@@ -117,12 +120,14 @@ export const AdminMarketCard: React.FC<AdminMarketCardProps> = ({
             <span className="text-muted-foreground">Created:</span>
             <span className="text-foreground">{formatDate(market.createdAt)}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Closes:</span>
-            <span className="text-foreground">
-              {formatDate(market.closingDate)} at {formatTime(market.closingDate)}
-            </span>
-          </div>
+          {market.closingDate && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Closes:</span>
+              <span className="text-foreground">
+                {formatDate(market.closingDate)} at {formatTime(market.closingDate)}
+              </span>
+            </div>
+          )}
           {market.resolvedAt && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Resolved:</span>
@@ -143,7 +148,7 @@ export const AdminMarketCard: React.FC<AdminMarketCardProps> = ({
         <div className="pt-4 border-t border-border">
           {!showResolveOptions ? (
             <div className="flex flex-wrap gap-2">
-              {market.adminActions.canResolve && market.status === "active" && (
+              {market.adminActions.canResolve && (market.status === "open" || market.status === "finalized") && (
                 <Button
                   variant="default"
                   size="sm"

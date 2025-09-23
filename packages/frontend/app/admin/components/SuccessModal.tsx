@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { AdminMarket } from '@/types'
+import { Market } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 
@@ -10,7 +10,7 @@ interface SuccessModalProps {
   onClose: () => void
   onViewMarket: () => void
   onCreateAnother: () => void
-  createdMarket: AdminMarket
+  createdMarket: Market
 }
 
 export function SuccessModal({ 
@@ -64,7 +64,7 @@ export function SuccessModal({
               Closing Date
             </label>
             <p className="text-foreground p-3 bg-muted rounded-lg text-sm">
-              {formatDate(createdMarket.closingDate)}
+              {createdMarket.closingDate ? formatDate(createdMarket.closingDate) : 'TBD'}
             </p>
           </div>
         </div>

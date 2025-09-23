@@ -33,15 +33,6 @@ export function ReviewMarketModal({
     }
   }
 
-  const formatDate = (date: Date): string => {
-    return new Intl.DateTimeFormat('en-US', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date)
-  }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
@@ -72,12 +63,12 @@ export function ReviewMarketModal({
             <div className="grid grid-cols-2 gap-3">
               <div className="border border-border bg-input rounded-lg p-3">
                 <span className="text-sm font-medium text-foreground">
-                  {formData.optionYes}
+                  Yes
                 </span>
               </div>
               <div className="border border-border bg-input rounded-lg p-3">
                 <span className="text-sm font-medium text-foreground">
-                  {formData.optionNo}
+                  No
                 </span>
               </div>
             </div>
@@ -85,10 +76,10 @@ export function ReviewMarketModal({
 
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
-              Closing Date
+              Market Type
             </label>
             <p className="text-foreground p-3 bg-muted rounded-lg">
-              {formatDate(formData.closingDate)}
+              Binary Prediction Market
             </p>
           </div>
         </div>

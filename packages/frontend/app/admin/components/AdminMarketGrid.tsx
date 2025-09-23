@@ -1,11 +1,11 @@
 'use client'
 
 import React from 'react'
-import { AdminMarket } from '@/types'
+import { Market } from '@/types'
 import { Button } from '@/components/ui/Button'
 
 interface AdminMarketGridProps {
-  markets: AdminMarket[]
+  markets: Market[]
   isLoading?: boolean
   onCreateMarket: () => void
   onResolveMarket: (marketId: string, winningOption: 'yes' | 'no') => void
@@ -80,16 +80,16 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
                           {market.question}
                         </h3>
                         <p className="text-xs text-muted-foreground">
-                          Closes: {market.closingDate.toLocaleDateString()}
+                          Closes: {market.closingDate?.toLocaleDateString() || 'TBD'}
                         </p>
                       </div>
                     </td>
                     <td className="p-4">
                       <span className={`inline-flex px-2 py-1 text-xs rounded-full ${
-                        market.status === "active"
+                        market.status === "open"
                           ? 'bg-green-500/20 text-green-400'
-                          : market.status === "closed"
-                          ? 'bg-yellow-500/20 text-yellow-400'
+                          : market.status === "finalized"
+                          ? 'bg-orange-500/20 text-orange-400'
                           : market.status === "resolved"
                           ? 'bg-blue-500/20 text-blue-400'
                           : 'bg-muted text-muted-foreground'
@@ -98,17 +98,17 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
                       </span>
                     </td>
                     <td className="p-4 text-sm text-foreground">
-                      {market.bets.total}
+                      0
                     </td>
                     <td className="p-4 text-sm text-foreground">
-                      {market.bets.totalVolume.toLocaleString()}
+                      0
                     </td>
                     <td className="p-4 text-sm text-muted-foreground">
                       {market.createdAt.toLocaleDateString()}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center space-x-2">
-                        {market.adminActions.canResolve && (
+                        {market.status === 'open' && (
                           <Button
                             variant="secondary"
                             size="sm"
@@ -117,7 +117,7 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
                             Resolve
                           </Button>
                         )}
-                        {market.adminActions.canEdit && (
+                        {false && (
                           <Button
                             variant="secondary"
                             size="sm"

@@ -79,7 +79,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
             <path d="M6 3v3l2 1" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
           </svg>
           <span className="text-xs text-foreground font-normal">
-            {formatDate(market.closingDate)}
+            {market.closingDate ? formatDate(market.closingDate) : 'TBD'}
           </span>
         </div>
 
