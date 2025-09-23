@@ -1,4 +1,4 @@
-export type MarketStatus = 'draft' | 'active' | 'open' | 'closed' | 'resolved'
+export type MarketStatus = 'open' | 'finalized' | 'resolved'
 
 export type MarketOption = 'yes' | 'no'
 
@@ -17,13 +17,14 @@ export interface Market {
   options: MarketOptionWithOdds[]
   status: MarketStatus
   createdAt: Date
-  closingDate: Date
+  closingDate?: Date
   resolvedAt?: Date | null
   winningOption?: MarketOptionWithOdds | null
   disclaimer?: string
   createdBy?: string
   merkleRoot?: string
   arbitrumTxHash?: string
+  admin?: string
 }
 
 export interface MarketSummary {
@@ -36,10 +37,7 @@ export interface MarketSummary {
 
 export interface CreateMarketData {
   question: string
-  optionYes: string
-  optionNo: string
-  closingDate: Date
-  disclaimer?: string
+  closingTime: Date
 }
 
 export interface AdminMarket extends Market {
@@ -62,10 +60,7 @@ export interface AdminMarket extends Market {
 
 export interface CreateMarketFormData {
   question: string
-  optionYes: string
-  optionNo: string
-  closingDate: Date
-  disclaimer?: string
+  closingTime: Date
 }
 
 export interface AdminMarketFilters {

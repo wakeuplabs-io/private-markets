@@ -12,9 +12,7 @@ export interface CreateMarketFlow {
 
 export interface CreateMarketFormData {
   question: string
-  optionYes: string
-  optionNo: string
-  closingDate: Date
+  closingTime: Date
   disclaimer?: string
 }
 

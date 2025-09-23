@@ -7,13 +7,13 @@ import { PlaceBetModal } from '@/components/betting'
 import { Market, PlaceBetData, MarketOption } from '@/types'
 import { useVault } from '@/hooks/useVault'
 import { useWallet } from '@/context/WalletContext'
-import { useMarkets } from '@/hooks/useMarkets'
+import { useUserMarkets } from '@/hooks/useUserMarkets'
 
 export default function MarketsPage() {
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null)
   const [isBetModalOpen, setIsBetModalOpen] = useState(false)
 
-  const { markets, isLoading } = useMarkets()
+  const { markets, isLoading } = useUserMarkets()
   const { placeBet, isLoading: isPlacingBet, clearError } = useVault()
   const { wallet, connectWallet, isConnected } = useWallet()
 
