@@ -13,13 +13,13 @@ contract UIGettersTest is IntegrationBase {
     function test_getMarketCount_returnsCorrectTotal_afterCreatingMultipleMarkets() public {
         vm.startPrank(admin);
 
-        predictionMarket.createMarket("Market 1");
+        predictionMarket.createMarket("Market 1", block.timestamp + 1 days);
         assertEq(predictionMarket.getMarketCount(), 1);
 
-        predictionMarket.createMarket("Market 2");
+        predictionMarket.createMarket("Market 2", block.timestamp + 1 days);
         assertEq(predictionMarket.getMarketCount(), 2);
 
-        predictionMarket.createMarket("Private Market");
+        predictionMarket.createMarket("Private Market", block.timestamp + 1 days);
         assertEq(predictionMarket.getMarketCount(), 3);
 
         vm.stopPrank();
@@ -28,9 +28,9 @@ contract UIGettersTest is IntegrationBase {
     function test_getMarketIdAt_returnsCorrectAutoIncrementalIds_forValidIndices() public {
         vm.startPrank(admin);
 
-        uint256 marketId1 = predictionMarket.createMarket("Market 1");
-        uint256 marketId2 = predictionMarket.createMarket("Market 2");
-        uint256 marketId3 = predictionMarket.createMarket("Private Market");
+        uint256 marketId1 = predictionMarket.createMarket("Market 1", block.timestamp + 1 days);
+        uint256 marketId2 = predictionMarket.createMarket("Market 2", block.timestamp + 1 days);
+        uint256 marketId3 = predictionMarket.createMarket("Private Market", block.timestamp + 1 days);
 
         vm.stopPrank();
 
@@ -48,7 +48,7 @@ contract UIGettersTest is IntegrationBase {
         predictionMarket.getMarketIdAt(0);
 
         vm.prank(admin);
-        predictionMarket.createMarket("Market 1");
+        predictionMarket.createMarket("Market 1", block.timestamp + 1 days);
 
         vm.expectRevert("Index out of bounds");
         predictionMarket.getMarketIdAt(1);
@@ -70,7 +70,7 @@ contract UIGettersTest is IntegrationBase {
         questions[4] = "Will the proposal pass?";
 
         for (uint256 i = 0; i < 5; i++) {
-            predictionMarket.createMarket(questions[i]);
+            predictionMarket.createMarket(questions[i], block.timestamp + 1 days);
         }
 
         vm.stopPrank();
@@ -102,9 +102,9 @@ contract UIGettersTest is IntegrationBase {
 
     function test_getMarketsByState_returnsOnlyOpenMarketsWhenAllMarketsAreOpen() public {
         vm.startPrank(admin);
-        predictionMarket.createMarket("Market 1");
-        predictionMarket.createMarket("Market 2");
-        predictionMarket.createMarket("Market 3");
+        predictionMarket.createMarket("Market 1", block.timestamp + 1 days);
+        predictionMarket.createMarket("Market 2", block.timestamp + 1 days);
+        predictionMarket.createMarket("Market 3", block.timestamp + 1 days);
         vm.stopPrank();
 
         IPredictionMarket.Market[] memory openMarkets = predictionMarket.getMarketsByState(IPredictionMarket.MarketState.OPEN);
@@ -113,16 +113,16 @@ contract UIGettersTest is IntegrationBase {
         IPredictionMarket.Market[] memory resolvedMarkets = predictionMarket.getMarketsByState(IPredictionMarket.MarketState.RESOLVED);
         assertEq(resolvedMarkets.length, 0);
 
-        IPredictionMarket.Market[] memory closedMarkets = predictionMarket.getMarketsByState(IPredictionMarket.MarketState.CLOSED);
-        assertEq(closedMarkets.length, 0);
+        IPredictionMarket.Market[] memory finalizedMarkets = predictionMarket.getMarketsByState(IPredictionMarket.MarketState.FINALIZED);
+        assertEq(finalizedMarkets.length, 0);
     }
 
     function test_getMarketsByState_correctlyFiltersOpenAndResolvedMarketsWhenMixed() public {
         vm.startPrank(admin);
-        uint256 market1 = predictionMarket.createMarket("Market 1");
-        uint256 market2 = predictionMarket.createMarket("Market 2");
-        uint256 market3 = predictionMarket.createMarket("Market 3");
-        uint256 market4 = predictionMarket.createMarket("Market 4");
+        uint256 market1 = predictionMarket.createMarket("Market 1", block.timestamp + 1 days);
+        uint256 market2 = predictionMarket.createMarket("Market 2", block.timestamp + 1 days);
+        uint256 market3 = predictionMarket.createMarket("Market 3", block.timestamp + 1 days);
+        uint256 market4 = predictionMarket.createMarket("Market 4", block.timestamp + 1 days);
         vm.stopPrank();
 
         vm.prank(admin);
@@ -147,7 +147,7 @@ contract UIGettersTest is IntegrationBase {
 
     function test_getMarket_returnsCompleteMarketData_forValidMarketId() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Individual test market");
+        uint256 marketId = predictionMarket.createMarket("Individual test market", block.timestamp + 1 days);
 
         IPredictionMarket.Market memory market = predictionMarket.getMarket(marketId);
 
@@ -172,7 +172,7 @@ contract UIGettersTest is IntegrationBase {
 
     function test_totalsGetters_correctlyTrackBettingAmountsForYesAndNoOutcomes() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Totals test");
+        uint256 marketId = predictionMarket.createMarket("Totals test", block.timestamp + 1 days);
 
         assertEq(predictionMarket.getYesTotals(marketId), 0);
         assertEq(predictionMarket.getNoTotals(marketId), 0);
@@ -199,7 +199,7 @@ contract UIGettersTest is IntegrationBase {
 
     function test_statusGetters_correctlyTrackBetAndClaimStatus() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Status test");
+        uint256 marketId = predictionMarket.createMarket("Status test", block.timestamp + 1 days);
 
         bytes32 betId1 = keccak256("bet1");
         bytes32 betId2 = keccak256("bet2");
@@ -234,7 +234,7 @@ contract UIGettersTest is IntegrationBase {
 
     function test_winnersRoot_correctlyStoredAndRetrievedAfterMarketResolution() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Winners root test");
+        uint256 marketId = predictionMarket.createMarket("Winners root test", block.timestamp + 1 days);
 
         assertEq(predictionMarket.getWinnersRoot(marketId), bytes32(0));
 
@@ -254,10 +254,10 @@ contract UIGettersTest is IntegrationBase {
 
         vm.startPrank(admin);
 
-        uint256 market1 = predictionMarket.createMarket("Will Bitcoin reach $100k in 2024?");
-        uint256 market2 = predictionMarket.createMarket("Will it rain tomorrow?");
-        uint256 market3 = predictionMarket.createMarket("Private prediction");
-        uint256 market4 = predictionMarket.createMarket("Will the proposal pass?");
+        uint256 market1 = predictionMarket.createMarket("Will Bitcoin reach $100k in 2024?", block.timestamp + 1 days);
+        uint256 market2 = predictionMarket.createMarket("Will it rain tomorrow?", block.timestamp + 1 days);
+        uint256 market3 = predictionMarket.createMarket("Private prediction", block.timestamp + 1 days);
+        uint256 market4 = predictionMarket.createMarket("Will the proposal pass?", block.timestamp + 1 days);
 
         vm.stopPrank();
 

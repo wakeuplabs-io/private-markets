@@ -8,7 +8,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_createMarket_returnsIncrementalIdAndStoresMarketDataCorrectly() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         assertEq(marketId, 1);
 
@@ -25,13 +25,13 @@ contract PredictionMarketCoreTest is IntegrationBase {
     function test_createMarket_revertsWhenQuestionIsEmpty() public {
         vm.prank(admin);
         vm.expectRevert();
-        predictionMarket.createMarket("");
+        predictionMarket.createMarket("", block.timestamp + 1 days);
     }
 
 
     function test_processBet_increasesTotalsAndMarksBetAsProcessed() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         fundTreasury(1000 ether);
 
@@ -62,7 +62,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_processBet_revertsWhenBetIdAlreadyProcessed() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         fundTreasury(1000 ether);
 
@@ -78,7 +78,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_setWinnersRoot_resolvesMarketAndStoresRootWhenCalledByAdmin() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         bytes32 winnersRoot = keccak256("winners");
         vm.prank(admin);
@@ -93,7 +93,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_setWinnersRoot_revertsWhenCallerIsNotMarketAdmin() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         bytes32 winnersRoot = keccak256("winners");
         vm.prank(user1);
@@ -103,7 +103,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_claim_transfersTokensToUserWhenProofIsValid() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         fundTreasury(1000 ether);
 
@@ -130,7 +130,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_claim_revertsWhenPayoutAlreadyClaimed() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         fundTreasury(1000 ether);
 
@@ -158,7 +158,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
         // 1. Create market
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Will ETH hit $5000?");
+        uint256 marketId = predictionMarket.createMarket("Will ETH hit $5000?", block.timestamp + 1 days);
 
         // 2. Multiple bets
         fundTreasury(10000 ether);

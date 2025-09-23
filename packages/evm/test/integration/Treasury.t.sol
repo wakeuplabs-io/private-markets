@@ -176,7 +176,7 @@ contract TreasuryTest is IntegrationBase {
         treasury.mint(address(treasury), amount);
 
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Test market");
+        uint256 marketId = predictionMarket.createMarket("Test market", block.timestamp + 1 days);
 
         vm.prank(address(wormholeReceiver));
         bytes32 betId = keccak256("bet1");

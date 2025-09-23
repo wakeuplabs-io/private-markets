@@ -12,6 +12,7 @@ import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProo
 contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
     // Custom Errors
     error EmptyQuestion();
+    error InvalidClosingTime();
     error MarketAlreadyExists(uint256 marketId);
     error ChainIdMismatch();
     error InvalidBetId();
@@ -49,17 +50,19 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
     /**
      * @notice Creates a new public prediction market (binary Yes/No)
      * @param question The market question
+     * @param closingTime Timestamp when the market closes for betting
      * @return uint256 The generated market ID
      */
-    function createMarket(string memory question) external override returns (uint256) {
-        return _createMarket(question, msg.sender);
+    function createMarket(string memory question, uint256 closingTime) external override returns (uint256) {
+        return _createMarket(question, closingTime, msg.sender);
     }
 
     /**
      * @dev Internal function to create binary markets
      */
-    function _createMarket(string memory question, address admin) internal returns (uint256) {
+    function _createMarket(string memory question, uint256 closingTime, address admin) internal returns (uint256) {
         if (bytes(question).length == 0) revert EmptyQuestion();
+        if (closingTime <= block.timestamp) revert InvalidClosingTime();
 
         // Increment counter and use as market ID
         _state.marketCounter++;
@@ -74,6 +77,7 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
             state: IPredictionMarket.MarketState.OPEN,
             admin: admin,
             createdAt: block.timestamp,
+            closingTime: closingTime,
             resolvedAt: 0
         });
 
@@ -98,6 +102,12 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
 
         IPredictionMarket.Market storage market = _state.markets[marketId];
         if (market.id == 0) revert MarketNotFound(marketId);
+
+        // Check if market should be finalized
+        if (block.timestamp >= market.closingTime && market.state == IPredictionMarket.MarketState.OPEN) {
+            market.state = IPredictionMarket.MarketState.FINALIZED;
+        }
+
         if (market.state != IPredictionMarket.MarketState.OPEN) revert MarketNotOpen(marketId, market.state);
 
         // Mark bet as processed to prevent replay
@@ -124,7 +134,16 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
     function setWinnersRoot(uint256 marketId, bytes32 root) external override {
         IPredictionMarket.Market storage market = _state.markets[marketId];
         if (market.id == 0) revert MarketNotFound(marketId);
-        if (market.state != IPredictionMarket.MarketState.OPEN) revert MarketAlreadyResolved(marketId);
+
+        // Auto-finalize if needed
+        if (block.timestamp >= market.closingTime && market.state == IPredictionMarket.MarketState.OPEN) {
+            market.state = IPredictionMarket.MarketState.FINALIZED;
+        }
+
+        // Market must be OPEN or FINALIZED to be resolved
+        if (market.state != IPredictionMarket.MarketState.OPEN && market.state != IPredictionMarket.MarketState.FINALIZED) {
+            revert MarketAlreadyResolved(marketId);
+        }
 
         // Verify admin authorization - only market admin can resolve
         if (msg.sender != market.admin) revert UnauthorizedResolver(msg.sender, market.admin);

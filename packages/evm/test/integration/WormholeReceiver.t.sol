@@ -172,7 +172,7 @@ contract WormholeReceiverTest is IntegrationBase {
 
         // Test that it has access to market functions via inheritance
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Test market");
+        uint256 marketId = predictionMarket.createMarket("Test market", block.timestamp + 1 days);
 
         // Verify market was created in the prediction market contract
         assertEq(predictionMarket.getMarketCount(), 1);
@@ -195,7 +195,7 @@ contract WormholeReceiverTest is IntegrationBase {
     function test_receiveWormholeMessages_processesValidCrossChainBet() public {
         // 1. Setup realistic test scenario
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Will ETH reach $5000 in 2024?");
+        uint256 marketId = predictionMarket.createMarket("Will ETH reach $5000 in 2024?", block.timestamp + 1 days);
         fundTreasury(2000 ether);
 
         // 2. Create realistic delivery parameters using official patterns
@@ -234,7 +234,7 @@ contract WormholeReceiverTest is IntegrationBase {
     function test_receiveWormholeMessages_handlesReceiverValuePayment() public {
         // 1. Setup market
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Receiver value test market");
+        uint256 marketId = predictionMarket.createMarket("Receiver value test market", block.timestamp + 1 days);
         fundTreasury(1000 ether);
 
         // 2. Create delivery with receiver value (realistic Wormhole pattern)
@@ -276,7 +276,7 @@ contract WormholeReceiverTest is IntegrationBase {
     function test_receiveWormholeMessages_failsWithInsufficientGas() public {
         // 1. Setup
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Gas limit test");
+        uint256 marketId = predictionMarket.createMarket("Gas limit test", block.timestamp + 1 days);
         fundTreasury(1000 ether);
 
         // 2. Create delivery with VERY low gas limit
@@ -342,7 +342,7 @@ contract WormholeReceiverTest is IntegrationBase {
 
         // 1. Market creation
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("End-to-end realistic test");
+        uint256 marketId = predictionMarket.createMarket("End-to-end realistic test", block.timestamp + 1 days);
         fundTreasury(5000 ether);
 
         // 2. Simulate multiple realistic deliveries
