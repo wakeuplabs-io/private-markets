@@ -79,11 +79,10 @@ const MarketCard: React.FC<MarketCardProps> = ({
             <path d="M6 3v3l2 1" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
           </svg>
           <span className="text-xs text-foreground font-normal">
-            {formatDate(market.closingDate)}
+            {market.closingDate ? formatDate(market.closingDate) : 'TBD'}
           </span>
         </div>
 
-        {/* Chance Pill */}
         <div className="flex items-center gap-2 bg-background px-2 py-1 rounded">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-foreground">
             <path d="M6 1L8 4H4L6 1Z" stroke="currentColor" strokeWidth="1" fill="none"/>
@@ -97,7 +96,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
 
       <div className="flex items-center gap-3">
         <Button
-          className="flex-1 h-12 bg-[hsl(var(--yes-button))] hover:bg-[hsl(var(--yes-button))]/90 text-background font-bold text-base rounded-full"
+          className="flex-1 h-12 bg-[hsl(var(--yes-button))] hover:bg-[hsl(var(--yes-button))]/90 text-primary-foreground font-bold text-base rounded-full"
           onClick={() => handleOptionClick('yes')}
         >
           Yes

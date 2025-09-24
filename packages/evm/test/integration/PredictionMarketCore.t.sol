@@ -8,7 +8,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_createMarket_returnsIncrementalIdAndStoresMarketDataCorrectly() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         assertEq(marketId, 1);
 
@@ -25,13 +25,13 @@ contract PredictionMarketCoreTest is IntegrationBase {
     function test_createMarket_revertsWhenQuestionIsEmpty() public {
         vm.prank(admin);
         vm.expectRevert();
-        predictionMarket.createMarket("");
+        predictionMarket.createMarket("", block.timestamp + 1 days);
     }
 
 
     function test_processBet_increasesTotalsAndMarksBetAsProcessed() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         fundTreasury(1000 ether);
 
@@ -62,7 +62,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_processBet_revertsWhenBetIdAlreadyProcessed() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         fundTreasury(1000 ether);
 
@@ -78,7 +78,10 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_setWinnersRoot_resolvesMarketAndStoresRootWhenCalledByAdmin() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
+
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
 
         bytes32 winnersRoot = keccak256("winners");
         vm.prank(admin);
@@ -93,7 +96,10 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_setWinnersRoot_revertsWhenCallerIsNotMarketAdmin() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
+
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
 
         bytes32 winnersRoot = keccak256("winners");
         vm.prank(user1);
@@ -103,13 +109,16 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_claim_transfersTokensToUserWhenProofIsValid() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         fundTreasury(1000 ether);
 
         vm.prank(address(wormholeReceiver));
         bytes32 betId = keccak256("bet1");
         predictionMarket.processBet(marketId, betId, true, 100 ether, testCommitment);
+
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
 
         bytes32 winnersRoot = keccak256(abi.encodePacked(testCommitment, uint256(100 ether)));
         vm.prank(admin);
@@ -130,13 +139,16 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
     function test_claim_revertsWhenPayoutAlreadyClaimed() public {
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket(testQuestion);
+        uint256 marketId = predictionMarket.createMarket(testQuestion, block.timestamp + 1 days);
 
         fundTreasury(1000 ether);
 
         vm.prank(address(wormholeReceiver));
         bytes32 betId = keccak256("bet1");
         predictionMarket.processBet(marketId, betId, true, 100 ether, testCommitment);
+
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
 
         bytes32 winnersRoot = keccak256(abi.encodePacked(testCommitment, uint256(100 ether)));
         vm.prank(admin);
@@ -158,7 +170,7 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
         // 1. Create market
         vm.prank(admin);
-        uint256 marketId = predictionMarket.createMarket("Will ETH hit $5000?");
+        uint256 marketId = predictionMarket.createMarket("Will ETH hit $5000?", block.timestamp + 1 days);
 
         // 2. Multiple bets
         fundTreasury(10000 ether);
@@ -182,11 +194,13 @@ contract PredictionMarketCoreTest is IntegrationBase {
 
         vm.stopPrank();
 
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
+
         // 3. Resolve market (Yes wins) - Create a simple single-leaf Merkle tree for testing
         bytes32 commitment1ForRoot = keccak256(abi.encodePacked(marketId, bytes32("secret1")));
         bytes32 leaf1 = keccak256(abi.encodePacked(commitment1ForRoot, uint256(75 ether)));
         bytes32 winnersRoot = leaf1; // Single leaf tree
-        
         vm.prank(admin);
         predictionMarket.setWinnersRoot(marketId, winnersRoot);
 

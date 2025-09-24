@@ -13,9 +13,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variants = {
       default: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-md',
-      secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-      success: 'bg-green-600 text-white hover:bg-green-700 shadow-md',
-      destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+      secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-md',
+      success: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-md',
+      destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-md',
       ghost: 'hover:bg-accent hover:text-accent-foreground',
     }
 

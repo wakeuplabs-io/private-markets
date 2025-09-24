@@ -7,16 +7,17 @@ import { PlaceBetModal } from '@/components/betting'
 import { Market, PlaceBetData, MarketOption } from '@/types'
 import { useVault } from '@/hooks/useVault'
 import { useWallet } from '@/context/WalletContext'
-import { useMarkets } from '@/hooks/useMarkets'
+import { useUserMarkets } from '@/hooks/useUserMarkets'
 
 export default function MarketsPage() {
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null)
   const [isBetModalOpen, setIsBetModalOpen] = useState(false)
 
-  const { markets, isLoading } = useMarkets()
+  const { markets, isLoading } = useUserMarkets()
   const { placeBet, isLoading: isPlacingBet, clearError } = useVault()
   const { wallet, connectWallet, isConnected } = useWallet()
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleOptionClick = (marketId: string, option: MarketOption) => {
     const market = markets.find(m => m.id === marketId)
     if (market) {
@@ -86,7 +87,6 @@ export default function MarketsPage() {
   return (
     <Layout>
       <div className="container mx-auto px-8 py-8">
-        {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">
             Prediction Markets
@@ -96,7 +96,6 @@ export default function MarketsPage() {
           </p>
         </div>
 
-        {/* Markets Grid */}
         <MarketGrid
           markets={markets}
           onOptionClick={handleOptionClick}

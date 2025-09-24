@@ -17,15 +17,15 @@ const MarketStatus: React.FC<MarketStatusProps> = ({
     switch (status) {
       case 'open':
         return {
-          text: 'Open',
+          text: 'Open for Betting',
           className: 'bg-primary text-primary-foreground',
           icon: '🟢'
         }
-      case 'closed':
+      case 'finalized':
         return {
-          text: 'Closed',
-          className: 'bg-secondary text-secondary-foreground',
-          icon: '🔒'
+          text: 'Betting Closed - Awaiting Resolution',
+          className: 'bg-orange-500 text-white',
+          icon: '⏰'
         }
       case 'resolved':
         return {

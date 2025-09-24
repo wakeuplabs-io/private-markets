@@ -1,0 +1,8 @@
+{
+  "lib/openzeppelin-contracts": {
+    "rev": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0"
+  },
+  "lib/wormhole": {
+    "rev": "5b0c39fdaceb476dd3cbad054ce18cb1b2a7b01d"
+  }
+}

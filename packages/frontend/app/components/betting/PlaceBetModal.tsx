@@ -98,7 +98,6 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
       className={cn('max-w-md', className)}
     >
       <div className="p-8 space-y-6">
-        {/* Header */}
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold text-foreground">
             Place Your Bet
@@ -108,8 +107,7 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
           </p>
         </div>
 
-        {/* Market Info */}
-        <div className="p-4 rounded-lg bg-muted/30 space-y-3">
+        <div className="p-4 rounded-lg bg-muted space-y-3">
           <h3 className="font-semibold text-foreground">
             {market.question}
           </h3>
@@ -126,21 +124,21 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
           </div>
         </div>
 
-        {/* Option Selection */}
         <BetOptionSelector
-          options={market.options}
+          options={{
+            yes: market.options.find(opt => opt.id === 'yes')?.name || 'Yes',
+            no: market.options.find(opt => opt.id === 'no')?.name || 'No'
+          }}
           selectedOption={selectedOption}
           onOptionSelect={setSelectedOption}
         />
 
-        {/* Amount Input */}
         <AmountInput
           amount={amount}
           onAmountChange={handleAmountChange}
           error={error}
         />
 
-        {/* Action Buttons */}
         <div className="flex gap-3 pt-4">
           <Button
             variant="secondary"

@@ -12,17 +12,19 @@
   "dependencies": {
     "@azguardwallet/client": "^0.4.2",
     "@azguardwallet/types": "^0.4.1",
-    "@aztec/aztec.js": "^2.0.3",
     "@aztec/accounts": "^2.0.3",
+    "@aztec/aztec.js": "^2.0.3",
     "@aztec/noir-contracts.js": "^2.0.3",
     "@nemi-fi/wallet-sdk": "^1.0.0",
     "clsx": "^2.1.1",
+    "ethers": "^6.15.0",
     "next": "15.1.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-qr-code": "^2.0.15",
     "tailwind-merge": "^3.3.1",
-    "viem": "^2.27.0"
+    "viem": "^2.27.0",
+    "wagmi": "^2.17.2"
   },
   "devDependencies": {
     "@types/node": "^20",

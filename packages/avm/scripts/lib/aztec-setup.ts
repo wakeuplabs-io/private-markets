@@ -8,12 +8,11 @@ import {
   Fr,
   SponsoredFeePaymentMethod,
   type ContractInstanceWithAddress,
-  createAztecNodeClient,
 } from "@aztec/aztec.js";
 import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
 import { getSchnorrAccount } from "@aztec/accounts/schnorr";
 import { deriveSigningKey } from "@aztec/stdlib/keys";
-import { getContractInstanceFromDeployParams } from "@aztec/aztec.js/contracts";
+import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contract";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { SPONSORED_FPC_SALT } from "@aztec/constants";
 import fs from "fs";
@@ -113,7 +112,7 @@ export class AztecSetup {
   }
 
   private async getSponsoredFPCInstance(): Promise<ContractInstanceWithAddress> {
-    return await getContractInstanceFromDeployParams(SponsoredFPCContract.artifact, {
+    return await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, {
       salt: new Fr(SPONSORED_FPC_SALT),
     });
   }

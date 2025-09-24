@@ -5,6 +5,10 @@ export type {
   Market,
   MarketSummary,
   CreateMarketData,
+  AdminMarket,
+  CreateMarketFormData,
+  AdminMarketFilters,
+  MarketResolutionData,
 } from './market'
 
 // Betting types
@@ -24,3 +28,14 @@ export type {
   WalletState,
   ConnectWalletOptions,
 } from './wallet'
+
+export type {
+  CreateMarketStep,
+  CreateMarketFlow,
+  AdminUser,
+  AdminDashboardStats,
+  ModalState,
+  AdminModalStates,
+  CreateMarketResponse,
+  ResolveMarketResponse,
+} from './admin'
