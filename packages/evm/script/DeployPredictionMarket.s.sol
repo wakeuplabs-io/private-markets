@@ -129,6 +129,16 @@ contract DeployPredictionMarket is Script {
         } else {
             console.log("Aztec emitter registered for chain ID 56");
         }
+
+        // Verify deployment by checking initial market count (should be 0)
+        uint256 initialMarketCount = predictionMarketCore.getMarketCount();
+        console.log("=== Deployment Verification ===");
+        console.log("Initial market count:", initialMarketCount);
+        if (initialMarketCount == 0) {
+            console.log("[PASS] Verification PASSED: Market count is 0 as expected");
+        } else {
+            console.log("[FAIL] Verification FAILED: Market count should be 0");
+        }
         console.log("Deployment completed successfully!");
 
         return DeploymentAddresses({

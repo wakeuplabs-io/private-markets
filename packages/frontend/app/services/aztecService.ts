@@ -119,13 +119,13 @@ class AztecService {
     
     if (errorMessage.includes("timeout")) {
       errorType = "timeout";
-      userMessage = "Tiempo de espera agotado al conectar con Aztec. Verifica tu conexión a internet.";
+      userMessage = "Timeout connecting to Aztec. Verify your internet connection.";
     } else if (errorMessage.includes("ECONNREFUSED") || errorMessage.includes("fetch")) {
       errorType = "network";
-      userMessage = "No se puede alcanzar el servidor de Aztec. Verifica que el nodo esté ejecutándose.";
+      userMessage = "Cannot reach the Aztec server. Verify that the node is running.";
     } else if (errorMessage.includes("configuration") || errorMessage.includes("config")) {
       errorType = "configuration";
-      userMessage = "Error de configuración de Aztec. Verifica las variables de entorno.";
+      userMessage = "Aztec configuration error. Verify the environment variables.";
       recoverable = false;
     }
     
@@ -143,7 +143,7 @@ class AztecService {
     if (this.lastError) {
       return this.lastError.message;
     }
-    return "No se pudo establecer conexión con la blockchain de Aztec";
+    return "Could not establish connection with the Aztec blockchain";
   }
 
 
