@@ -187,6 +187,9 @@ contract TreasuryTest is IntegrationBase {
         // NOTE: Simplified Merkle tree logic for testing Treasury fund delivery
         // The actual Merkle tree verification is handled off-chain by the builder service
         // This test focuses on Treasury's responsibility: delivering funds to valid claimants
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
+
         bytes32 leaf = keccak256(abi.encodePacked(testCommitment, uint256(50 ether)));
         bytes32 winnersRoot = leaf; // Single-leaf tree for simplicity
 

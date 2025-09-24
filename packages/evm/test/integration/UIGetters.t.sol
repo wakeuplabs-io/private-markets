@@ -112,9 +112,6 @@ contract UIGettersTest is IntegrationBase {
 
         IPredictionMarket.Market[] memory resolvedMarkets = predictionMarket.getMarketsByState(IPredictionMarket.MarketState.RESOLVED);
         assertEq(resolvedMarkets.length, 0);
-
-        IPredictionMarket.Market[] memory finalizedMarkets = predictionMarket.getMarketsByState(IPredictionMarket.MarketState.FINALIZED);
-        assertEq(finalizedMarkets.length, 0);
     }
 
     function test_getMarketsByState_correctlyFiltersOpenAndResolvedMarketsWhenMixed() public {
@@ -124,6 +121,9 @@ contract UIGettersTest is IntegrationBase {
         uint256 market3 = predictionMarket.createMarket("Market 3", block.timestamp + 1 days);
         uint256 market4 = predictionMarket.createMarket("Market 4", block.timestamp + 1 days);
         vm.stopPrank();
+
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
 
         vm.prank(admin);
         predictionMarket.setWinnersRoot(market1, keccak256("winners1"));
@@ -219,9 +219,12 @@ contract UIGettersTest is IntegrationBase {
         assertTrue(predictionMarket.isProcessed(betId1));
         assertFalse(predictionMarket.isProcessed(betId2));
 
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
+
         bytes32 leaf = keccak256(abi.encodePacked(commitment1, uint256(50 ether)));
         bytes32 winnersRoot = leaf;
-        
+
         vm.prank(admin);
         predictionMarket.setWinnersRoot(marketId, winnersRoot);
 
@@ -237,6 +240,9 @@ contract UIGettersTest is IntegrationBase {
         uint256 marketId = predictionMarket.createMarket("Winners root test", block.timestamp + 1 days);
 
         assertEq(predictionMarket.getWinnersRoot(marketId), bytes32(0));
+
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
 
         bytes32 winnersRoot = keccak256("test_winners");
         vm.prank(admin);
@@ -280,6 +286,9 @@ contract UIGettersTest is IntegrationBase {
         predictionMarket.processBet(market2, keccak256("bet2"), false, 300 ether, keccak256("c2"));
         predictionMarket.processBet(market4, keccak256("bet3"), true, 200 ether, keccak256("c3"));
         vm.stopPrank();
+
+        // Advance time past closing time to allow resolution
+        vm.warp(block.timestamp + 1 days + 1);
 
         vm.prank(admin);
         predictionMarket.setWinnersRoot(market1, keccak256("market1_winners"));

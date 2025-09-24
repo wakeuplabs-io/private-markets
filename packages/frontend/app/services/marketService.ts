@@ -236,11 +236,10 @@ export class MarketService {
 
   static async getMarketStats(): Promise<MarketStats> {
     try {
-      const [allMarkets, activeMarkets, finalizedMarkets, resolvedMarkets] = await Promise.all([
+      const [allMarkets, activeMarkets, resolvedMarkets] = await Promise.all([
         this.getAllMarkets(),
-        this.getMarketsByState(0), // OPEN
-        this.getMarketsByState(1), // FINALIZED
-        this.getMarketsByState(2)  // RESOLVED
+        this.getMarketsByState(0),
+        this.getMarketsByState(1)
       ])
 
       let totalVolume = BigInt(0)
@@ -263,10 +262,15 @@ export class MarketService {
         ? Number(totalVolume) / marketsWithVolume
         : 0
 
+      const now = Date.now() / 1000
+      const finalizedCount = allMarkets.filter(market =>
+        market.state === 0 && Number(market.closingTime) <= now
+      ).length
+
       return {
         totalMarkets: allMarkets.length,
         activeMarkets: activeMarkets.length,
-        finalizedMarkets: finalizedMarkets.length,
+        finalizedMarkets: finalizedCount,
         resolvedMarkets: resolvedMarkets.length,
         totalVolume,
         averageVolume
@@ -279,9 +283,8 @@ export class MarketService {
 
   static async resolveMarket(marketId: number, winningOption: 'yes' | 'no'): Promise<string> {
     try {
-      // In production, this would calculate the actual Merkle root based on bets and winning option
       console.log(`Resolving market ${marketId} with winning option: ${winningOption}`)
-      const winnersRoot = '0x' + '0'.repeat(64) // dummy root for now
+      const winnersRoot = '0x' + '0'.repeat(64)
 
       return await this.setWinnersRoot(marketId, winnersRoot)
     } catch (error) {
@@ -307,12 +310,12 @@ export class MarketService {
     let status: MarketStatus
     switch (contractMarket.state) {
       case 0:
-        status = 'open'
+        // Check if market is past closing time for client-side finalized calculation
+        const now = Date.now() / 1000 // Convert to seconds
+        const closingTime = Number(contractMarket.closingTime)
+        status = closingTime <= now ? 'finalized' : 'open'
         break
       case 1:
-        status = 'finalized'
-        break
-      case 2:
         status = 'resolved'
         break
       default:

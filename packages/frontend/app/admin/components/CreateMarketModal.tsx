@@ -34,7 +34,6 @@ export function CreateMarketModal({
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
 
-    // Validate question
     if (!formData.question.trim()) {
       newErrors.question = 'Question is required'
     } else if (formData.question.length < 10) {
@@ -43,14 +42,13 @@ export function CreateMarketModal({
       newErrors.question = 'Question cannot exceed 200 characters'
     }
 
-    // Validate closing time
     const now = new Date()
-    const minClosingTime = new Date(now.getTime() + 5 * 60 * 1000) // At least 5 minutes from now
+    const minClosingTime = new Date(now.getTime() + 1 * 60 * 1000)
 
     if (formData.closingTime <= now) {
       newErrors.closingTime = 'Closing time must be in the future'
     } else if (formData.closingTime < minClosingTime) {
-      newErrors.closingTime = 'Closing time must be at least 5 minutes from now'
+      newErrors.closingTime = 'Closing time must be at least 1 minute from now'
     }
 
     setErrors(newErrors)
@@ -66,7 +64,6 @@ export function CreateMarketModal({
 
     setIsSubmitting(true)
     try {
-      // Simulate server validation
       await new Promise(resolve => setTimeout(resolve, 500))
       onNext(formData)
     } catch (error) {
@@ -82,7 +79,6 @@ export function CreateMarketModal({
       question: value
     }))
 
-    // Clear error when typing
     if (errors.question) {
       setErrors(prev => ({
         ...prev,
@@ -92,18 +88,48 @@ export function CreateMarketModal({
   }
 
   const handleClosingTimeChange = (value: string) => {
-    const date = new Date(value)
+    if (!value) return
+
+    // Parse the datetime-local value properly to avoid timezone conversion issues
+    // The value comes as "YYYY-MM-DDTHH:mm" and we want to create a Date
+    // that represents this exact date/time in the user's local timezone
+    const [datePart, timePart] = value.split('T')
+    const [year, month, day] = datePart.split('-').map(Number)
+    const [hours, minutes] = timePart.split(':').map(Number)
+
+    // Create date using local timezone (not UTC)
+    const date = new Date(year, month - 1, day, hours, minutes, 0, 0)
+
     setFormData(prev => ({
       ...prev,
       closingTime: date
     }))
 
-    // Clear error when changing
     if (errors.closingTime) {
       setErrors(prev => ({
         ...prev,
         closingTime: undefined
       }))
+    }
+  }
+
+  // Helper function to format date for datetime-local input (preserving local timezone)
+  const formatDateTimeLocal = (date: Date): string => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+
+  // Helper function to get current timezone name
+  const getCurrentTimezone = (): string => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone
+    } catch {
+      return 'Local Time'
     }
   }
 
@@ -152,20 +178,23 @@ export function CreateMarketModal({
             <input
               id="closingTime"
               type="datetime-local"
-              value={formData.closingTime.toISOString().slice(0, 16)}
+              value={formatDateTimeLocal(formData.closingTime)}
               onChange={(e) => handleClosingTimeChange(e.target.value)}
               className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-ring/20 focus:border-ring transition-colors bg-input text-foreground ${
                 errors.closingTime
                   ? 'border-destructive bg-destructive/10'
                   : 'border-border'
               }`}
-              min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)}
+              min={formatDateTimeLocal(new Date(Date.now() + 5 * 60 * 1000))}
             />
             {errors.closingTime && (
               <p className="text-destructive text-sm mt-1">{errors.closingTime}</p>
             )}
             <p className="text-xs text-muted-foreground mt-1">
-              When betting will close for this market. Must be in the future.
+              When betting will close for this market ({getCurrentTimezone()}). Must be in the future.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Selected time: {formData.closingTime.toLocaleString()}
             </p>
           </div>
 

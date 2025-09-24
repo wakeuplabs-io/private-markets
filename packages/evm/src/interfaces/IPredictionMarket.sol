@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 interface IPredictionMarket {
     enum MarketState {
         OPEN,
-        FINALIZED,
         RESOLVED
     }
 

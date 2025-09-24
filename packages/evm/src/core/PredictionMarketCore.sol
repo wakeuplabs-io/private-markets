@@ -103,12 +103,10 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
         IPredictionMarket.Market storage market = _state.markets[marketId];
         if (market.id == 0) revert MarketNotFound(marketId);
 
-        // Check if market should be finalized
-        if (block.timestamp >= market.closingTime && market.state == IPredictionMarket.MarketState.OPEN) {
-            market.state = IPredictionMarket.MarketState.FINALIZED;
-        }
-
         if (market.state != IPredictionMarket.MarketState.OPEN) revert MarketNotOpen(marketId, market.state);
+
+        // Only allow bets if market is still within closing time
+        if (block.timestamp >= market.closingTime) revert MarketNotOpen(marketId, market.state);
 
         // Mark bet as processed to prevent replay
         _state.processed[betId] = true;
@@ -135,14 +133,14 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
         IPredictionMarket.Market storage market = _state.markets[marketId];
         if (market.id == 0) revert MarketNotFound(marketId);
 
-        // Auto-finalize if needed
-        if (block.timestamp >= market.closingTime && market.state == IPredictionMarket.MarketState.OPEN) {
-            market.state = IPredictionMarket.MarketState.FINALIZED;
+        // Market must be OPEN to be resolved
+        if (market.state != IPredictionMarket.MarketState.OPEN) {
+            revert MarketAlreadyResolved(marketId);
         }
 
-        // Market must be OPEN or FINALIZED to be resolved
-        if (market.state != IPredictionMarket.MarketState.OPEN && market.state != IPredictionMarket.MarketState.FINALIZED) {
-            revert MarketAlreadyResolved(marketId);
+        // Only allow resolution after closing time
+        if (block.timestamp < market.closingTime) {
+            revert MarketNotOpen(marketId, market.state);
         }
 
         // Verify admin authorization - only market admin can resolve
