@@ -201,7 +201,6 @@ contract PredictionMarketCoreTest is IntegrationBase {
         bytes32 commitment1ForRoot = keccak256(abi.encodePacked(marketId, bytes32("secret1")));
         bytes32 leaf1 = keccak256(abi.encodePacked(commitment1ForRoot, uint256(75 ether)));
         bytes32 winnersRoot = leaf1; // Single leaf tree
-
         vm.prank(admin);
         predictionMarket.setWinnersRoot(marketId, winnersRoot);
 
