@@ -1,6 +1,5 @@
 import { AztecAddress, Contract, type Wallet } from "@aztec/aztec.js";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
-import { Contract as WalletSdkContract } from "@nemi-fi/wallet-sdk/eip1193";
 import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
 import { ensureWalletConnected } from "../lib/walletSdk";
 import { aztecService } from "../services/aztecService";
