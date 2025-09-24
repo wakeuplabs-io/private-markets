@@ -14,6 +14,12 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().default(9999),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
   CORS_ORIGINS: z.string().default("http://localhost:3000"),
+
+  // Blockchain Configuration
+  PREDICTION_MARKET_ADDRESS: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address"),
+  RPC_URL: z.string().url("Invalid RPC URL"),
+  CHAIN_ID: z.coerce.number().int().positive("Chain ID must be positive"),
+  START_BLOCK: z.coerce.number().int().min(0, "Start block must be non-negative").default(0),
 });
 
 export type env = z.infer<typeof EnvSchema>;

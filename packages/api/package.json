@@ -6,16 +6,21 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "esbuild src/index.ts --bundle --platform=node --outfile=dist/index.js",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "test:e2e": "vitest run --config vitest.config.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/supertest": "^6.0.3",
     "esbuild": "^0.21.4",
+    "supertest": "^7.1.4",
     "ts-node": "^10.9.2",
-    "tsx": "^4.7.1"
+    "tsx": "^4.7.1",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.0",
@@ -31,6 +36,7 @@
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
     "stoker": "^1.4.2",
+    "viem": "^2.37.8",
     "zod": "^3.23.8",
     "zod-openapi": "^4.2.3"
   }

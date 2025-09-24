@@ -10,8 +10,25 @@ import createApp from "./lib/create-app";
 import env from "./env";
 import { cors } from "hono/cors";
 import configureOpenAPI from "./lib/configure-open-api";
-import index from "./interfaces/http/routes/index.route";
-import market from "./interfaces/http/routes/market/market.index";
+import index from "./interfaces/http/index.route";
+import { createMarketRouter } from "./interfaces/http/market/market.index";
+import pino from "pino";
+
+// Create logger for routes
+const routeLogger = pino({
+  level: env.LOG_LEVEL || 'info',
+  ...(env.NODE_ENV === 'development' && {
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: true
+      }
+    }
+  })
+});
+
+// Create market routes with logger
+const market = createMarketRouter(routeLogger);
 
 /**
  * Main Hono application instance
