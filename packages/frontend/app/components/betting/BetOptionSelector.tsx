@@ -26,7 +26,6 @@ const BetOptionSelector: React.FC<BetOptionSelectorProps> = ({
         Choose your prediction:
       </label>
       <div className="grid grid-cols-2 gap-3">
-        {/* Yes Option */}
         <button
           type="button"
           onClick={() => onOptionSelect('yes')}
@@ -34,7 +33,7 @@ const BetOptionSelector: React.FC<BetOptionSelectorProps> = ({
             'p-4 rounded-lg border-2 transition-all duration-200',
             'hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-ring',
             selectedOption === 'yes'
-              ? 'border-primary bg-primary/10 text-primary-foreground'
+              ? 'border-primary bg-primary/10 text-foreground'
               : 'border-border bg-muted/50 text-foreground hover:bg-muted/70'
           )}
         >
@@ -44,7 +43,6 @@ const BetOptionSelector: React.FC<BetOptionSelectorProps> = ({
           </div>
         </button>
 
-        {/* No Option */}
         <button
           type="button"
           onClick={() => onOptionSelect('no')}
@@ -52,7 +50,7 @@ const BetOptionSelector: React.FC<BetOptionSelectorProps> = ({
             'p-4 rounded-lg border-2 transition-all duration-200',
             'hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-ring',
             selectedOption === 'no'
-              ? 'border-primary bg-primary/10 text-primary-foreground'
+              ? 'border-primary bg-primary/10 text-foreground'
               : 'border-border bg-muted/50 text-foreground hover:bg-muted/70'
           )}
         >

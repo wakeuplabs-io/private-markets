@@ -88,7 +88,7 @@ async function main(): Promise<void> {
 
         const privateBalance = await tokenContract.methods
           .balance_of_private(deployerAddress)
-          .simulate();
+          .simulate({ from: deployer.getAddress() });
 
         console.log("[OK] Private balance:", privateBalance.toString());
         console.log("[OK] Expected amount:", mintAmount.toString());
@@ -107,9 +107,9 @@ async function main(): Promise<void> {
     );
 
     const [name, symbol, decimals] = await Promise.all([
-      tokenContract.methods.public_get_name().simulate(),
-      tokenContract.methods.public_get_symbol().simulate(),
-      tokenContract.methods.public_get_decimals().simulate()
+      tokenContract.methods.public_get_name().simulate({ from: deployer.getAddress() }),
+      tokenContract.methods.public_get_symbol().simulate({ from: deployer.getAddress() }),
+      tokenContract.methods.public_get_decimals().simulate({ from: deployer.getAddress() })
     ]);
 
     console.log("[OK] Token name:", fieldToString(name));

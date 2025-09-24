@@ -13,7 +13,6 @@ const BackgroundMesh: React.FC<BackgroundMeshProps> = ({ className }) => {
         className
       )}
     >
-      {/* SVG mesh pattern based on Figma design */}
       <svg
         width="100%"
         height="100%"

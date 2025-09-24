@@ -84,11 +84,7 @@ export function debugField(field: unknown, label = "Field"): void {
       if (typeof fieldObj.value === 'bigint') {
         const hex = fieldObj.value.toString(16);
         const converted = bigintToString(fieldObj.value);
-        console.log(`${label} conversion:`, {
-          bigint: fieldObj.value,
-          hex,
-          string: converted
-        });
+        console.log(`${label} conversion - bigint:`, fieldObj.value.toString(), 'hex:', hex, 'string:', converted);
       }
     }
   }

@@ -167,7 +167,6 @@ export function TokenInfoBadge({
         </div>
       </div>
 
-      {/* Private Balance Display */}
       <div className="flex flex-col items-end">
         <span className="text-xs text-muted-foreground leading-none">
           Balance

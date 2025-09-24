@@ -40,7 +40,6 @@ const AmountInput: React.FC<AmountInputProps> = ({
         <p>🔒 Your address remains private, only the market resolution is public</p>
       </div>
 
-      {/* Quick amount buttons */}
       <div className="flex gap-2">
         <span className="text-sm text-muted-foreground self-center">Quick:</span>
         {[10, 25, 50, 100].map((quickAmount) => (

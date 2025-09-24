@@ -14,12 +14,10 @@ export default function MarketsError({ error, reset }: ErrorPageProps) {
     <Layout>
       <div className="container mx-auto px-8 py-16">
         <div className="text-center space-y-6 max-w-md mx-auto">
-          {/* Error Icon */}
           <div className="w-16 h-16 mx-auto bg-destructive/10 rounded-full flex items-center justify-center">
             <span className="text-2xl">⚠️</span>
           </div>
 
-          {/* Error Message */}
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-foreground">
               Something went wrong
@@ -29,7 +27,6 @@ export default function MarketsError({ error, reset }: ErrorPageProps) {
             </p>
           </div>
 
-          {/* Error Details (in development) */}
           {process.env.NODE_ENV === 'development' && (
             <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-left">
               <h3 className="font-medium text-destructive mb-2">Error Details:</h3>
@@ -44,7 +41,6 @@ export default function MarketsError({ error, reset }: ErrorPageProps) {
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
               variant="default"

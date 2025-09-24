@@ -75,15 +75,15 @@ async function main(): Promise<void> {
     // Check balance
     const balance = await contract.methods
       .balance_of_private(AztecAddress.fromString(azguardAddress))
-      .simulate();
-    
+      .simulate({ from: deployer.getAddress() });
+
     const balanceOwner = await contract.methods
       .balance_of_private(deployer.getAddress())
-      .simulate();
+      .simulate({ from: deployer.getAddress() });
 
     const balanceAlice = await contract.methods
       .balance_of_private(alice.getAddress())
-      .simulate();
+      .simulate({ from: deployer.getAddress() });
 
     console.log("[OK] Azguard private balance:", balance.toString());
     console.log("[OK] Owner private balance:", balanceOwner.toString());

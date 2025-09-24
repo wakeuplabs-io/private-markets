@@ -1,0 +1,139 @@
+# Justfile for EVM contract interactions
+# Usage: just <command> [args]
+# Set CONTRACT_ADDRESS environment variable or pass as argument
+
+# Default contract address (can be overridden)
+default_address := env_var_or_default("CONTRACT_ADDRESS", "0xbec49fa140acaa83533fb00a2bb19bddd0290f25")
+
+# Default RPC URL for local development
+rpc_url := env_var_or_default("RPC_URL", "http://localhost:8545")
+
+# ==== Market Getters ====
+
+# Get total number of markets
+market-count address=default_address:
+    cast call {{address}} "getMarketCount()" --rpc-url {{rpc_url}}
+
+# Get market by ID
+get-market address=default_address market_id="1":
+    cast call {{address}} "getMarket(uint256)" {{market_id}} --rpc-url {{rpc_url}}
+
+# Get market ID at specific index
+get-market-id-at address=default_address index="0":
+    cast call {{address}} "getMarketIdAt(uint256)" {{index}} --rpc-url {{rpc_url}}
+
+# Get all markets with pagination
+get-all-markets address=default_address offset="0" limit="100":
+    cast call {{address}} "getAllMarkets(uint256,uint256)" {{offset}} {{limit}} --rpc-url {{rpc_url}}
+
+# Get markets by state (0=OPEN, 1=FINALIZED, 2=RESOLVED)
+get-markets-by-state address=default_address state="0":
+    cast call {{address}} "getMarketsByState(uint8)" {{state}} --rpc-url {{rpc_url}}
+
+# ==== Betting Totals ====
+
+# Get YES totals for a market
+get-yes-totals address=default_address market_id="1":
+    cast call {{address}} "getYesTotals(uint256)" {{market_id}} --rpc-url {{rpc_url}}
+
+# Get NO totals for a market
+get-no-totals address=default_address market_id="1":
+    cast call {{address}} "getNoTotals(uint256)" {{market_id}} --rpc-url {{rpc_url}}
+
+# Get all totals (NO and YES) for a market
+get-all-totals address=default_address market_id="1":
+    cast call {{address}} "getAllTotals(uint256)" {{market_id}} --rpc-url {{rpc_url}}
+
+# ==== Write Operations ====
+
+# Create a new market (requires private key)
+create-market address=default_address question="Will Bitcoin reach 100k USD?" closing_time="1790184819" private_key="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80":
+    cast send {{address}} "createMarket(string,uint256)" "{{question}}" {{closing_time}} --private-key {{private_key}} --rpc-url {{rpc_url}} --gas-limit 20000000
+
+# Set winners root (admin only, requires private key)
+set-winners-root address=default_address market_id="1" root="0x0000000000000000000000000000000000000000000000000000000000000001" private_key="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80":
+    cast send {{address}} "setWinnersRoot(uint256,bytes32)" {{market_id}} {{root}} --private-key {{private_key}} --rpc-url {{rpc_url}}
+
+# ==== Resolution & Claims ====
+
+# Get winners root for a resolved market
+get-winners-root address=default_address market_id="1":
+    cast call {{address}} "getWinnersRoot(uint256)" {{market_id}} --rpc-url {{rpc_url}}
+
+# Check if a bet ID has been processed
+is-processed address=default_address bet_id="0x0000000000000000000000000000000000000000000000000000000000000001":
+    cast call {{address}} "isProcessed(bytes32)" {{bet_id}} --rpc-url {{rpc_url}}
+
+# Check if a commitment has been claimed
+is-claimed address=default_address market_id="1" commitment="0x0000000000000000000000000000000000000000000000000000000000000001":
+    cast call {{address}} "isClaimed(uint256,bytes32)" {{market_id}} {{commitment}} --rpc-url {{rpc_url}}
+
+# ==== Configuration ====
+
+# Get registered emitter for a chain ID
+get-emitter address=default_address chain_id="56":
+    cast call {{address}} "getRegisteredEmitter(uint16)" {{chain_id}} --rpc-url {{rpc_url}}
+
+# Get chain ID
+chain-id address=default_address:
+    cast call {{address}} "chainId()" --rpc-url {{rpc_url}}
+
+# Get EVM chain ID
+evm-chain-id address=default_address:
+    cast call {{address}} "evmChainId()" --rpc-url {{rpc_url}}
+
+# Get finality setting
+finality address=default_address:
+    cast call {{address}} "finality()" --rpc-url {{rpc_url}}
+
+# Get treasury contract address
+treasury-contract address=default_address:
+    cast call {{address}} "treasuryContract()" --rpc-url {{rpc_url}}
+
+# Get wormhole contract address
+wormhole address=default_address:
+    cast call {{address}} "wormhole()" --rpc-url {{rpc_url}}
+
+# Get contract owner
+owner address=default_address:
+    cast call {{address}} "owner()" --rpc-url {{rpc_url}}
+
+# Check if deployment is a fork
+is-fork address=default_address:
+    cast call {{address}} "isFork()" --rpc-url {{rpc_url}}
+
+# ==== Useful Combinations ====
+
+# Get complete market info (market + totals)
+market-info address=default_address market_id="1":
+    @echo "=== Market Info ==="
+    just get-market {{address}} {{market_id}}
+    @echo "\n=== Market Totals ==="
+    just get-all-totals {{address}} {{market_id}}
+
+# Get all open markets
+open-markets address=default_address:
+    @echo "=== Open Markets (State 0) ==="
+    just get-markets-by-state {{address}} 0
+
+# Get all finalized markets
+finalized-markets address=default_address:
+    @echo "=== Finalized Markets (State 1) ==="
+    just get-markets-by-state {{address}} 1
+
+# Get all resolved markets
+resolved-markets address=default_address:
+    @echo "=== Resolved Markets (State 2) ==="
+    just get-markets-by-state {{address}} 2
+
+# Get contract overview
+overview address=default_address:
+    @echo "=== Contract Overview ==="
+    @echo "Contract Address: {{address}}"
+    @echo "RPC URL: {{rpc_url}}"
+    @echo "\n=== Basic Info ==="
+    @echo -n "Total Markets: "; just market-count {{address}}
+    @echo -n "Chain ID: "; just chain-id {{address}}
+    @echo -n "EVM Chain ID: "; just evm-chain-id {{address}}
+    @echo -n "Owner: "; just owner {{address}}
+    @echo -n "Treasury: "; just treasury-contract {{address}}
