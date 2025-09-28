@@ -8,6 +8,7 @@
 import { createPublicClient, http, parseAbi, type PublicClient, type Log, decodeEventLog } from 'viem';
 import { localhost } from 'viem/chains';
 import { IBlockchainService } from '../../domain/services/IBlockchainService';
+import { ICheckpointRepository } from '../../domain/repositories/ICheckpointRepository';
 import type { Logger } from 'pino';
 
 /**
@@ -45,7 +46,8 @@ export class ViemBlockchainService implements IBlockchainService {
   constructor(
     private config: BlockchainServiceConfig,
     private eventHandler: IBlockchainEventHandler,
-    private logger: Logger
+    private logger: Logger,
+    private checkpointRepository?: ICheckpointRepository
   ) {}
 
   async startListening(): Promise<void> {
@@ -139,6 +141,140 @@ export class ViemBlockchainService implements IBlockchainService {
       chainId: this.config.chainId,
       contractAddress: this.config.contractAddress
     };
+  }
+
+  /**
+   * Gets historical logs for a block range
+   * @param fromBlock - Starting block number (inclusive)
+   * @param toBlock - Ending block number (inclusive)
+   * @returns Promise resolving to array of logs
+   */
+  async getLogs(fromBlock: number, toBlock: number): Promise<Log[]> {
+    if (!this.client) {
+      throw new Error('Blockchain client not connected');
+    }
+
+    try {
+      this.logger.debug({
+        fromBlock,
+        toBlock,
+        blockRange: toBlock - fromBlock + 1,
+        contractAddress: this.config.contractAddress
+      }, 'Fetching historical logs');
+
+      const logs = await this.client.getLogs({
+        address: this.config.contractAddress,
+        event: this.contractAbi[0], // BetReceived event
+        fromBlock: BigInt(fromBlock),
+        toBlock: BigInt(toBlock)
+      });
+
+      this.logger.debug({
+        fromBlock,
+        toBlock,
+        logsFound: logs.length
+      }, 'Historical logs fetched');
+
+      return logs;
+
+    } catch (error) {
+      this.logger.error({
+        error: error instanceof Error ? error.message : String(error),
+        fromBlock,
+        toBlock
+      }, 'Failed to fetch historical logs');
+
+      throw error;
+    }
+  }
+
+  /**
+   * Processes historical logs (similar to real-time event processing)
+   * @param logs - Array of logs to process
+   * @returns Promise resolving to number of successfully processed events
+   */
+  async processHistoricalLogs(logs: Log[]): Promise<number> {
+    let processedCount = 0;
+
+    this.logger.info({
+      totalLogs: logs.length
+    }, 'Processing historical logs');
+
+    for (const log of logs) {
+      try {
+        // Decode the event log
+        const decodedLog = decodeEventLog({
+          abi: this.contractAbi,
+          data: log.data,
+          topics: log.topics
+        });
+
+        this.logger.debug({
+          event: 'BetReceived',
+          marketId: Number(decodedLog.args.marketId),
+          betId: decodedLog.args.betId,
+          outcome: decodedLog.args.outcome,
+          amount: decodedLog.args.amount?.toString(),
+          commitment: decodedLog.args.commitment,
+          blockNumber: Number(log.blockNumber),
+          transactionHash: log.transactionHash,
+          logIndex: log.logIndex
+        }, 'Processing historical blockchain event');
+
+        await this.eventHandler.handleBetReceived(log);
+        processedCount++;
+
+      } catch (error) {
+        this.logger.error({
+          error: error instanceof Error ? error.message : String(error),
+          logData: {
+            blockNumber: Number(log.blockNumber),
+            transactionHash: log.transactionHash,
+            logIndex: log.logIndex
+          }
+        }, 'Error processing historical blockchain event');
+
+        // Continue processing other events rather than failing entire batch
+      }
+    }
+
+    this.logger.info({
+      totalLogs: logs.length,
+      processedCount,
+      failedCount: logs.length - processedCount
+    }, 'Historical logs processing completed');
+
+    return processedCount;
+  }
+
+  /**
+   * Updates checkpoint after processing events
+   * @param blockNumber - Block number to checkpoint
+   * @param eventsProcessed - Number of events processed
+   */
+  async updateCheckpoint(blockNumber: number, eventsProcessed: number): Promise<void> {
+    if (!this.checkpointRepository) {
+      this.logger.debug({ blockNumber }, 'No checkpoint repository configured, skipping checkpoint update');
+      return;
+    }
+
+    try {
+      await this.checkpointRepository.updateCheckpoint(blockNumber, {
+        totalEventsProcessed: eventsProcessed
+      });
+
+      this.logger.debug({
+        blockNumber,
+        eventsProcessed
+      }, 'Checkpoint updated successfully');
+
+    } catch (error) {
+      this.logger.error({
+        error: error instanceof Error ? error.message : String(error),
+        blockNumber,
+        eventsProcessed
+      }, 'Failed to update checkpoint');
+    }
   }
 
   /**

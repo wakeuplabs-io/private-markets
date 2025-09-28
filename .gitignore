@@ -25,3 +25,5 @@ lcov.info
 # Out dir
 **/out
 crytic-export
+
+docs

@@ -49,10 +49,10 @@ export function createTestLogger(): Logger {
 export function createTestContainer(logger: Logger): Container {
   const container = new Container();
 
-  // Configure all the normal bindings first
+  
   configureContainer(container, logger);
 
-  // Now replace the blockchain service with our mock
+  
   const eventHandler = container.resolve<BlockchainEventHandler>(TYPES.BlockchainEventHandler);
 
   const mockBlockchainService = new MockViemBlockchainService(
@@ -61,7 +61,7 @@ export function createTestContainer(logger: Logger): Container {
     logger
   );
 
-  // Replace the real service with the mock
+  
   container.registerInstance<IBlockchainService>(
     TYPES.BlockchainService,
     mockBlockchainService
@@ -71,23 +71,23 @@ export function createTestContainer(logger: Logger): Container {
 }
 
 /**
- * 🎯 Main test app factory
+ * [MAIN] Main test app factory
  * Creates a complete app instance with mocked blockchain service
  */
 export function createTestApp(): TestAppSetup {
   const logger = createTestLogger();
   const container = createTestContainer(logger);
 
-  // Get the mock service for test control
+  
   const mockBlockchainService = container.resolve<IBlockchainService>(TYPES.BlockchainService) as MockViemBlockchainService;
 
-  // Create the app
+  
   const app = createApp();
 
-  // Create market routes with the same container
+  
   const marketRouter = createMarketRouterWithContainer(container);
 
-  // Register routes
+  
   app.route('/api', indexRouter);
   app.route('/api', marketRouter);
 
@@ -147,7 +147,7 @@ export function validateBetStructure(bet: any): void {
   expect(typeof bet.blockNumber).toBe('number');
   expect(typeof bet.timestamp).toBe('string');
 
-  // Validate outcome consistency
+  
   expect(bet.outcomeLabel).toBe(bet.outcome ? 'Yes' : 'No');
 }
 
@@ -155,32 +155,16 @@ export function validateBetStructure(bet: any): void {
  * Helper to seed test markets if needed
  */
 export async function seedTestMarkets(container: Container): Promise<void> {
-  // For now, our InMemoryMarketRepository already has some test data
-  // This function can be expanded if we need to add more test markets
+  
   const logger = container.resolve<Logger>(TYPES.Logger);
   logger.info('Test markets seeded (using default test data)');
 }
-
-/**
- * Helper to clear test data between tests
- */
-export async function clearTestData(container: Container): Promise<void> {
-  // For in-memory storage, we don't need to clear data between test files
-  // as each test gets a fresh container, but this could be useful for
-  // clearing data between individual test cases within the same suite
-}
-
-/**
- * Helper to make API requests - Deprecated, use app.request() directly instead
- * Left as placeholder for documentation purposes
- */
 
 /**
  * Helper to assert BigInt string values in tests
  */
 export function assertBigIntString(value: string, expectedWei: string): void {
   expect(value).toBe(expectedWei);
-  // Validate it's a valid BigInt string
   expect(() => BigInt(value)).not.toThrow();
 }
 

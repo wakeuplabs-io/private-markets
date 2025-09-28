@@ -32,14 +32,14 @@ describe('E2E: Blockchain Events → API Flow', () => {
   });
 
   describe('Single Event Tests', () => {
-    it('🎯 should trigger mock BetReceived event and retrieve via API', async () => {
+    it('[CORE] should trigger mock BetReceived event and retrieve via API', async () => {
       const { app, mockBlockchainService } = testSetup;
       const mockEvent = mockBetReceivedEvents.basicYesBet;
 
-      // 🚀 TRIGGER: Dispatch mock blockchain event
+      // TRIGGER: Dispatch mock blockchain event
       await mockBlockchainService.triggerBetReceivedEvent(mockEvent);
 
-      // 🔍 VERIFY: Get bets via API
+      // VERIFY: Get bets via API
       const response = await app.request('/api/market/1/bets', {
         method: 'GET'
       });
@@ -53,20 +53,20 @@ describe('E2E: Blockchain Events → API Flow', () => {
       expect(response.status).toBe(200);
       const responseBody = await response.json();
 
-      // ✅ ASSERTIONS: Validate response structure
+      // ASSERTIONS: Validate response structure
       validateBetResponseStructure(responseBody);
 
-      // ✅ ASSERTIONS: Validate bet count and data
+      // ASSERTIONS: Validate bet count and data
       expect(responseBody.marketId).toBe(1);
       expect(responseBody.totalBets).toBe(1);
       expect(responseBody.totalYes).toBe(1);
       expect(responseBody.totalNo).toBe(0);
 
-      // ✅ ASSERTIONS: Validate amounts
+      // ASSERTIONS: Validate amounts
       assertBigIntString(responseBody.totalAmountYes, mockEvent.amount);
       assertBigIntString(responseBody.totalAmountNo, '0');
 
-      // ✅ ASSERTIONS: Validate bet details
+      // ASSERTIONS: Validate bet details
       const bet = responseBody.bets[0];
       validateBetStructure(bet);
       expect(bet.betId).toBe(mockEvent.betId);
@@ -76,7 +76,7 @@ describe('E2E: Blockchain Events → API Flow', () => {
       expect(bet.commitment).toBe(mockEvent.commitment);
       expect(bet.blockNumber).toBe(mockEvent.blockNumber);
 
-      console.log(`✅ Successfully processed mock bet: ${weiToEth(bet.amount)} ETH on ${bet.outcomeLabel}`);
+      console.log(`[OK] Successfully processed mock bet: ${weiToEth(bet.amount)} ETH on ${bet.outcomeLabel}`);
     });
 
     it('should handle "No" outcome bet correctly', async () => {
@@ -136,7 +136,7 @@ describe('E2E: Blockchain Events → API Flow', () => {
       assertBigIntString(responseBody.totalAmountYes, expectedYesTotal.toString());
       assertBigIntString(responseBody.totalAmountNo, expectedNoTotal.toString());
 
-      console.log(`✅ Processed ${responseBody.totalBets} bets: ${responseBody.totalYes} Yes (${weiToEth(responseBody.totalAmountYes)} ETH), ${responseBody.totalNo} No (${weiToEth(responseBody.totalAmountNo)} ETH)`);
+      console.log(`[OK] Processed ${responseBody.totalBets} bets: ${responseBody.totalYes} Yes (${weiToEth(responseBody.totalAmountYes)} ETH), ${responseBody.totalNo} No (${weiToEth(responseBody.totalAmountNo)} ETH)`);
     });
 
     it('should handle batch event processing', async () => {
@@ -218,7 +218,7 @@ describe('E2E: Blockchain Events → API Flow', () => {
       expect(responseBody3.marketId).toBe(3);
       expect(responseBody3.totalBets).toBe(1);
 
-      console.log(`✅ Market isolation verified: M1(${responseBody1.totalBets}), M2(${responseBody2.totalBets}), M3(${responseBody3.totalBets})`);
+      console.log(`[OK] Market isolation verified: M1(${responseBody1.totalBets}), M2(${responseBody2.totalBets}), M3(${responseBody3.totalBets})`);
     });
   });
 
@@ -267,7 +267,7 @@ describe('E2E: Blockchain Events → API Flow', () => {
       const bet = responseBody.bets[0];
       expect(bet.amount).toBe('100000000000000000000');
 
-      console.log(`✅ Large bet processed: ${weiToEth(bet.amount)} ETH`);
+      console.log(`[OK] Large bet processed: ${weiToEth(bet.amount)} ETH`);
     });
   });
 
@@ -316,7 +316,7 @@ describe('E2E: Blockchain Events → API Flow', () => {
       const currentBlock = await mockBlockchainService.getCurrentBlock();
       expect(currentBlock).toBe(12345);
 
-      console.log('✅ Mock blockchain service status verified');
+      console.log('[OK] Mock blockchain service status verified');
     });
   });
 });

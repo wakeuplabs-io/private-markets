@@ -20,6 +20,7 @@ const EnvSchema = z.object({
   RPC_URL: z.string().url("Invalid RPC URL"),
   CHAIN_ID: z.coerce.number().int().positive("Chain ID must be positive"),
   START_BLOCK: z.coerce.number().int().min(0, "Start block must be non-negative").default(0),
+  MAX_SCAN_BLOCKS: z.coerce.number().int().positive("Max scan blocks must be positive").default(200000),
 });
 
 export type env = z.infer<typeof EnvSchema>;

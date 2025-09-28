@@ -8,13 +8,23 @@
 import { Container } from './Container';
 import { IMarketRepository } from '../domain/repositories/IMarketRepository';
 import { IBetRepository } from '../domain/repositories/IBetRepository';
+import { IResolutionRepository } from '../domain/repositories/IResolutionRepository';
+import { ICheckpointRepository } from '../domain/repositories/ICheckpointRepository';
 import { IBlockchainService } from '../domain/services/IBlockchainService';
+import { IMerkleService } from '../domain/services/IMerkleService';
 import { InMemoryMarketRepository } from '../infrastructure/persistence/InMemoryMarketRepository';
 import { InMemoryBetRepository } from '../infrastructure/persistence/InMemoryBetRepository';
+import { InMemoryResolutionRepository } from '../infrastructure/persistence/InMemoryResolutionRepository';
+import { InMemoryCheckpointRepository } from '../infrastructure/persistence/InMemoryCheckpointRepository';
 import { ViemBlockchainService, type BlockchainServiceConfig } from '../infrastructure/blockchain/ViemBlockchainService';
+import { MerkleTreeService } from '../infrastructure/services/MerkleTreeService';
 import { GetMarketById } from '../application/use-cases/GetMarketById';
 import { GetMarketBets } from '../application/use-cases/GetMarketBets';
 import { StoreBet } from '../application/use-cases/StoreBet';
+import { ResolveMarket } from '../application/use-cases/ResolveMarket';
+import { GetProofByCommitment } from '../application/use-cases/GetProofByCommitment';
+import { GetMarketStatus } from '../application/use-cases/GetMarketStatus';
+import { ScanHistoricalEvents } from '../application/use-cases/ScanHistoricalEvents';
 import { MarketHandler } from '../interfaces/http/market/market.handler';
 import { BlockchainEventHandler } from '../interfaces/events/BlockchainEventHandler';
 import env from '../env';
@@ -27,14 +37,21 @@ export const TYPES = {
   // Repositories
   MarketRepository: 'MarketRepository',
   BetRepository: 'BetRepository',
+  ResolutionRepository: 'ResolutionRepository',
+  CheckpointRepository: 'CheckpointRepository',
 
   // Services
   BlockchainService: 'BlockchainService',
+  MerkleService: 'MerkleService',
 
   // Use Cases
   GetMarketById: 'GetMarketById',
   GetMarketBets: 'GetMarketBets',
   StoreBet: 'StoreBet',
+  ResolveMarket: 'ResolveMarket',
+  GetProofByCommitment: 'GetProofByCommitment',
+  GetMarketStatus: 'GetMarketStatus',
+  ScanHistoricalEvents: 'ScanHistoricalEvents',
 
   // Handlers
   MarketHandler: 'MarketHandler',
@@ -64,7 +81,22 @@ export function configureContainer(container: Container, logger: Logger): void {
     () => new InMemoryBetRepository(container.resolve<Logger>(TYPES.Logger))
   );
 
-  // Register blockchain service
+  container.registerSingleton<IResolutionRepository>(
+    TYPES.ResolutionRepository,
+    () => new InMemoryResolutionRepository(container.resolve<Logger>(TYPES.Logger))
+  );
+
+  container.registerSingleton<ICheckpointRepository>(
+    TYPES.CheckpointRepository,
+    () => new InMemoryCheckpointRepository(container.resolve<Logger>(TYPES.Logger))
+  );
+
+  // Register services
+  container.registerSingleton<IMerkleService>(
+    TYPES.MerkleService,
+    () => new MerkleTreeService(container.resolve<Logger>(TYPES.Logger))
+  );
+
   container.registerSingleton<IBlockchainService>(
     TYPES.BlockchainService,
     () => {
@@ -76,7 +108,8 @@ export function configureContainer(container: Container, logger: Logger): void {
       };
 
       const eventHandler = container.resolve<BlockchainEventHandler>(TYPES.BlockchainEventHandler);
-      return new ViemBlockchainService(config, eventHandler, container.resolve<Logger>(TYPES.Logger));
+      const checkpointRepository = container.resolve<ICheckpointRepository>(TYPES.CheckpointRepository);
+      return new ViemBlockchainService(config, eventHandler, container.resolve<Logger>(TYPES.Logger), checkpointRepository);
     }
   );
 
@@ -104,6 +137,44 @@ export function configureContainer(container: Container, logger: Logger): void {
     )
   );
 
+  container.register<ResolveMarket>(
+    TYPES.ResolveMarket,
+    () => new ResolveMarket(
+      container.resolve<IMarketRepository>(TYPES.MarketRepository),
+      container.resolve<IBetRepository>(TYPES.BetRepository),
+      container.resolve<IResolutionRepository>(TYPES.ResolutionRepository),
+      container.resolve<IMerkleService>(TYPES.MerkleService),
+      container.resolve<Logger>(TYPES.Logger)
+    )
+  );
+
+  container.register<GetProofByCommitment>(
+    TYPES.GetProofByCommitment,
+    () => new GetProofByCommitment(
+      container.resolve<IResolutionRepository>(TYPES.ResolutionRepository),
+      container.resolve<Logger>(TYPES.Logger)
+    )
+  );
+
+  container.register<GetMarketStatus>(
+    TYPES.GetMarketStatus,
+    () => new GetMarketStatus(
+      container.resolve<IMarketRepository>(TYPES.MarketRepository),
+      container.resolve<IBetRepository>(TYPES.BetRepository),
+      container.resolve<IResolutionRepository>(TYPES.ResolutionRepository),
+      container.resolve<Logger>(TYPES.Logger)
+    )
+  );
+
+  container.register<ScanHistoricalEvents>(
+    TYPES.ScanHistoricalEvents,
+    () => new ScanHistoricalEvents(
+      container.resolve<IBlockchainService>(TYPES.BlockchainService),
+      container.resolve<ICheckpointRepository>(TYPES.CheckpointRepository),
+      container.resolve<Logger>(TYPES.Logger)
+    )
+  );
+
   // Register event handlers
   container.register<BlockchainEventHandler>(
     TYPES.BlockchainEventHandler,
@@ -118,7 +189,13 @@ export function configureContainer(container: Container, logger: Logger): void {
     TYPES.MarketHandler,
     () => new MarketHandler(
       container.resolve<GetMarketById>(TYPES.GetMarketById),
-      container.resolve<GetMarketBets>(TYPES.GetMarketBets)
+      container.resolve<GetMarketBets>(TYPES.GetMarketBets),
+      container.resolve<ResolveMarket>(TYPES.ResolveMarket),
+      container.resolve<GetProofByCommitment>(TYPES.GetProofByCommitment),
+      container.resolve<GetMarketStatus>(TYPES.GetMarketStatus),
+      container.resolve<ScanHistoricalEvents>(TYPES.ScanHistoricalEvents),
+      container.resolve<IBlockchainService>(TYPES.BlockchainService),
+      container.resolve<ICheckpointRepository>(TYPES.CheckpointRepository)
     )
   );
 }

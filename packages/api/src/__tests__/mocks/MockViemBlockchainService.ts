@@ -32,6 +32,9 @@ export class MockViemBlockchainService implements IBlockchainService {
   private connected = false;
   private listening = false;
 
+  // Store historical logs for testing historical scanning
+  private storedLogs: Map<number, Log[]> = new Map();
+
   // Contract ABI for the BetReceived event
   private readonly contractAbi = parseAbi([
     'event BetReceived(uint256 indexed marketId, bytes32 indexed betId, bool outcome, uint256 amount, bytes32 commitment)'
@@ -101,7 +104,7 @@ export class MockViemBlockchainService implements IBlockchainService {
   }
 
   /**
-   * 🎯 KEY METHOD: Trigger a BetReceived event for testing
+   * [KEY METHOD] Trigger a BetReceived event for testing
    * This bypasses the blockchain watcher and calls the handler directly
    */
   async triggerBetReceivedEvent(eventData: MockEventData): Promise<void> {
@@ -110,6 +113,13 @@ export class MockViemBlockchainService implements IBlockchainService {
     }
 
     const mockLog = this.createMockLog(eventData);
+
+    // Store the log for historical scanning
+    const blockNumber = Number(mockLog.blockNumber);
+    if (!this.storedLogs.has(blockNumber)) {
+      this.storedLogs.set(blockNumber, []);
+    }
+    this.storedLogs.get(blockNumber)!.push(mockLog);
 
     this.logger.info({
       event: 'BetReceived',
@@ -134,9 +144,9 @@ export class MockViemBlockchainService implements IBlockchainService {
 
   /**
    * Creates a properly formatted viem Log for testing
-   * @private
+   * Made public for advanced testing scenarios
    */
-  private createMockLog(data: MockEventData): Log {
+  createMockLog(data: MockEventData): Log {
     // Generate encoded topics for the event
     const topics = encodeEventTopics({
       abi: this.contractAbi,
@@ -187,5 +197,87 @@ export class MockViemBlockchainService implements IBlockchainService {
     for (const event of events) {
       await this.triggerBetReceivedEvent(event);
     }
+  }
+
+  /**
+   * Mock implementation of getLogs for historical scanning
+   * Returns logs that were previously stored via triggerBetReceivedEvent
+   */
+  async getLogs(fromBlock: number, toBlock: number): Promise<Log[]> {
+    this.logger.debug({
+      fromBlock,
+      toBlock,
+      blockRange: toBlock - fromBlock + 1
+    }, 'Mock getLogs called');
+
+    const logs: Log[] = [];
+
+    // Iterate through the block range and collect stored logs
+    for (let blockNumber = fromBlock; blockNumber <= toBlock; blockNumber++) {
+      const blockLogs = this.storedLogs.get(blockNumber) || [];
+      logs.push(...blockLogs);
+    }
+
+    this.logger.debug({
+      fromBlock,
+      toBlock,
+      logsFound: logs.length
+    }, 'Mock getLogs returning logs');
+
+    return logs;
+  }
+
+  /**
+   * Mock implementation of processHistoricalLogs
+   * Processes logs by calling the event handler for each one
+   */
+  async processHistoricalLogs(logs: Log[]): Promise<number> {
+    let processedCount = 0;
+
+    this.logger.info({
+      totalLogs: logs.length
+    }, 'Mock processHistoricalLogs called');
+
+    for (const log of logs) {
+      try {
+        await this.eventHandler.handleBetReceived(log);
+        processedCount++;
+      } catch (error) {
+        this.logger.error({
+          error: error instanceof Error ? error.message : String(error),
+          logData: {
+            blockNumber: Number(log.blockNumber),
+            transactionHash: log.transactionHash
+          }
+        }, 'Error processing historical log in mock');
+        // Continue processing other logs rather than failing entire batch
+      }
+    }
+
+    this.logger.info({
+      totalLogs: logs.length,
+      processedCount
+    }, 'Mock processHistoricalLogs completed');
+
+    return processedCount;
+  }
+
+  /**
+   * Helper method to clear stored logs (useful for test cleanup)
+   */
+  clearStoredLogs(): void {
+    this.storedLogs.clear();
+    this.logger.debug('Cleared stored logs');
+  }
+
+  /**
+   * Helper method to get stored logs count (for debugging)
+   */
+  getStoredLogsCount(): number {
+    let total = 0;
+    for (const logs of this.storedLogs.values()) {
+      total += logs.length;
+    }
+    return total;
   }
 }

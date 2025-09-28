@@ -6,7 +6,15 @@
  */
 
 import { createRouter } from "../../../lib/create-app";
-import { getMarketByIdRoute, getMarketBetsRoute } from "./market.routes";
+import {
+  getMarketByIdRoute,
+  getMarketBetsRoute,
+  resolveMarketRoute,
+  getProofByCommitmentRoute,
+  getMarketStatusRoute,
+  systemRefreshRoute,
+  systemHealthRoute
+} from "./market.routes";
 import { MarketHandler } from "./market.handler";
 import { createContainer, TYPES } from "../../../container/bindings";
 import { Container } from "../../../container/Container";
@@ -27,6 +35,11 @@ export function createMarketRouter(logger: Logger) {
   // Register routes
   app.openapi(getMarketByIdRoute, marketHandler.getById);
   app.openapi(getMarketBetsRoute, marketHandler.getBets);
+  app.openapi(resolveMarketRoute, marketHandler.resolve);
+  app.openapi(getProofByCommitmentRoute, marketHandler.getProof);
+  app.openapi(getMarketStatusRoute, marketHandler.getStatus);
+  app.openapi(systemRefreshRoute, marketHandler.systemRefresh);
+  app.openapi(systemHealthRoute, marketHandler.systemHealth);
 
   return app;
 }
@@ -44,6 +57,11 @@ export function createMarketRouterWithContainer(container: Container) {
   // Register routes
   app.openapi(getMarketByIdRoute, marketHandler.getById);
   app.openapi(getMarketBetsRoute, marketHandler.getBets);
+  app.openapi(resolveMarketRoute, marketHandler.resolve);
+  app.openapi(getProofByCommitmentRoute, marketHandler.getProof);
+  app.openapi(getMarketStatusRoute, marketHandler.getStatus);
+  app.openapi(systemRefreshRoute, marketHandler.systemRefresh);
+  app.openapi(systemHealthRoute, marketHandler.systemHealth);
 
   return app;
 }
