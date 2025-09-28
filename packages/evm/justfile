@@ -3,7 +3,7 @@
 # Set CONTRACT_ADDRESS environment variable or pass as argument
 
 # Default contract address (can be overridden)
-default_address := env_var_or_default("CONTRACT_ADDRESS", "0xbec49fa140acaa83533fb00a2bb19bddd0290f25")
+default_address := env_var_or_default("CONTRACT_ADDRESS", "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf")
 
 # Default RPC URL for local development
 rpc_url := env_var_or_default("RPC_URL", "http://localhost:8545")
