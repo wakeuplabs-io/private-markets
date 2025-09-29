@@ -1,7 +1,7 @@
 import { AztecAddress, Fr, createPXEClient, Contract } from "@aztec/aztec.js";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
-import { ensureWalletConnected } from "../lib/walletSdk";
+import { ensureWalletConnected } from "@/lib/wallet";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

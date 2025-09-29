@@ -1,8 +1,8 @@
 import { AztecAddress, Contract, type Wallet } from "@aztec/aztec.js";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
-import { ensureWalletConnected } from "../lib/walletSdk";
-import { aztecService } from "../services/aztecService";
+import { ensureWalletConnected } from "@/lib/wallet";
+import { aztecService } from "@/services/aztecService";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAccount = any;

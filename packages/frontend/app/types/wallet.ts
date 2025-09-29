@@ -1,6 +1,34 @@
-import type { AzguardClient } from "@azguardwallet/client";
 import type { PXE } from "@aztec/aztec.js";
 
+// Core wallet interfaces
+export interface IWalletAccount {
+  getAddress(): { toString(): string };
+}
+
+export interface IWalletProvider {
+  connect(options?: unknown): Promise<IWalletAccount>;
+  disconnect(): void;
+  getAccount(): IWalletAccount | null;
+  isConnected(): boolean;
+  getProviderName(): string;
+}
+
+export interface IExtendedWalletProvider extends IWalletProvider {
+  createAccount(options?: unknown): Promise<IWalletAccount>;
+  sendTransaction(interaction: unknown): Promise<void>;
+  simulateTransaction(interaction: unknown): Promise<unknown>;
+  registerContract(artifact: unknown, deployer: unknown, salt: unknown, args: unknown[]): Promise<void>;
+  connectTestAccount?(index: number): Promise<IWalletAccount>;
+}
+
+export interface WalletProviderConfig {
+  name: string;
+  provider: IWalletProvider;
+}
+
+export type WalletConnector = string;
+
+// Wallet context types
 export type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 export type WalletType = 'aztec' | 'ethereum' | 'metamask'
@@ -13,7 +41,6 @@ export interface WalletInfo {
     eth?: string
     usdc?: string
   }
-  azguardClient?: AzguardClient
   pxe?: PXE
   accounts?: string[]
 }
@@ -30,6 +57,5 @@ export interface ConnectWalletOptions {
 }
 
 export interface ConnectResult {
-  client: AzguardClient
   pxe?: PXE
 }

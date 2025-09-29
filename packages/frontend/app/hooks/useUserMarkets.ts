@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount } from 'wagmi'
 import { MarketService } from '@/services/marketService'
-import { Market } from '@/types'
+import { Market, BlockchainConnectionStatus } from '@/types'
 
 interface UseUserMarketsReturn {
   markets: Market[]
   activeMarkets: Market[]
   isLoading: boolean
   error: string | null
+  connectionStatus: BlockchainConnectionStatus
   refreshMarkets: () => Promise<void>
 }
 
@@ -18,23 +19,25 @@ export function useUserMarkets(): UseUserMarketsReturn {
   const [activeMarkets, setActiveMarkets] = useState<Market[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<BlockchainConnectionStatus>('connecting')
   const { isConnected } = useAccount()
 
   const loadMarkets = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
+      setConnectionStatus('connecting')
+
+      // Get blockchain connection status
+      const blockchainStatus = await MarketService.getConnectionStatus()
+      setConnectionStatus(blockchainStatus)
 
       if (!isConnected) {
         setError('Please connect your wallet to view markets')
         return
       }
 
-      if (!MarketService.isValidContractAddress()) {
-        setError('Contract address not configured')
-        return
-      }
-
+      // Load markets regardless of blockchain status (fallback to mock if offline)
       const [allMarkets, openMarkets] = await Promise.all([
         MarketService.getUserMarkets(),
         MarketService.getActiveMarkets()
@@ -42,9 +45,13 @@ export function useUserMarkets(): UseUserMarketsReturn {
 
       setMarkets(allMarkets)
       setActiveMarkets(openMarkets)
+
+      // Clear any previous errors if we successfully loaded data
+      setError(null)
     } catch (err) {
       console.error('Error loading user markets:', err)
       setError(err instanceof Error ? err.message : 'Failed to load markets')
+      setConnectionStatus('error')
     } finally {
       setIsLoading(false)
     }
@@ -74,6 +81,7 @@ export function useUserMarkets(): UseUserMarketsReturn {
     activeMarkets,
     isLoading,
     error,
+    connectionStatus,
     refreshMarkets
   }
 }

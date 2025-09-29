@@ -1,5 +1,7 @@
 export type MarketStatus = 'open' | 'finalized' | 'resolved'
 
+export type BlockchainConnectionStatus = 'online' | 'offline' | 'connecting' | 'error'
+
 export type MarketOption = 'yes' | 'no'
 
 export interface MarketOptionWithOdds {
@@ -25,6 +27,7 @@ export interface Market {
   merkleRoot?: string
   arbitrumTxHash?: string
   admin?: string
+  isOfflineMode?: boolean
 }
 
 export interface MarketSummary {

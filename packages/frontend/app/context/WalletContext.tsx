@@ -5,7 +5,7 @@ import { walletService, type WalletInfo } from "@/services/walletService"
 import { tokenService } from "@/services/tokenService"
 import { vaultService } from "@/services/vaultService"
 import { CONTRACT_ADDRESSES } from "@/config/contracts"
-import type { WalletConnector } from "@/lib/walletSdk"
+import type { WalletConnector } from "@/lib/wallet"
 
 interface WalletContextType {
   status: 'disconnected' | 'connecting' | 'connected' | 'error'
