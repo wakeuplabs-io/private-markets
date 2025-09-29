@@ -121,7 +121,7 @@ function walletReducer(state: WalletState, action: WalletAction): WalletState {
       return {
         ...state,
         status: 'disconnected',
-        accountStatus: 'none',
+        accountStatus: 'exists',
         wallet: null,
         error: null
       }
