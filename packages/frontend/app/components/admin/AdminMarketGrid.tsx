@@ -158,8 +158,6 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
   formatDate
 }) => {
   const winningOption = safeGetMarketWinningOption(market)
-
-  console.log(market.status);
   const textColor = market.status === 'resolved' ? 'text-foreground/50' : 'text-foreground'
   return (
     <div className="rounded-lg bg-[#1D293D]/65 backdrop-blur-sm">
