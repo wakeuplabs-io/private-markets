@@ -3,6 +3,7 @@ import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
 import { ensureWalletConnected } from "@/lib/wallet";
 import { aztecService } from "@/services/aztecService";
+import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAccount = any;
@@ -165,17 +166,14 @@ export class WalletSdkTokenProvider implements ITokenProvider {
       if (!contract) {
         throw new Error(`${FALLBACK_VALUES.ERROR_MESSAGE}: Could not get contract`);
       }
-      const account = await ensureWalletConnected();
-      const from = account.getAddress();
+      await ensureWalletConnected();
 
-      const fromAddress = AztecAddress.fromString(from.toString());
-      const tx = await contract.methods
-        .mint_to_private(fromAddress, recipient, amount)
-        .send({ from: fromAddress })
-        .wait();
+      console.log('[TOKEN] Minting to private:', recipient, amount);
+      const interaction = contract.methods.mint_to_private(recipient, amount);
+      console.log('[TOKEN] Minting to private:', interaction);
+      await walletConnectionManager.sendTransaction(interaction);
 
-      const txHash = tx.txHash.toString();
-      return txHash;
+      return 'Transaction sent successfully';
     } catch (error) {
       console.error('[TOKEN] Error minting to private:', error);
       throw new Error(`${FALLBACK_VALUES.ERROR_MESSAGE}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -228,7 +226,6 @@ export class PXETokenProvider implements ITokenProvider {
 
       const aztecAddress = AztecAddress.fromString(this.contractAddress);
 
-      // Use TokenContract.at() instead of Contract.at() for proper registration
       const contract = await TokenContract.at(aztecAddress, wallet);
       this.contractCache.set(this.contractAddress, contract);
       return contract;

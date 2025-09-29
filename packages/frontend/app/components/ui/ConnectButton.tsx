@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useWallet } from "@/context";
 import { Button } from "@/components/ui/Button";
 import { LoadingState } from "@/components/ui/Fallbacks";
@@ -20,17 +21,53 @@ export default function ConnectButton() {
     isCreatingAccount
   } = useWallet();
 
-  const defaultConnector = 'aztec';
-  if (isConnected && wallet) {
-    console.log("wallet.address", wallet.address);
+  const [expandedAddress, setExpandedAddress] = useState(false);
+  const [copied, setCopied] = useState(false);
 
+  const defaultConnector = 'aztec';
+
+  const copyAddress = async () => {
+    if (!wallet?.address) return;
+
+    try {
+      await navigator.clipboard.writeText(wallet.address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy address:', error);
+    }
+  };
+  if (isConnected && wallet) {
     return (
       <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card/50 backdrop-blur-sm">
         <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-        <div className="text-sm">
+        <div className="text-sm flex-1">
           <div className="font-semibold text-foreground">Connected via {wallet.connector}</div>
-          <div className="text-muted-foreground text-xs">
-            Address: {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
+          <div className="space-y-1">
+            <div
+              className="text-muted-foreground text-xs cursor-pointer hover:text-foreground transition-colors"
+              onClick={() => setExpandedAddress(!expandedAddress)}
+            >
+              {expandedAddress ? 'Address:' : `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-6)}`}
+              {!expandedAddress && <span className="text-primary ml-1">(click to expand)</span>}
+            </div>
+
+            {expandedAddress && (
+              <div className="flex items-center gap-2 mt-2">
+                <div className="font-mono text-xs bg-secondary/50 p-2 rounded border flex-1 break-all">
+                  {wallet.address}
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={copyAddress}
+                  className="shrink-0 h-8 w-8 p-0"
+                  title={copied ? "Copied!" : "Copy address"}
+                >
+                  {copied ? '✓' : '📋'}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
         <Button

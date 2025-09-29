@@ -26,6 +26,7 @@ import {
   getDefaultInitializer,
 } from '@aztec/stdlib/abi';
 import { getInitialTestAccounts } from '@aztec/accounts/testing';
+import { deriveSigningKey } from "@aztec/stdlib/keys";
 
 const LOCAL_STORAGE_KEY = "aztec-account";
 const DEFAULT_NODE_URL = "http://localhost:8080";
@@ -124,7 +125,7 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     try {
       const salt = Fr.random();
       const secretKey = Fr.random();
-      const signingKey = GrumpkinScalar.random();
+      const signingKey = deriveSigningKey(secretKey);
 
       const account = await getSchnorrAccount(this.pxe, secretKey, signingKey, salt);
 
@@ -159,10 +160,8 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
           salt: salt.toString(),
         };
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(accountData));
-        console.log(`[AztecWalletProvider] Account data saved to localStorage`);
       }
 
-      // Register the account with PXE
       await account.register();
       this.connectedAccount = wallet;
 
@@ -193,7 +192,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       await schnorrAccount.register();
       const wallet = await schnorrAccount.getWallet();
 
-      console.log(`[AztecWalletProvider] Connected to test account ${index}: ${wallet.getAddress().toString()}`);
 
       this.connectedAccount = wallet;
       return new AztecAccount(wallet);
@@ -204,13 +202,11 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
 
   disconnect(): void {
     this.connectedAccount = null;
-    console.log(`[AztecWalletProvider] Disconnected (account data preserved in localStorage)`);
   }
 
   clearAccount(): void {
     this.connectedAccount = null;
     localStorage.removeItem(LOCAL_STORAGE_KEY);
-    console.log(`[AztecWalletProvider] Account cleared from localStorage`);
   }
 
   getAccount(): IWalletAccount | null {
