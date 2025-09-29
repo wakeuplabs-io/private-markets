@@ -12,7 +12,9 @@
   "dependencies": {
     "@aztec/accounts": "^2.0.3",
     "@aztec/aztec.js": "^2.0.3",
+    "@aztec/constants": "^2.0.3",
     "@aztec/noir-contracts.js": "^2.0.3",
+    "@aztec/pxe": "^2.0.3",
     "clsx": "^2.1.1",
     "ethers": "^6.15.0",
     "next": "15.1.0",

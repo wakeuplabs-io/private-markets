@@ -1,5 +1,5 @@
-import type { AccountWallet } from "@aztec/aztec.js";
 import type { IWalletAccount } from "@/types/wallet";
+import type { AccountWallet } from '@aztec/aztec.js';
 
 export class AztecAccount implements IWalletAccount {
   constructor(private accountWallet: AccountWallet) {}

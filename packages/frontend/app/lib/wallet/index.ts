@@ -17,5 +17,11 @@ export async function ensureWalletConnected() {
   if (!walletConnectionManager.isConnected()) {
     throw new Error("Wallet not connected. Please connect a wallet first.");
   }
-  return walletConnectionManager.getAccount();
+  const account = walletConnectionManager.getAccount();
+
+  if ('getAccountWallet' in account && typeof account.getAccountWallet === 'function') {
+    return (account as any).getAccountWallet();
+  }
+
+  return account;
 }

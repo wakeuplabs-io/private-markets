@@ -63,7 +63,7 @@ export function MarketsPage() {
 
   const handleConnectWallet = async () => {
     try {
-      await connectWallet('obsidion')
+      await connectWallet('aztec')
     } catch (error) {
       console.error('Failed to connect wallet:', error)
     }

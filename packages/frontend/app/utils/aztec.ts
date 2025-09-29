@@ -15,6 +15,6 @@ export function getDefaultAztecConfig(): AztecWalletConfig {
   return {
     nodeUrl: process.env.NEXT_PUBLIC_PXE_URL || "http://localhost:8080",
     proverEnabled: true,
-    accountType: "ecdsa",
+    accountType: "schnorr",
   };
 }

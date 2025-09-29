@@ -120,6 +120,15 @@ export class WalletConnectionManager {
     this.currentProvider = null;
   }
 
+  clearAccount(): void {
+    if (this.currentProvider) {
+      this.currentProvider.clearAccount();
+    }
+    this.account = null;
+    this.currentConnector = null;
+    this.currentProvider = null;
+  }
+
   /**
    * Get the currently connected account
    * @returns The connected account or throws if none is connected

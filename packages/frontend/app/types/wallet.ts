@@ -8,9 +8,12 @@ export interface IWalletAccount {
 export interface IWalletProvider {
   connect(options?: unknown): Promise<IWalletAccount>;
   disconnect(): void;
+  clearAccount(): void;
   getAccount(): IWalletAccount | null;
   isConnected(): boolean;
   getProviderName(): string;
+  hasExistingAccount(): boolean;
+  getAccountStatus(): 'none' | 'exists' | 'connected';
 }
 
 export interface IExtendedWalletProvider extends IWalletProvider {
@@ -31,6 +34,8 @@ export type WalletConnector = string;
 // Wallet context types
 export type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
+export type AccountStatus = 'checking' | 'none' | 'exists' | 'connected'
+
 export type WalletType = 'aztec' | 'ethereum' | 'metamask'
 
 export interface WalletInfo {
@@ -47,6 +52,7 @@ export interface WalletInfo {
 
 export interface WalletState {
   status: WalletConnectionStatus
+  accountStatus: AccountStatus
   wallet: WalletInfo | null
   error: string | null
 }
