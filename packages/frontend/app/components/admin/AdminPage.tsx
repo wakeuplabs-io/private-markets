@@ -20,7 +20,7 @@ export function AdminPage() {
     resolveMarket
   } = useAdminMarkets()
 
-  const [currentStep, setCurrentStep] = useState<CreateMarketStep>('form')
+  const [currentStep, setCurrentStep] = useState<CreateMarketStep | null>(null)
   const [createMarketFormData, setCreateMarketFormData] = useState<CreateMarketFormData | null>(null)
   const [createdMarket, setCreatedMarket] = useState<Market | null>(null)
 
@@ -74,8 +74,9 @@ export function AdminPage() {
   }
 
   const handleCloseModal = () => {
-    setCurrentStep('form')
+    setCurrentStep(null)
     setCreateMarketFormData(null)
+    setCreatedMarket(null)
   }
 
   return (

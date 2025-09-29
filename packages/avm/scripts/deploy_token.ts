@@ -17,8 +17,8 @@ async function main(): Promise<void> {
     "AUSD",
     18
   ).send(deployTxOptions).deployed();
-
-  console.log("[OK] Token deployed at:", contract.address.toString());
+  console.log("");
+  console.log("✅ [OK] Token deployed at:", contract.address.toString());
 
   // Save contract address
   aztecSetup.saveContractAddress("token", contract.address.toString());

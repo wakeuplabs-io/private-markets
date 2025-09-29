@@ -80,12 +80,12 @@ export class AztecSetup {
     const pxeUrl = process.env.PXE_URL || "http://localhost:8080";
     this.network = this.detectNetwork();
 
-    console.log(`🔗 Connecting to ${this.network} PXE at: ${pxeUrl}`);
+    console.log(`Connecting to ${this.network} PXE at: ${pxeUrl}`);
 
     this.pxe = createPXEClient(pxeUrl);
     await waitForPXE(this.pxe);
 
-    console.log(`✅ Connected to ${this.network} PXE`);
+    console.log(`Connected to ${this.network} PXE`);
 
     if (this.network === "testnet") {
       await this.registerContractsForTestnet();
@@ -97,7 +97,7 @@ export class AztecSetup {
   private async registerContractsForTestnet(): Promise<void> {
     if (!this.pxe) throw new Error("PXE not initialized");
 
-    console.log("🔄 Registering contracts for testnet...");
+    console.log("Registering contracts for testnet...");
 
     try {
       const sponsoredFPC = await this.getSponsoredFPCInstance();
@@ -105,7 +105,7 @@ export class AztecSetup {
         instance: sponsoredFPC,
         artifact: SponsoredFPCContract.artifact
       });
-      console.log("✅ Sponsored FPC contract registered");
+      console.log("Sponsored FPC contract registered");
     } catch (error) {
       console.warn("⚠️  Failed to register contracts (may already be registered):", error);
     }
@@ -127,7 +127,7 @@ export class AztecSetup {
 
     allKeys[accountName] = keys;
     fs.writeFileSync(this.keysFile, JSON.stringify(allKeys, null, 2));
-    console.log(`💾 Saved keys for ${accountName} to ${this.keysFile}`);
+    console.log(`Saved keys for ${accountName} to ${this.keysFile}`);
   }
 
   private loadKeys(accountName: string): AccountKeys | null {
@@ -147,7 +147,7 @@ export class AztecSetup {
 
     allAccounts[accountName] = info;
     fs.writeFileSync(this.accountsFile, JSON.stringify(allAccounts, null, 2));
-    console.log(`📝 Saved account info for ${accountName}: ${info.address}`);
+    console.log(`Saved account info for ${accountName}: ${info.address}`);
   }
 
   private loadAccountInfo(accountName: string): AccountInfo | null {
@@ -186,7 +186,7 @@ export class AztecSetup {
   private async deploySchnorrAccount(keys: AccountKeys): Promise<Wallet> {
     if (!this.pxe) throw new Error("PXE not initialized");
 
-    console.log("🚀 Deploying new Schnorr account...");
+    console.log("Deploying new Schnorr account...");
 
     const privateKeyFr = Fr.fromHexString(keys.privateKey);
     const saltFr = Fr.fromHexString(keys.salt);
@@ -206,9 +206,9 @@ export class AztecSetup {
         fee: { paymentMethod: sponsoredPaymentMethod }
       }).wait({ timeout: 60 * 60 * 12 });
 
-      console.log("✅ Schnorr account deployed successfully");
+      console.log("Schnorr account deployed successfully");
     } catch (error) {
-      console.warn("⚠️  Account deployment failed (may already exist):", error);
+      console.warn("Account deployment failed (may already exist):", error);
     }
 
     return await schnorrAccount.getWallet();
@@ -218,7 +218,7 @@ export class AztecSetup {
     if (!this.pxe) throw new Error("PXE not initialized. Call setupPXE() first");
 
     if (this.network === "sandbox") {
-      console.log(`📦 Using sandbox account: ${accountName}`);
+      console.log(`Using sandbox account: ${accountName}`);
       const wallets = await getInitialTestAccountsWallets(this.pxe);
       const accountIndex = accountName === "user" ? 1 : 0;
       const wallet = wallets[accountIndex] || wallets[0];
@@ -229,18 +229,18 @@ export class AztecSetup {
         deployed: true,
       });
 
-      console.log(`✅ Sandbox account ${accountName}: ${wallet.getAddress().toString()}`);
+      console.log(`Sandbox account ${accountName}: ${wallet.getAddress().toString()}`);
       return wallet;
     }
 
     // Testnet flow
-    console.log(`🔐 Loading/creating testnet account: ${accountName}`);
+    console.log(`Loading/creating testnet account: ${accountName}`);
 
     let keys = this.loadKeys(accountName);
     let accountInfo = this.loadAccountInfo(accountName);
 
     if (!keys) {
-      console.log(`🔑 Generating new keys for ${accountName}...`);
+      console.log(`Generating new keys for ${accountName}...`);
       keys = this.generateRandomKeys();
       this.saveKeys(accountName, keys);
     }
@@ -248,10 +248,10 @@ export class AztecSetup {
     let wallet: Wallet;
 
     if (accountInfo?.deployed) {
-      console.log(`♻️  Loading existing deployed account: ${accountName}`);
+      console.log(`Loading existing deployed account: ${accountName}`);
       wallet = await this.createSchnorrWallet(keys);
     } else {
-      console.log(`🚀 Deploying new account: ${accountName}`);
+      console.log(`Deploying new account: ${accountName}`);
       wallet = await this.deploySchnorrAccount(keys);
 
       this.saveAccountInfo(accountName, {
@@ -260,7 +260,7 @@ export class AztecSetup {
       });
     }
 
-    console.log(`✅ Account ready: ${wallet.getAddress().toString()}`);
+    console.log(`Account ready: ${wallet.getAddress().toString()}`);
     return wallet;
   }
 
@@ -335,9 +335,9 @@ export class AztecSetup {
 
     try {
       await this.pxe.registerSender(address);
-      console.log(`✅ Registered sender: ${address.toString()}`);
+      console.log(`Registered sender: ${address.toString()}`);
     } catch (error) {
-      console.warn(`⚠️  Failed to register sender (may already be registered):`, error);
+      console.warn(`Failed to register sender (may already be registered):`, error);
     }
   }
 
@@ -347,13 +347,13 @@ export class AztecSetup {
    */
   async extractAndSaveSandboxKeys(): Promise<void> {
     if (this.network !== "sandbox") {
-      console.warn("⚠️  This function only works in sandbox environment");
+      console.warn("This function only works in sandbox environment");
       return;
     }
 
     if (!this.pxe) throw new Error("PXE not initialized");
 
-    console.log("🔍 Extracting sandbox account keys...");
+    console.log("Extracting sandbox account keys...");
     const wallets = await getInitialTestAccountsWallets(this.pxe);
 
     const accountNames = ["deployer", "user", "alice", "bob"];
@@ -375,17 +375,17 @@ export class AztecSetup {
         deployed: true,
       });
 
-      console.log(`📋 Saved ${accountName}: ${wallet.getAddress().toString()}`);
+      console.log(`Saved ${accountName}: ${wallet.getAddress().toString()}`);
     }
 
-    console.log("✅ Sandbox keys extraction complete");
+    console.log("Sandbox keys extraction complete");
   }
 
   /**
    * Display current account status
    */
   displayAccountStatus(): void {
-    console.log("\n📊 === ACCOUNT STATUS ===");
+    console.log("\n=== ACCOUNT STATUS ===");
     console.log(`Network: ${this.getNetwork()}`);
 
     if (fs.existsSync(this.accountsFile)) {
