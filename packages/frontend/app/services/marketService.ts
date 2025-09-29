@@ -1,7 +1,9 @@
 import { readContract, writeContract } from 'wagmi/actions'
 import { config } from '@/config/wagmi'
 import { PREDICTION_MARKET_ABI } from '@/constants/contracts'
-import { Market, MarketStatus } from '@/types'
+import { Market, MarketStatus, BlockchainConnectionStatus } from '@/types'
+import { BlockchainStatusService } from './blockchainStatusService'
+import { MockDataFactory } from '@/lib/mockData'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
 
@@ -48,31 +50,45 @@ export class MarketService {
 
   static async getMarketCount(): Promise<number> {
     if (!CONTRACT_ADDRESS) {
-      throw new Error('Contract address not configured')
+      console.warn('Contract address not configured, using mock data')
+      return MockDataFactory.getMockMarkets().length
     }
-    console.log('Getting market count from contract:', CONTRACT_ADDRESS)
-    const result = await readContract(config, {
-      address: CONTRACT_ADDRESS,
-      abi: PREDICTION_MARKET_ABI,
-      functionName: 'getMarketCount',
-    })
-    console.log('Market count result:', Number(result))
-    return Number(result)
+
+    try {
+      console.log('Getting market count from contract:', CONTRACT_ADDRESS)
+      const result = await readContract(config, {
+        address: CONTRACT_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'getMarketCount',
+      })
+      console.log('Market count result:', Number(result))
+      return Number(result)
+    } catch (error) {
+      console.warn('Failed to get market count from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
+      return MockDataFactory.getMockMarkets().length
+    }
   }
 
   static async getAllMarkets(offset = 0, limit = 100): Promise<ContractMarket[]> {
     if (!CONTRACT_ADDRESS) {
-      throw new Error('Contract address not configured')
+      console.warn('Contract address not configured, using mock data')
+      return this.convertMockToContractMarkets(MockDataFactory.getMockMarkets(limit))
     }
-    console.log('Getting all markets:', { offset, limit, contractAddress: CONTRACT_ADDRESS })
-    const result = await readContract(config, {
-      address: CONTRACT_ADDRESS,
-      abi: PREDICTION_MARKET_ABI,
-      functionName: 'getAllMarkets',
-      args: [BigInt(offset), BigInt(limit)],
-    })
 
-    return result as ContractMarket[]
+    try {
+      console.log('Getting all markets:', { offset, limit, contractAddress: CONTRACT_ADDRESS })
+      const result = await readContract(config, {
+        address: CONTRACT_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'getAllMarkets',
+        args: [BigInt(offset), BigInt(limit)],
+      })
+
+      return result as ContractMarket[]
+    } catch (error) {
+      console.warn('Failed to get markets from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
+      return this.convertMockToContractMarkets(MockDataFactory.getMockMarkets(limit))
+    }
   }
 
   static async getMarket(marketId: number): Promise<ContractMarket> {
@@ -122,21 +138,38 @@ export class MarketService {
   }
 
   static async createMarket(question: string, closingTime: Date): Promise<string> {
+    // Check if blockchain is available
+    const isOnline = await BlockchainStatusService.isEVMOnline()
+
+    if (!isOnline) {
+      console.info('EVM offline, simulating market creation')
+      // Simulate the market creation in mock data
+      MockDataFactory.createMockMarket(question, closingTime)
+      // Return a mock transaction hash
+      return `mock-tx-${Date.now()}`
+    }
+
     if (!CONTRACT_ADDRESS) {
       throw new Error('Contract address not configured')
     }
 
-    // Convert Date to Unix timestamp (seconds)
-    const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
+    try {
+      // Convert Date to Unix timestamp (seconds)
+      const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
 
-    const hash = await writeContract(config, {
-      address: CONTRACT_ADDRESS,
-      abi: PREDICTION_MARKET_ABI,
-      functionName: 'createMarket',
-      args: [question, closingTimestamp],
-    })
+      const hash = await writeContract(config, {
+        address: CONTRACT_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'createMarket',
+        args: [question, closingTimestamp],
+      })
 
-    return hash
+      return hash
+    } catch (error) {
+      console.warn('Failed to create market on blockchain, using mock creation:', error instanceof Error ? error.message : 'Unknown error')
+      MockDataFactory.createMockMarket(question, closingTime)
+      return `mock-tx-${Date.now()}`
+    }
   }
 
   static async setWinnersRoot(marketId: number, root: string): Promise<string> {
@@ -157,6 +190,14 @@ export class MarketService {
   // === User-focused Methods ===
 
   static async getUserMarkets(): Promise<Market[]> {
+    // Check if blockchain is available
+    const isOnline = await BlockchainStatusService.isEVMOnline()
+
+    if (!isOnline) {
+      console.info('EVM offline, returning mock user markets')
+      return MockDataFactory.getMockMarkets(10)
+    }
+
     try {
       const contractMarkets = await this.getAllMarkets()
       const markets: Market[] = []
@@ -175,8 +216,8 @@ export class MarketService {
 
       return markets
     } catch (error) {
-      console.error('Error fetching user markets:', error)
-      throw error
+      console.warn('Error fetching user markets from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
+      return MockDataFactory.getMockMarkets(10)
     }
   }
 
@@ -207,6 +248,14 @@ export class MarketService {
   // === Admin-focused Methods ===
 
   static async getAdminMarkets(): Promise<Market[]> {
+    // Check if blockchain is available
+    const isOnline = await BlockchainStatusService.isEVMOnline()
+
+    if (!isOnline) {
+      console.info('EVM offline, returning mock admin markets')
+      return MockDataFactory.getMockMarkets(15)
+    }
+
     try {
       const contractMarkets = await this.getAllMarkets()
       const markets: Market[] = []
@@ -229,8 +278,8 @@ export class MarketService {
 
       return markets
     } catch (error) {
-      console.error('Error fetching admin markets:', error)
-      throw error
+      console.warn('Error fetching admin markets from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
+      return MockDataFactory.getMockMarkets(15)
     }
   }
 
@@ -365,5 +414,45 @@ export class MarketService {
 
   static isValidContractAddress(): boolean {
     return !!CONTRACT_ADDRESS && CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000'
+  }
+
+  // === Helper Methods for Mock Data Conversion ===
+
+  /**
+   * Convert mock Market objects to ContractMarket format for consistency
+   */
+  private static convertMockToContractMarkets(mockMarkets: Market[]): ContractMarket[] {
+    return mockMarkets.map(market => ({
+      id: BigInt(parseInt(market.id.replace('mock-', '')) || 0),
+      question: market.question,
+      state: this.marketStatusToContractState(market.status),
+      admin: market.admin || '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
+      createdAt: BigInt(Math.floor(market.createdAt.getTime() / 1000)),
+      closingTime: BigInt(Math.floor((market.closingDate?.getTime() || Date.now()) / 1000)),
+      resolvedAt: market.resolvedAt ? BigInt(Math.floor(market.resolvedAt.getTime() / 1000)) : BigInt(0)
+    }))
+  }
+
+  /**
+   * Convert MarketStatus to contract state number
+   */
+  private static marketStatusToContractState(status: MarketStatus): number {
+    switch (status) {
+      case 'open':
+      case 'finalized':
+        return 0
+      case 'resolved':
+        return 1
+      default:
+        return 0
+    }
+  }
+
+  /**
+   * Get blockchain connection status for UI display
+   */
+  static async getConnectionStatus(): Promise<BlockchainConnectionStatus> {
+    const status = await BlockchainStatusService.getStatus()
+    return status.evm
   }
 }

@@ -80,7 +80,7 @@ export class MarketHandler {
         );
       }
 
-      // Log unexpected errors
+      
       c.var.logger.error(
         { error: error instanceof Error ? error.message : String(error), marketId: c.req.param("id") },
         "Unexpected error retrieving market"
@@ -127,7 +127,6 @@ export class MarketHandler {
         );
       }
 
-      // Log unexpected errors
       c.var.logger.error(
         { error: error instanceof Error ? error.message : String(error), marketId: c.req.param("id") },
         "Unexpected error retrieving market bets"
@@ -236,7 +235,6 @@ export class MarketHandler {
         );
       }
 
-      // Log unexpected errors
       c.var.logger.error({
         error: error instanceof Error ? error.message : String(error),
         commitment: c.req.param("commitment")?.slice(0, 10) + '...'

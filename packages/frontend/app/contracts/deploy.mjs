@@ -115,6 +115,7 @@ async function main() {
   );
   console.log("Generating authwit for donation...");
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const donationWitness = await ownerWallet.createAuthWit({ caller: emitter.address, action: donationAction });
 
   const addresses = { emitter: emitter.address.toString() };
@@ -122,6 +123,7 @@ async function main() {
 
   console.log("Getting emitter contract...")
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const contract = await Contract.at(emitter.address, EmitterContractArtifact, ownerWallet);
 
   console.log("Defining addresses...")

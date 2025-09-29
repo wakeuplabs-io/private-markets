@@ -9,6 +9,8 @@ export type {
   CreateMarketFormData,
   AdminMarketFilters,
   MarketResolutionData,
+  BlockchainConnectionStatus,
+  MarketOptionWithOdds,
 } from './market'
 
 // Betting types
@@ -27,7 +29,21 @@ export type {
   WalletInfo,
   WalletState,
   ConnectWalletOptions,
+  IWalletAccount,
+  IWalletProvider,
+  IExtendedWalletProvider,
+  WalletConnector,
 } from './wallet'
+
+// Aztec wallet types
+export type {
+  AztecWalletConfig,
+  AztecAccountData,
+  AztecContractParams,
+  AztecTransactionInteraction,
+  TestAccountOptions,
+  CreateAccountOptions,
+} from '@/providers/aztec/types'
 
 export type {
   CreateMarketStep,

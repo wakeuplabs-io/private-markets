@@ -1,7 +1,7 @@
 import { AztecAddress } from "@aztec/aztec.js";
 import type { TokenInfo, ITokenService } from "@/types/token";
 import { fieldToString } from "@/lib/aztecUtils";
-import { WalletSdkTokenProvider, PXETokenProvider } from "../providers/tokenProvider";
+import { WalletSdkTokenProvider, PXETokenProvider } from "./tokenProviderService";
 import { walletService } from "./walletService";
 
 class TokenService implements ITokenService {

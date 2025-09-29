@@ -1,4 +1,4 @@
-import { WalletSdkVaultProvider, PXEVaultProvider } from "../providers/vaultProvider";
+import { WalletSdkVaultProvider, PXEVaultProvider } from "./vaultProviderService";
 import { walletService } from "./walletService";
 
 export class VaultService {

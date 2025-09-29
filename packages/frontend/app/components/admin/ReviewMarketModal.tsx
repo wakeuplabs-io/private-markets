@@ -10,7 +10,7 @@ interface ReviewMarketModalProps {
   onClose: () => void
   onBack: () => void
   onConfirm: () => Promise<void>
-  formData: CreateMarketFormData
+  formData: CreateMarketFormData | null
 }
 
 export function ReviewMarketModal({ 
@@ -33,6 +33,9 @@ export function ReviewMarketModal({
     }
   }
 
+  if (!formData) {
+    return null
+  }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>

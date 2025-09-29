@@ -3,6 +3,7 @@ import { DM_Sans, Lato } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "./context";
 import { WagmiProviderWrapper } from "./providers/wagmiProvider";
+import { WalletProvidersInitializer } from "./components/providers/WalletProvidersInitializer";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -24,11 +25,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body className={`${dmSans.variable} ${lato.variable} font-sans antialiased`}>
-        <WagmiProviderWrapper>
-          <WalletProvider>
-            {children}
-          </WalletProvider>
-        </WagmiProviderWrapper>
+        <WalletProvidersInitializer>
+          <WagmiProviderWrapper>
+            <WalletProvider>
+              {children}
+            </WalletProvider>
+          </WagmiProviderWrapper>
+        </WalletProvidersInitializer>
       </body>
     </html>
   );

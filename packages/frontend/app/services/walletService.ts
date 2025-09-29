@@ -1,4 +1,7 @@
-import { walletConnection, type WalletConnector } from "../lib/walletSdk";
+import { walletConnectionManager, type WalletConnector } from "@/lib/wallet"
+import { walletRegistry } from "@/lib/wallet/WalletRegistry";
+// Import to ensure providers are initialized before any wallet operations
+import "@/lib/wallet/providers";
 
 export interface WalletInfo {
   connector: WalletConnector;
@@ -20,15 +23,19 @@ export class WalletService {
 
   async connect(connector: WalletConnector): Promise<WalletInfo> {
     try {
-      const account = await walletConnection.connect(connector);
+      const account = await walletConnectionManager.connect(connector);
 
       if (!account) {
         throw new Error(`Failed to connect to ${connector}: No account returned`);
       }
 
+      const addressObj = account.getAddress();
+      const addressString = addressObj.toString();
+      console.log('[WalletService] connect - addressObj:', addressObj, 'addressString:', addressString);
+
       const walletInfo: WalletInfo = {
         connector,
-        address: account.getAddress().toString(),
+        address: addressString,
         isConnected: true,
       };
 
@@ -41,16 +48,20 @@ export class WalletService {
   }
 
   disconnect(): void {
-    walletConnection.disconnect();
+    walletConnectionManager.disconnect();
+  }
+
+  clearAccount(): void {
+    walletConnectionManager.clearAccount();
   }
 
   getWalletInfo(): WalletInfo | null {
-    if (!walletConnection.isConnected()) {
+    if (!walletConnectionManager.isConnected()) {
       return null;
     }
 
-    const connector = walletConnection.getCurrentConnector();
-    const address = walletConnection.getAddress();
+    const connector = walletConnectionManager.getCurrentConnector();
+    const address = walletConnectionManager.getAddress();
 
     if (!connector || !address) {
       return null;
@@ -64,18 +75,18 @@ export class WalletService {
   }
 
   isConnected(): boolean {
-    return walletConnection.isConnected();
+    return walletConnectionManager.isConnected();
   }
 
   getAccount() {
     if (!this.isConnected()) {
       throw new Error("No wallet connected. Please connect a wallet first.");
     }
-    return walletConnection.getAccount();
+    return walletConnectionManager.getAccount();
   }
 
   getAddress() {
-    const address = walletConnection.getAddress();
+    const address = walletConnectionManager.getAddress();
     if (!address) {
       throw new Error("No wallet connected. Please connect a wallet first.");
     }
@@ -83,11 +94,112 @@ export class WalletService {
   }
 
   getCurrentConnector(): WalletConnector | null {
-    return walletConnection.getCurrentConnector();
+    return walletConnectionManager.getCurrentConnector();
   }
 
   async connectWithPersistence(connector: WalletConnector): Promise<WalletInfo> {
     return await this.connect(connector);
+  }
+
+  async createAccount(connector: WalletConnector, options?: unknown): Promise<WalletInfo> {
+    try {
+      const account = await walletConnectionManager.createAccount(connector, options);
+
+      if (!account) {
+        throw new Error(`Failed to create account with ${connector}: No account returned`);
+      }
+
+      const addressObj = account.getAddress();
+      const addressString = addressObj.toString();
+      console.log('[WalletService] createAccount - addressObj:', addressObj, 'addressString:', addressString);
+
+      const walletInfo: WalletInfo = {
+        connector,
+        address: addressString,
+        isConnected: true,
+      };
+
+      return walletInfo;
+
+    } catch (error) {
+      console.error(`Failed to create account with ${connector}:`, error);
+      throw new Error(`Failed to create account with ${connector}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async connectTestAccount(connector: WalletConnector, index: number): Promise<WalletInfo> {
+    try {
+      const account = await walletConnectionManager.connectTestAccount(connector, index);
+
+      if (!account) {
+        throw new Error(`Failed to connect test account with ${connector}: No account returned`);
+      }
+
+      const addressObj = account.getAddress();
+      const addressString = addressObj.toString();
+
+      const walletInfo: WalletInfo = {
+        connector,
+        address: addressString,
+        isConnected: true,
+      };
+
+      return walletInfo;
+
+    } catch (error) {
+      console.error(`Failed to connect test account with ${connector}:`, error);
+      throw new Error(`Failed to connect test account with ${connector}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async sendTransaction(interaction: unknown): Promise<void> {
+    return walletConnectionManager.sendTransaction(interaction);
+  }
+
+  async simulateTransaction(interaction: unknown): Promise<unknown> {
+    return walletConnectionManager.simulateTransaction(interaction);
+  }
+
+  async registerContract(artifact: unknown, deployer: unknown, salt: unknown, args: unknown[]): Promise<void> {
+    return walletConnectionManager.registerContract(artifact, deployer, salt, args);
+  }
+
+  /**
+   * Check if a wallet provider has an existing account
+   * @param connector - The wallet provider identifier
+   * @returns Promise resolving to true if account exists
+   */
+  async hasExistingAccount(connector: WalletConnector): Promise<boolean> {
+    try {
+      const provider = walletRegistry.get(connector);
+      if (!provider) {
+        throw new Error(`Wallet provider "${connector}" not found`);
+      }
+
+      return provider.hasExistingAccount();
+    } catch (error) {
+      console.error(`Failed to check existing account for ${connector}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Get the account status for a wallet provider
+   * @param connector - The wallet provider identifier
+   * @returns Promise resolving to the account status
+   */
+  async getAccountStatus(connector: WalletConnector): Promise<'none' | 'exists' | 'connected'> {
+    try {
+      const provider = walletRegistry.get(connector);
+      if (!provider) {
+        throw new Error(`Wallet provider "${connector}" not found`);
+      }
+
+      return provider.getAccountStatus();
+    } catch (error) {
+      console.error(`Failed to get account status for ${connector}:`, error);
+      return 'none';
+    }
   }
 }
 

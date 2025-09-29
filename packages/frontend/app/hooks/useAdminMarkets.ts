@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount } from 'wagmi'
 import { MarketService } from '@/services/marketService'
-import { Market, CreateMarketFormData } from '@/types'
+import { Market, CreateMarketFormData, BlockchainConnectionStatus } from '@/types'
 
 interface UseAdminMarketsReturn {
   markets: Market[]
   isLoading: boolean
   error: string | null
+  connectionStatus: BlockchainConnectionStatus
   refreshMarkets: () => Promise<void>
   createMarket: (formData: CreateMarketFormData) => Promise<void>
   resolveMarket: (marketId: string, winningOption: 'yes' | 'no') => Promise<void>
@@ -18,29 +19,35 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
   const [markets, setMarkets] = useState<Market[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<BlockchainConnectionStatus>('connecting')
   const { isConnected } = useAccount()
 
   const loadAdminData = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
+      setConnectionStatus('connecting')
+
+      // Get blockchain connection status
+      const blockchainStatus = await MarketService.getConnectionStatus()
+      setConnectionStatus(blockchainStatus)
 
       if (!isConnected) {
         setError('Please connect your wallet to view admin data')
         return
       }
 
-      if (!MarketService.isValidContractAddress()) {
-        setError('Contract address not configured')
-        return
-      }
-
+      // Load markets regardless of blockchain status (fallback to mock if offline)
       const adminMarkets = await MarketService.getAdminMarkets()
       console.log('Admin markets:', adminMarkets)
       setMarkets(adminMarkets)
+
+      // Clear any previous errors if we successfully loaded data
+      setError(null)
     } catch (err) {
       console.error('Error loading admin data:', err)
       setError(err instanceof Error ? err.message : 'Failed to load admin data')
+      setConnectionStatus('error')
     } finally {
       setIsLoading(false)
     }
@@ -105,6 +112,7 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
     markets,
     isLoading,
     error,
+    connectionStatus,
     refreshMarkets,
     createMarket,
     resolveMarket

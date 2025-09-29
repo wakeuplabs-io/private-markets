@@ -5,13 +5,23 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { BetOptionSelector } from './BetOptionSelector'
 import { AmountInput } from './AmountInput'
+import { SafeRender, InvalidDataState, LoadingState } from '@/components/ui/Fallbacks'
 import { cn } from '@/lib/utils'
 import { Market, MarketOption, PlaceBetData } from '@/types'
+import {
+  isValidMarket,
+  safeGetMarketClosingDate,
+  safeGetMarketOptions,
+  getMarketOptionName,
+  isValidMarketOptionChoice,
+  isValidAmount,
+  safeFormatDate
+} from '@/utils/typeGuards'
 
 interface PlaceBetModalProps {
   isOpen: boolean
   onClose: () => void
-  market: Market | null
+  market: Market | null | undefined
   onPlaceBet: (betData: PlaceBetData) => Promise<void>
   isLoading?: boolean
   className?: string
@@ -53,11 +63,19 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
   }
 
   const handleSubmit = async () => {
-    if (!market || !selectedOption) return
+    if (!isValidMarket(market) || !isValidMarketOptionChoice(selectedOption)) {
+      setError('Invalid market or option selected')
+      return
+    }
 
     const validation = validateAmount(amount)
     if (validation) {
       setError(validation)
+      return
+    }
+
+    if (!isValidAmount(amount)) {
+      setError('Invalid amount')
       return
     }
 
@@ -89,8 +107,6 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
 
   const isValid = selectedOption && amount && !error && !validateAmount(amount)
 
-  if (!market) return null
-
   return (
     <Modal
       isOpen={isOpen}
@@ -107,67 +123,138 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
           </p>
         </div>
 
-        <div className="p-4 rounded-lg bg-muted space-y-3">
-          <h3 className="font-semibold text-foreground">
-            {market.question}
-          </h3>
-          <div className="text-xs text-muted-foreground space-y-1">
-            <div>Closes: {new Intl.DateTimeFormat('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            }).format(market.closingDate)}</div>
-            {market.disclaimer && (
-              <div className="italic">{market.disclaimer}</div>
-            )}
-          </div>
-        </div>
-
-        <BetOptionSelector
-          options={{
-            yes: market.options.find(opt => opt.id === 'yes')?.name || 'Yes',
-            no: market.options.find(opt => opt.id === 'no')?.name || 'No'
-          }}
-          selectedOption={selectedOption}
-          onOptionSelect={setSelectedOption}
-        />
-
-        <AmountInput
-          amount={amount}
-          onAmountChange={handleAmountChange}
-          error={error}
-        />
-
-        <div className="flex gap-3 pt-4">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={handleClose}
-            disabled={isLoading}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="default"
-            size="md"
-            onClick={handleSubmit}
-            disabled={!isValid || isLoading}
-            className="flex-1"
-          >
-            {isLoading ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                <span>Placing...</span>
-              </div>
-            ) : (
-              'Place Bet'
-            )}
-          </Button>
-        </div>
+        <SafeRender
+          data={market}
+          validator={isValidMarket}
+          fallback={
+            <InvalidDataState
+              dataType="market"
+              onRefresh={() => window.location.reload()}
+            />
+          }
+        >
+          {(validMarket) => (
+            <PlaceBetModalContent
+              market={validMarket}
+              selectedOption={selectedOption}
+              setSelectedOption={setSelectedOption}
+              amount={amount}
+              handleAmountChange={handleAmountChange}
+              error={error}
+              isValid={isValid}
+              isLoading={isLoading}
+              handleSubmit={handleSubmit}
+              handleClose={handleClose}
+            />
+          )}
+        </SafeRender>
       </div>
     </Modal>
+  )
+}
+
+// Separate content component for better organization
+interface PlaceBetModalContentProps {
+  market: Market
+  selectedOption: MarketOption | null
+  setSelectedOption: (option: MarketOption | null) => void
+  amount: string
+  handleAmountChange: (amount: string) => void
+  error: string
+  isValid: boolean | string
+  isLoading: boolean
+  handleSubmit: () => void
+  handleClose: () => void
+}
+
+const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
+  market,
+  selectedOption,
+  setSelectedOption,
+  amount,
+  handleAmountChange,
+  error,
+  isValid,
+  isLoading,
+  handleSubmit,
+  handleClose
+}) => {
+  const closingDate = safeGetMarketClosingDate(market)
+  const options = safeGetMarketOptions(market)
+
+  const formatClosingDate = () => {
+    if (!closingDate) return 'TBD'
+
+    return safeFormatDate(closingDate, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }, 'TBD')
+  }
+
+  const getOptionNames = () => {
+    return {
+      yes: getMarketOptionName(options, 'yes', 'Yes'),
+      no: getMarketOptionName(options, 'no', 'No')
+    }
+  }
+
+  return (
+    <>
+      <div className="p-4 rounded-lg bg-muted space-y-3">
+        <h3 className="font-semibold text-foreground">
+          {market.question || 'Untitled Market'}
+        </h3>
+        <div className="text-xs text-muted-foreground space-y-1">
+          <div>Closes: {formatClosingDate()}</div>
+          {market.disclaimer && (
+            <div className="italic">{market.disclaimer}</div>
+          )}
+        </div>
+      </div>
+
+      <BetOptionSelector
+        options={getOptionNames()}
+        selectedOption={selectedOption}
+        onOptionSelect={setSelectedOption}
+      />
+
+      <AmountInput
+        amount={amount}
+        onAmountChange={handleAmountChange}
+        error={error}
+      />
+
+      <div className="flex gap-3 pt-4">
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={handleClose}
+          disabled={isLoading}
+          className="flex-1"
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="default"
+          size="md"
+          onClick={handleSubmit}
+          disabled={!isValid || isLoading}
+          className="flex-1"
+        >
+          {isLoading ? (
+            <LoadingState
+              message="Placing..."
+              variant="minimal"
+              className="justify-center"
+            />
+          ) : (
+            'Place Bet'
+          )}
+        </Button>
+      </div>
+    </>
   )
 }
 

@@ -6,7 +6,7 @@ async function main(): Promise<void> {
   aztecSetup.displayAccountStatus();
 
   const network = aztecSetup.getNetwork();
-  console.log(`🔗 Current network: ${network}`);
+  console.log(`Current network: ${network}`);
 
   if (network === "sandbox") {
     console.log("🏗️  Extracting and saving sandbox account information...");

@@ -77,6 +77,7 @@ function logFormattedProofs(formattedProofs) {
 }
 
 // Convert a string to a Uint8Array of specific length
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function stringToUint8Array(str, length) {
   const buf = new Uint8Array(length);
   const encoder = new TextEncoder();
@@ -131,11 +132,12 @@ function chainIdToUint8Array(chainId) {
 }
 
 // Helper function to debug a Uint8Array
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function debugArray(name, array) {
   console.log(`${name} - Length: ${array.length}, First 5 bytes: [${Array.from(array.slice(0, 5)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}], as hex: 0x${Buffer.from(array).toString('hex').substring(0, 10)}...`);
 }
 
-function createMessageArrays(donationAddress, arbChainId, verificationData) {
+function createMessageArrays(donationAddress, arbChainId) {
   // Create arrays: [donationAddress, arbChainId, msg1, msg2, msg3, msg4, msg5]
   const msgArrays = [donationAddress, arbChainId];
   
@@ -188,7 +190,7 @@ async function main() {
     const addressesPath = join(__dirname, 'addresses.json');
     addresses = JSON.parse(readFileSync(addressesPath, 'utf8'));
     console.log("Using addresses from addresses.json:", addresses);
-  } catch (error) {
+  } catch {
     // Fallback to hardcoded addresses
     addresses = { 
       emitter: "0x054aba4606088823379606da36c8f6c770bcfe1b38ed663256bec4eca8e0125c" 
