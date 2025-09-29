@@ -46,7 +46,7 @@ export default function TokenActionsDropdown({
       const recipientAddress = AztecAddress.fromString(recipient.trim());
       const amountBigInt = BigInt(amount);
 
-      const txHash = await actions.mintToPrivate(recipientAddress, amountBigInt);
+      const txHash = await actions.mintToPrivate(recipientAddress, amountBigInt * BigInt(10) ** BigInt(18));
 
       // Clear form
       setRecipient("");
