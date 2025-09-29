@@ -30,15 +30,15 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, className }) =
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80">
       <div
-        className="absolute inset-0 backdrop-blur-sm bg-[hsl(var(--aztec-overlay))]"
+        className="absolute inset-0 bg-[hsl(var(--aztec-overlay))]"
         onClick={onClose}
       />
 
       <div
         className={cn(
-          'relative z-10 w-full max-w-lg mx-4 bg-card border border-border rounded-2xl shadow-xl',
+          'relative z-10 w-full max-w-lg mx-4 bg-[hsl(var(--aztec-modal-bg))] border border-[#F5F3FF33] rounded-2xl shadow-xl',
           className
         )}
         onClick={(e) => e.stopPropagation()}

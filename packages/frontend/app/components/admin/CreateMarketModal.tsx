@@ -155,10 +155,10 @@ export function CreateMarketModal({
               value={formData.question}
               onChange={(e) => handleQuestionChange(e.target.value)}
               placeholder="Example: Will Bitcoin reach $100,000 by the end of 2025?"
-              className={`w-full px-3 py-2 border rounded-lg resize-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-colors bg-input text-foreground placeholder-muted-foreground ${
+              className={`w-full px-3 py-2 rounded-lg resize-none focus:ring-2 focus:ring-ring/20 focus:border-ring transition-colors bg-input text-foreground placeholder-muted-foreground ${
                 errors.question
-                  ? 'border-destructive bg-destructive/10'
-                  : 'border-border'
+                  ? 'border border-destructive bg-destructive/10'
+                  : 'border-none'
               }`}
               rows={3}
               maxLength={200}
@@ -180,10 +180,10 @@ export function CreateMarketModal({
               type="datetime-local"
               value={formatDateTimeLocal(formData.closingTime)}
               onChange={(e) => handleClosingTimeChange(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-ring/20 focus:border-ring transition-colors bg-input text-foreground ${
+              className={`w-full px-3 py-2 rounded-lg focus:ring-2 focus:ring-ring/20 focus:border-ring transition-colors bg-input text-foreground ${
                 errors.closingTime
-                  ? 'border-destructive bg-destructive/10'
-                  : 'border-border'
+                  ? 'border border-destructive bg-destructive/10'
+                  : 'border-none'
               }`}
               min={formatDateTimeLocal(new Date(Date.now() + 5 * 60 * 1000))}
             />
@@ -198,7 +198,7 @@ export function CreateMarketModal({
             </p>
           </div>
 
-          <div className="bg-muted/30 border border-border rounded-lg p-4">
+          <div className="bg-muted/30 rounded-lg p-4">
             <h3 className="text-sm font-medium text-foreground mb-2">Market Details</h3>
             <div className="space-y-2 text-sm text-muted-foreground">
               <div className="flex justify-between">
