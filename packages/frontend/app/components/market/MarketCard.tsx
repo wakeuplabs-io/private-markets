@@ -3,14 +3,22 @@
 import React from 'react'
 import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
+import { SafeRender, InvalidDataState, MarketCardSkeleton } from '@/components/ui/Fallbacks'
 import { cn } from '@/lib/utils'
 import { Market, MarketOption } from '@/types'
+import {
+  isValidMarket,
+  safeGetMarketClosingDate,
+  safeFormatDate,
+  safeGetProperty
+} from '@/utils/typeGuards'
 
 interface MarketCardProps {
-  market: Market
+  market: Market | null | undefined
   onOptionClick?: (marketId: string, option: MarketOption) => void
   onConnectWallet?: () => void
   isWalletConnected?: boolean
+  isLoading?: boolean
   className?: string
 }
 
@@ -19,18 +27,64 @@ const MarketCard: React.FC<MarketCardProps> = ({
   onOptionClick,
   onConnectWallet,
   isWalletConnected = false,
+  isLoading = false,
   className
 }) => {
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
+  // Show skeleton while loading
+  if (isLoading) {
+    return <MarketCardSkeleton className={className} />
+  }
+
+  return (
+    <SafeRender
+      data={market}
+      validator={isValidMarket}
+      fallback={<InvalidDataState dataType="market" />}
+      skeleton={<MarketCardSkeleton className={className} />}
+    >
+      {(validMarket) => (
+        <MarketCardContent
+          market={validMarket}
+          onOptionClick={onOptionClick}
+          onConnectWallet={onConnectWallet}
+          isWalletConnected={isWalletConnected}
+          className={className}
+        />
+      )}
+    </SafeRender>
+  )
+}
+
+// Separate content component for better organization
+interface MarketCardContentProps {
+  market: Market
+  onOptionClick?: (marketId: string, option: MarketOption) => void
+  onConnectWallet?: () => void
+  isWalletConnected: boolean
+  className?: string
+}
+
+const MarketCardContent: React.FC<MarketCardContentProps> = ({
+  market,
+  onOptionClick,
+  onConnectWallet,
+  isWalletConnected,
+  className
+}) => {
+  const closingDate = safeGetMarketClosingDate(market)
+
+  const formatDate = (date: Date | null | undefined) => {
+    return safeFormatDate(date, {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
-    }).format(date)
+    }, 'TBD')
   }
 
-  const formatChanceText = (percentage?: number) => {
-    if (percentage === undefined) return 'Unknown chance'
+  const formatChanceText = (percentage?: number | null) => {
+    if (percentage === undefined || percentage === null || isNaN(percentage)) {
+      return 'Unknown chance'
+    }
     return `${percentage}% chance`
   }
 
@@ -42,6 +96,10 @@ const MarketCard: React.FC<MarketCardProps> = ({
     }
   }
 
+  const safeImageUrl = safeGetProperty(market, 'imageUrl', null)
+  const safeQuestion = safeGetProperty(market, 'question', 'Untitled Market')
+  const safeChancePercentage = safeGetProperty(market, 'chancePercentage', null)
+
   return (
     <div
       className={cn(
@@ -52,13 +110,23 @@ const MarketCard: React.FC<MarketCardProps> = ({
     >
       <div className="flex items-start gap-3">
         <div className="w-12 h-12 rounded bg-muted/50 overflow-hidden flex-shrink-0">
-          {market.imageUrl ? (
+          {safeImageUrl ? (
             <Image
-              src={market.imageUrl}
-              alt={market.question}
+              src={safeImageUrl}
+              alt={safeQuestion}
               width={48}
               height={48}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                // Fallback to placeholder if image fails to load
+                const target = e.target as HTMLImageElement
+                target.style.display = 'none'
+                target.parentElement!.innerHTML = `
+                  <div class="w-full h-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
+                    <span class="text-lg">🔮</span>
+                  </div>
+                `
+              }}
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
@@ -68,7 +136,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
         </div>
 
         <h3 className="font-heading font-bold text-lg text-foreground leading-tight flex-1">
-          {market.question}
+          {safeQuestion}
         </h3>
       </div>
 
@@ -79,7 +147,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
             <path d="M6 3v3l2 1" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
           </svg>
           <span className="text-xs text-foreground font-normal">
-            {market.closingDate ? formatDate(market.closingDate) : 'TBD'}
+            {formatDate(closingDate)}
           </span>
         </div>
 
@@ -89,7 +157,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
             <path d="M6 11L4 8H8L6 11Z" stroke="currentColor" strokeWidth="1" fill="none"/>
           </svg>
           <span className="text-xs text-foreground font-normal">
-            {formatChanceText(market.chancePercentage)}
+            {formatChanceText(safeChancePercentage)}
           </span>
         </div>
       </div>
@@ -98,6 +166,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
         <Button
           className="flex-1 h-12 bg-[hsl(var(--yes-button))] hover:bg-[hsl(var(--yes-button))]/90 text-primary-foreground font-bold text-base rounded-full"
           onClick={() => handleOptionClick('yes')}
+          disabled={market.status !== 'open'}
         >
           Yes
         </Button>
@@ -105,10 +174,17 @@ const MarketCard: React.FC<MarketCardProps> = ({
         <Button
           className="flex-1 h-12 bg-[hsl(var(--no-button))] hover:bg-[hsl(var(--no-button))]/90 text-foreground font-bold text-base rounded-full"
           onClick={() => handleOptionClick('no')}
+          disabled={market.status !== 'open'}
         >
           No
         </Button>
       </div>
+
+      {market.status !== 'open' && (
+        <div className="text-center text-xs text-muted-foreground">
+          {market.status === 'resolved' ? 'Market resolved' : 'Market closed'}
+        </div>
+      )}
     </div>
   )
 }

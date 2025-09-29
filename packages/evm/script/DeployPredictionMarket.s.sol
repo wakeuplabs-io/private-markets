@@ -112,7 +112,7 @@ contract DeployPredictionMarket is Script {
         }
 
         vm.stopBroadcast();
-
+        console.log("");
         console.log("=== Deployment Summary ===");
         console.log("Treasury Contract:", address(treasury));
         console.log("PredictionMarketCore Contract:", address(predictionMarketCore));

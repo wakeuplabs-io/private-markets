@@ -13,7 +13,8 @@
     "start:frontend": "npm run start --workspace=packages/frontend",
     "avm:deploy:token": "npm run deploy:token --workspace=packages/avm",
     "avm:deploy:vault": "npm run deploy:vault --workspace=packages/avm",
-    "avm:call:bet": "npm run call:bet --workspace=packages/avm"
+    "avm:call:bet": "npm run call:bet --workspace=packages/avm",
+    "evm:deploy:market": "cd packages/evm && forge script script/DeployPredictionMarket.s.sol --fork-url http://localhost:9555 --broadcast"
   },
   "keywords": [],
   "author": "",

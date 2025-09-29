@@ -4,30 +4,37 @@ import React from 'react'
 import { Market } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { SafeRender, InvalidDataState } from '@/components/ui/Fallbacks'
+import {
+  isValidMarket,
+  safeGetProperty,
+  safeGetMarketClosingDate,
+  safeFormatDate
+} from '@/utils/typeGuards'
 
 interface SuccessModalProps {
   isOpen: boolean
   onClose: () => void
   onViewMarket: () => void
   onCreateAnother: () => void
-  createdMarket: Market
+  createdMarket: Market | null | undefined
 }
 
-export function SuccessModal({ 
-  isOpen, 
-  onClose, 
-  onViewMarket, 
-  onCreateAnother, 
-  createdMarket 
+export function SuccessModal({
+  isOpen,
+  onClose,
+  onViewMarket,
+  onCreateAnother,
+  createdMarket
 }: SuccessModalProps) {
-  const formatDate = (date: Date): string => {
-    return new Intl.DateTimeFormat('en-US', {
+  const formatDate = (date: Date | null | undefined): string => {
+    return safeFormatDate(date, {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date)
+    }, 'TBD')
   }
 
   return (
@@ -49,45 +56,98 @@ export function SuccessModal({
           </p>
         </div>
 
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Market Question
-            </label>
-            <p className="text-foreground p-3 bg-muted rounded-lg text-sm">
-              {createdMarket.question}
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Closing Date
-            </label>
-            <p className="text-foreground p-3 bg-muted rounded-lg text-sm">
-              {createdMarket.closingDate ? formatDate(createdMarket.closingDate) : 'TBD'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex justify-center space-x-3">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onCreateAnother}
-            size="sm"
-          >
-            Create Another
-          </Button>
-
-          <Button
-            type="button"
-            onClick={onViewMarket}
-            size="sm"
-          >
-            View Markets
-          </Button>
-        </div>
+        <SafeRender
+          data={createdMarket}
+          validator={isValidMarket}
+          fallback={
+            <InvalidDataState
+              dataType="market"
+              onRefresh={() => window.location.reload()}
+            />
+          }
+        >
+          {(validMarket) => (
+            <SuccessModalContent
+              market={validMarket}
+              formatDate={formatDate}
+              onViewMarket={onViewMarket}
+              onCreateAnother={onCreateAnother}
+            />
+          )}
+        </SafeRender>
       </div>
     </Modal>
+  )
+}
+
+// Separate content component for better organization
+interface SuccessModalContentProps {
+  market: Market
+  formatDate: (date: Date | null | undefined) => string
+  onViewMarket: () => void
+  onCreateAnother: () => void
+}
+
+const SuccessModalContent: React.FC<SuccessModalContentProps> = ({
+  market,
+  formatDate,
+  onViewMarket,
+  onCreateAnother
+}) => {
+  const question = safeGetProperty(market, 'question', 'Untitled Market')
+  const closingDate = safeGetMarketClosingDate(market)
+
+  return (
+    <>
+      <div className="space-y-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Market Question
+          </label>
+          <p className="text-foreground p-3 bg-muted rounded-lg text-sm">
+            {question}
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">
+            Closing Date
+          </label>
+          <p className="text-foreground p-3 bg-muted rounded-lg text-sm">
+            {formatDate(closingDate)}
+          </p>
+        </div>
+
+        {market.status && (
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Status
+            </label>
+            <p className="text-foreground p-3 bg-muted rounded-lg text-sm capitalize">
+              {market.status}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-center space-x-3">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onCreateAnother}
+          size="sm"
+        >
+          Create Another
+        </Button>
+
+        <Button
+          type="button"
+          onClick={onViewMarket}
+          size="sm"
+        >
+          View Markets
+        </Button>
+      </div>
+    </>
   )
 }
