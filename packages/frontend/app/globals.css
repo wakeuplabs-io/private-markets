@@ -14,6 +14,18 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  
+  .rounded-button {
+    @apply px-4 py-4 font-bold text-sm border-0 rounded-[100px] min-w-[130px];
+  }
+  
+  .heading-h1 {
+    @apply text-3xl font-bold text-foreground;
+  }
+  
+  .heading-h2 {
+    @apply text-xl font-bold text-foreground;
+  }
 }
 
 @layer base {
@@ -26,8 +38,9 @@ body {
     --aztec-white-soft: 220 13% 69%;   /* #9CA3AF - Muted text */
     --aztec-grey-blue: 210 24% 26%;    /* #314158 - Secondary buttons */
     --aztec-overlay: 220 50% 9% / 0.8; /* #0F172B with opacity - Modal overlay */
+    --aztec-modal-bg: 220 50% 9%;      /* #0F172B without opacity - Modal content */
     --aztec-border: 210 30% 25%;       /* #374151 - Borders */
-    --aztec-input: 220 13% 18%;        /* #1F2937 - Input backgrounds */
+    --aztec-input: 210 30% 18%;        /* #1D293D - Input backgrounds (same as light-blue) */
 
     /* Market Card Button Colors */
     --yes-button: 81 85% 67%;           /* #BBF451 - Yes button (same as primary) */

@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Image from 'next/image'
 import { Market } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { SafeRender, EmptyState, LoadingState, InvalidDataState } from '@/components/ui/Fallbacks'
@@ -10,6 +11,7 @@ import {
   safeFormatDate,
   safeGetMarketWinningOption
 } from '@/utils/typeGuards'
+import { cn } from '@/lib/utils'
 
 interface AdminMarketGridProps {
   markets: Market[] | null | undefined
@@ -28,13 +30,13 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
   const getStatusIcon = (status: string | null | undefined) => {
     switch (status) {
       case 'open':
-        return '⏰'
+        return <Image src="/clock.svg" alt="Open" width={24} height={24} />
       case 'finalized':
-        return '⚠️'
+        return <Image src="/warning.svg" alt="Finalized" width={24} height={24} />
       case 'resolved':
-        return '✅'
+        return <Image src="/success.svg" alt="Resolved" width={24} height={24} />
       default:
-        return '📊'
+        return <Image src="/file.svg" alt="Unknown" width={24} height={24} />
     }
   }
 
@@ -75,7 +77,7 @@ interface AdminMarketGridContentProps {
   markets: Market[]
   onCreateMarket: () => void
   onResolveMarket: (marketId: string, winningOption: 'yes' | 'no') => void
-  getStatusIcon: (status: string | null | undefined) => string
+  getStatusIcon: (status: string | null | undefined) => React.JSX.Element
   formatDate: (date: Date | null | undefined, prefix: string) => string
 }
 
@@ -110,17 +112,20 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg overflow-hidden">
+      <div className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left p-4 font-medium text-foreground">Market</th>
-                <th className="text-left p-4 font-medium text-foreground">Options</th>
-                <th className="text-left p-4 font-medium text-foreground">State</th>
-              </tr>
-            </thead>
-            <tbody>
+          <div className="w-full min-w-[800px]">
+            {/* Header */}
+            <div className="bg-muted rounded-lg p-4">
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-7 font-normal text-muted-foreground">Market</div>
+                <div className="col-span-4 font-normal text-muted-foreground">Options</div>
+                <div className="col-span-1 font-medium text-muted-foreground">State</div>
+              </div>
+            </div>
+            
+            {/* Rows */}
+            <div className="space-y-6 mt-4">
               {sortedMarkets.map((market) => (
                 <AdminMarketRow
                   key={market.id}
@@ -130,8 +135,8 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
                   formatDate={formatDate}
                 />
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -142,7 +147,7 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
 interface AdminMarketRowProps {
   market: Market
   onResolveMarket: (marketId: string, winningOption: 'yes' | 'no') => void
-  getStatusIcon: (status: string | null | undefined) => string
+  getStatusIcon: (status: string | null | undefined) => React.JSX.Element
   formatDate: (date: Date | null | undefined, prefix: string) => string
 }
 
@@ -153,45 +158,51 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
   formatDate
 }) => {
   const winningOption = safeGetMarketWinningOption(market)
-
+  const textColor = market.status === 'resolved' ? 'text-foreground/50' : 'text-foreground'
   return (
-    <tr className="border-t border-border h-20">
-      {/* Market Column */}
-      <td className="p-6">
-        <div className="flex items-start space-x-3">
-          <span className="text-lg">{getStatusIcon(market.status)}</span>
-          <div>
-            <h3 className="font-medium text-foreground text-sm mb-1">
-              {market.question || 'Untitled Market'}
-            </h3>
-            <div className="flex space-x-4 text-xs text-muted-foreground">
-              <span>{formatDate(market.createdAt, 'Created')}</span>
-              <span>
-                {market.status === 'resolved' && market.resolvedAt
-                  ? formatDate(market.resolvedAt, 'Closed')
-                  : market.closingDate
-                    ? formatDate(market.closingDate, 'Closes')
-                    : 'Closes: TBD'
-                }
-              </span>
+    <div className="rounded-lg bg-[#1D293D]/65 backdrop-blur-sm">
+      <div className="grid grid-cols-12 gap-4 h-full items-center p-6">
+        {/* Market Column */}
+        <div className="col-span-7">
+          <div className="flex items-start space-x-3 ">
+            <span className="text-lg mt-0.5 w-6 h-6">{getStatusIcon(market.status)}</span>
+            <div className="flex-1">
+                <h3 className={cn("font-bold text-2xl mb-2 leading-tight", textColor)}>
+                  {market.question || 'Untitled Market'}
+                </h3>
+              <div className={cn("flex space-x-6 text-base font-normal", textColor)}>
+                <span>{formatDate(market.createdAt, 'Created')}</span>
+                <span>
+                  {market.status === 'resolved' && market.resolvedAt
+                    ? formatDate(market.resolvedAt, 'Closed')
+                    : market.closingDate
+                      ? formatDate(market.closingDate, 'Closes')
+                      : 'Closes: TBD'
+                  }
+                </span>
+              </div>
+              {market.status === 'finalized' && (
+              <p className="text-xs text-[hsl(var(--error))] mb-2 max-w-xs leading-tight">
+                You must select and publish the final result. Participants are waiting.
+              </p>
+            )}
             </div>
           </div>
         </div>
-      </td>
 
-      {/* Options Column */}
-      <td className="p-6">
+        {/* Options Column */}
+        <div className="col-span-4">
         {market.status === 'open' && (
-          <div className="flex space-x-2">
+          <div className="flex space-x-3">
             <Button
               disabled
-              className="px-6 py-2 h-10 bg-muted text-muted-foreground cursor-not-allowed hover:bg-muted rounded-lg font-medium text-sm border-0"
+              className="rounded-button"
             >
               Yes
             </Button>
             <Button
               disabled
-              className="px-6 py-2 h-10 bg-muted text-muted-foreground cursor-not-allowed hover:bg-muted rounded-lg font-medium text-sm border-0"
+              className="rounded-button"
             >
               No
             </Button>
@@ -199,16 +210,16 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
         )}
 
         {market.status === 'finalized' && (
-          <div className="flex space-x-2">
+          <div className="flex space-x-3">
             <Button
               onClick={() => onResolveMarket(market.id, 'yes')}
-              className="px-6 py-2 h-10 bg-[hsl(var(--aztec-green-shine))] hover:bg-[hsl(var(--aztec-green-shine))]/90 text-[hsl(var(--aztec-dark-blue))] font-bold text-sm rounded-lg border-0"
+              className="rounded-button"
             >
               Yes
             </Button>
             <Button
               onClick={() => onResolveMarket(market.id, 'no')}
-              className="px-6 py-2 h-10 bg-[hsl(var(--error))] hover:bg-[hsl(var(--error))]/90 text-white font-bold text-sm rounded-lg border-0"
+              className="rounded-button"
             >
               No
             </Button>
@@ -216,39 +227,38 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
         )}
 
         {market.status === 'resolved' && (
-          <div className="flex">
+          <div className="flex space-x-3">
             {winningOption?.name?.toLowerCase() === 'yes' ? (
               <Button
                 disabled
-                className="px-6 py-2 h-10 bg-[hsl(var(--aztec-green-shine))] text-[hsl(var(--aztec-dark-blue))] cursor-not-allowed hover:bg-[hsl(var(--aztec-green-shine))] font-bold text-sm rounded-lg border-0"
+                className="rounded-button"
+                variant="success"
               >
                 Yes
               </Button>
             ) : (
               <Button
                 disabled
-                className="px-6 py-2 h-10 bg-[hsl(var(--error))] text-white cursor-not-allowed hover:bg-[hsl(var(--error))] font-bold text-sm rounded-lg border-0"
+                className="rounded-button"
+                variant="destructive"
               >
                 No
               </Button>
             )}
           </div>
         )}
-      </td>
+        </div>
 
-      {/* State Column */}
-      <td className="p-6">
-        <div className="flex flex-col">
-          {market.status === 'finalized' && (
-            <p className="text-xs text-[hsl(var(--error))] mb-2 max-w-xs">
-              You must select and publish the final result. Participants are waiting.
-            </p>
-          )}
-          <div className="text-sm font-medium text-muted-foreground capitalize">
-            {market.status || 'unknown'}
+        {/* State Column */}
+        <div className="col-span-1">
+          <div className="flex flex-col">
+            
+            <div className={cn("text-sm font-bold capitalize", textColor)}>
+              {market.status || 'unknown'}
+            </div>
           </div>
         </div>
-      </td>
-    </tr>
+      </div>
+    </div>
   )
 }

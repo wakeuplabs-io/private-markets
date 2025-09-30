@@ -4,6 +4,7 @@ import "./globals.css";
 import { WalletProvider } from "./context";
 import { WagmiProviderWrapper } from "./providers/wagmiProvider";
 import { WalletProvidersInitializer } from "./components/providers/WalletProvidersInitializer";
+import { Layout } from "./components/layout";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WalletProvidersInitializer>
           <WagmiProviderWrapper>
             <WalletProvider>
-              {children}
+              <Layout>
+                {children}
+              </Layout>
             </WalletProvider>
           </WagmiProviderWrapper>
         </WalletProvidersInitializer>
