@@ -18,6 +18,23 @@ import {
 } from "@/utils/typeGuards";
 import { cn } from "@/lib/utils";
 
+const LoadingRow = () => {
+    return (
+        <div className="w-full bg-card/50 backdrop-blur-sm rounded-md p-6 grid grid-cols-12 gap-4">
+            <div className="flex items-center justify-start space-x-4 col-span-8">
+                <div className="size-12 rounded-full bg-muted animate-pulse"></div>
+                <div className="h-6 w-full max-w-xl rounded-lg bg-muted animate-pulse"></div>
+            </div>
+            <div className="flex items-center justify-start col-span-3">
+                <div className="h-6 w-full max-w-[100px] rounded-lg bg-muted animate-pulse"></div>
+            </div>
+            <div className="flex items-center justify-start col-span-1">
+                <div className="h-6 w-full max-w-[100px] rounded-lg bg-muted animate-pulse"></div>
+            </div>
+        </div>
+    );
+};
+
 interface AdminMarketGridProps {
     markets: Market[] | null | undefined;
     isLoading?: boolean;
@@ -32,40 +49,20 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
     onCreateMarket,
     onResolveMarket,
 }) => {
+
+    const ICON_DIMENSIONS = { width: 24, height: 24 } as const;
+    const STATUS_ICON_STRATEGIES = {
+        open: { src: "/clock.svg", alt: "Open" },
+        finalized: { src: "/warning.svg", alt: "Finalized" },
+        resolved: { src: "/success.svg", alt: "Resolved" },
+        default: { src: "/file.svg", alt: "Unknown" }
+    } as const;
+
     const getStatusIcon = (status: string | null | undefined) => {
-        switch (status) {
-            case "open":
-                return (
-                    <Image src="/clock.svg" alt="Open" width={24} height={24} />
-                );
-            case "finalized":
-                return (
-                    <Image
-                        src="/warning.svg"
-                        alt="Finalized"
-                        width={24}
-                        height={24}
-                    />
-                );
-            case "resolved":
-                return (
-                    <Image
-                        src="/success.svg"
-                        alt="Resolved"
-                        width={24}
-                        height={24}
-                    />
-                );
-            default:
-                return (
-                    <Image
-                        src="/file.svg"
-                        alt="Unknown"
-                        width={24}
-                        height={24}
-                    />
-                );
-        }
+        const strategy = STATUS_ICON_STRATEGIES[status as keyof typeof STATUS_ICON_STRATEGIES] 
+            || STATUS_ICON_STRATEGIES.default;
+        
+        return <Image src={strategy.src} alt={strategy.alt} {...ICON_DIMENSIONS} />;
     };
 
     const formatDate = (date: Date | null | undefined, prefix: string) => {
@@ -80,10 +77,6 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
         );
         return `${prefix}: ${formattedDate}`;
     };
-
-    if (isLoading) {
-        return <LoadingState message="Loading markets..." />;
-    }
 
     return (
         <SafeRender
@@ -103,6 +96,7 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
                     onResolveMarket={onResolveMarket}
                     getStatusIcon={getStatusIcon}
                     formatDate={formatDate}
+                    isLoading={isLoading}
                 />
             )}
         </SafeRender>
@@ -116,6 +110,7 @@ interface AdminMarketGridContentProps {
     onResolveMarket: (marketId: string, winningOption: "yes" | "no") => void;
     getStatusIcon: (status: string | null | undefined) => React.JSX.Element;
     formatDate: (date: Date | null | undefined, prefix: string) => string;
+    isLoading?: boolean;
 }
 
 const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
@@ -124,6 +119,7 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
     onResolveMarket,
     getStatusIcon,
     formatDate,
+    isLoading = false,
 }) => {
     // Filter and sort only valid markets
     const validMarkets = markets.filter(isValidMarket);
@@ -135,7 +131,7 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
         });
     }, [validMarkets]);
 
-    if (sortedMarkets.length === 0) {
+    if (!isLoading && sortedMarkets.length === 0) {
         return (
             <EmptyState
                 title="No markets found"
@@ -167,18 +163,27 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
                             </div>
                         </div>
 
-                        {/* Rows */}
-                        <div className="space-y-6 mt-4">
-                            {sortedMarkets.map((market) => (
-                                <AdminMarketRow
-                                    key={market.id}
-                                    market={market}
-                                    onResolveMarket={onResolveMarket}
-                                    getStatusIcon={getStatusIcon}
-                                    formatDate={formatDate}
-                                />
-                            ))}
-                        </div>
+                        {isLoading ? (
+                            <div className="space-y-6 mt-4">
+                                <LoadingRow />
+                                <LoadingRow />
+                                <LoadingRow />
+                                <LoadingRow />
+                                <LoadingRow />
+                            </div>
+                        ) : (
+                            <div className="space-y-6 mt-4">
+                                {sortedMarkets.map((market) => (
+                                    <AdminMarketRow
+                                        key={market.id}
+                                        market={market}
+                                        onResolveMarket={onResolveMarket}
+                                        getStatusIcon={getStatusIcon}
+                                        formatDate={formatDate}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

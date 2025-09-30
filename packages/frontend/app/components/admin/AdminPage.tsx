@@ -26,7 +26,7 @@ export function AdminPage() {
         useState<CreateMarketFormData | null>(null);
     const [createdMarket, setCreatedMarket] = useState<Market | null>(null);
 
-    const isLoading = adminLoading || marketsLoading;
+    const isLoading = adminLoading;
 
     if (isLoading) {
         return (
