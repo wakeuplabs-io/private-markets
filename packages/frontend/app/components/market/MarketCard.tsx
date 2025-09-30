@@ -36,6 +36,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
 }) => {
     // Show skeleton while loading
     if (isLoading) {
+        console.log('MarketCard isLoading', isLoading)
         return <MarketCardSkeleton className={className} />;
     }
 

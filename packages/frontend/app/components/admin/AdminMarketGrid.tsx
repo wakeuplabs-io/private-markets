@@ -8,6 +8,7 @@ import {
     SafeRender,
     EmptyState,
     InvalidDataState,
+    AdminMarketCardSkeleton,
 } from "@/components/ui/Fallbacks";
 import {
     isValidArray,
@@ -15,23 +16,6 @@ import {
     safeGetMarketWinningOption,
 } from "@/utils/typeGuards";
 import { cn, formatDate } from "@/lib/utils";
-
-const LoadingRow = () => {
-    return (
-        <div className="w-full bg-card/50 backdrop-blur-sm rounded-md p-6 grid grid-cols-12 gap-4">
-            <div className="flex items-center justify-start space-x-4 col-span-8">
-                <div className="size-12 rounded-full bg-muted animate-pulse"></div>
-                <div className="h-6 w-full max-w-xl rounded-lg bg-muted animate-pulse"></div>
-            </div>
-            <div className="flex items-center justify-start col-span-3">
-                <div className="h-6 w-full max-w-[100px] rounded-lg bg-muted animate-pulse"></div>
-            </div>
-            <div className="flex items-center justify-start col-span-1">
-                <div className="h-6 w-full max-w-[100px] rounded-lg bg-muted animate-pulse"></div>
-            </div>
-        </div>
-    );
-};
 
 interface AdminMarketGridProps {
     markets: Market[] | null | undefined;
@@ -152,11 +136,10 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
 
                         {isLoading ? (
                             <div className="space-y-6 mt-4">
-                                <LoadingRow />
-                                <LoadingRow />
-                                <LoadingRow />
-                                <LoadingRow />
-                                <LoadingRow />
+                                <AdminMarketCardSkeleton />
+                                <AdminMarketCardSkeleton />
+                                <AdminMarketCardSkeleton />
+                                <AdminMarketCardSkeleton />
                             </div>
                         ) : (
                             <div className="space-y-6 mt-4">
