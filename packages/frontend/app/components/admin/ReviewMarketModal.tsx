@@ -1,113 +1,98 @@
-'use client'
+"use client";
 
-import React, { useState } from 'react'
-import { CreateMarketFormData } from '@/types'
-import { Button } from '@/components/ui/Button'
-import { Modal } from '@/components/ui/Modal'
+import React, { useState } from "react";
+import { CreateMarketFormData } from "@/types";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { formatDate } from "@/lib/utils";
 
 interface ReviewMarketModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onBack: () => void
-  onConfirm: () => Promise<void>
-  formData: CreateMarketFormData | null
+    isOpen: boolean;
+    onClose: () => void;
+    onBack: () => void;
+    onConfirm: () => Promise<void>;
+    formData: CreateMarketFormData | null;
 }
 
-export function ReviewMarketModal({ 
-  isOpen, 
-  onClose, 
-  onBack, 
-  onConfirm, 
-  formData 
+export function ReviewMarketModal({
+    isOpen,
+    onClose,
+    onBack,
+    onConfirm,
+    formData,
 }: ReviewMarketModalProps) {
-  const [isCreating, setIsCreating] = useState(false)
+    const [isCreating, setIsCreating] = useState(false);
 
-  const handleConfirm = async () => {
-    setIsCreating(true)
-    try {
-      await onConfirm()
-    } catch (error) {
-      console.error('Error al crear mercado:', error)
-    } finally {
-      setIsCreating(false)
+    const handleConfirm = async () => {
+        setIsCreating(true);
+        try {
+            await onConfirm();
+        } catch (error) {
+            console.error("Error al crear mercado:", error);
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    if (!formData) {
+        return null;
     }
-  }
 
-  if (!formData) {
-    return null
-  }
+    return (
+        <Modal isOpen={isOpen} onClose={onClose}>
+            <div className="p-8">
+                <div className="mb-12">
+                    <h2 className="text-2xl font-bold text-foreground mb-1">
+                        Confirm New Market
+                    </h2>
+                    <p className="text-base text-muted-foreground">
+                        You´re about to publish a new market.
+                    </p>
+                </div>
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="p-6">
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-foreground mb-1">
-            Confirm New Market
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Review the market details before creating
-          </p>
-        </div>
+                <div className="space-y-4 bg-muted rounded-lg p-4">
+                    <div>
+                        <p className="text-foreground">{formData.question}</p>
+                    </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Market Question
-            </label>
-            <p className="text-foreground p-3 bg-muted rounded-lg">
-              {formData.question}
-            </p>
-          </div>
+                    <div className="flex justify-between">
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                            Options
+                        </label>
+                        <p className="text-foreground">Yes / No</p>
+                    </div>
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Options
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="border border-border bg-input rounded-lg p-3">
-                <span className="text-sm font-medium text-foreground">
-                  Yes
-                </span>
-              </div>
-              <div className="border border-border bg-input rounded-lg p-3">
-                <span className="text-sm font-medium text-foreground">
-                  No
-                </span>
-              </div>
+                    <div className="flex justify-between">
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                            Closing Date:
+                        </label>
+                        <p className="text-foreground">
+                            {formatDate(formData.closingTime)}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-12 flex-nowrap">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={onBack}
+                        disabled={isCreating}
+                        className="flex-1 w-full"
+                    >
+                        Back
+                    </Button>
+
+                    <Button
+                        type="button"
+                        onClick={handleConfirm}
+                        disabled={isCreating}
+                        className="flex-1 w-full"
+                    >
+                        {isCreating ? "Creating..." : "Create Market"}
+                    </Button>
+                </div>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Market Type
-            </label>
-            <p className="text-foreground p-3 bg-muted rounded-lg">
-              Binary Prediction Market
-            </p>
-          </div>
-        </div>
-
-        <div className="flex justify-end space-x-3 pt-4 border-t border-border">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onBack}
-            disabled={isCreating}
-            size="sm"
-          >
-            Back
-          </Button>
-
-          <Button
-            type="button"
-            onClick={handleConfirm}
-            disabled={isCreating}
-            size="sm"
-          >
-            {isCreating ? 'Creating...' : 'Create Market'}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  )
+        </Modal>
+    );
 }

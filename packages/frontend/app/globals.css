@@ -135,4 +135,23 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Estilos para el icono del calendario en inputs datetime-local */
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1); /* Convierte el icono negro a blanco */
+    cursor: pointer;
+  }
+  
+  /* Para navegadores que no soportan webkit */
+  input[type="datetime-local"]::-webkit-datetime-edit-text {
+    color: hsl(var(--foreground));
+  }
+  
+  input[type="datetime-local"]::-webkit-datetime-edit-month-field,
+  input[type="datetime-local"]::-webkit-datetime-edit-day-field,
+  input[type="datetime-local"]::-webkit-datetime-edit-year-field,
+  input[type="datetime-local"]::-webkit-datetime-edit-hour-field,
+  input[type="datetime-local"]::-webkit-datetime-edit-minute-field {
+    color: hsl(var(--foreground));
+  }
 }
