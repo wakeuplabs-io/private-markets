@@ -16,7 +16,7 @@ import {
     safeFormatDate,
     safeGetMarketWinningOption,
 } from "@/utils/typeGuards";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 const LoadingRow = () => {
     return (
@@ -65,18 +65,7 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
         return <Image src={strategy.src} alt={strategy.alt} {...ICON_DIMENSIONS} />;
     };
 
-    const formatDate = (date: Date | null | undefined, prefix: string) => {
-        const formattedDate = safeFormatDate(
-            date,
-            {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-            },
-            "TBD"
-        );
-        return `${prefix}: ${formattedDate}`;
-    };
+    
 
     return (
         <SafeRender
@@ -109,7 +98,7 @@ interface AdminMarketGridContentProps {
     onCreateMarket: () => void;
     onResolveMarket: (marketId: string, winningOption: "yes" | "no") => void;
     getStatusIcon: (status: string | null | undefined) => React.JSX.Element;
-    formatDate: (date: Date | null | undefined, prefix: string) => string;
+    formatDate: (date: Date | null | undefined, prefix?: string) => string;
     isLoading?: boolean;
 }
 
@@ -196,7 +185,7 @@ interface AdminMarketRowProps {
     market: Market;
     onResolveMarket: (marketId: string, winningOption: "yes" | "no") => void;
     getStatusIcon: (status: string | null | undefined) => React.JSX.Element;
-    formatDate: (date: Date | null | undefined, prefix: string) => string;
+    formatDate: (date: Date | null | undefined, prefix?: string) => string;
 }
 
 const AdminMarketRow: React.FC<AdminMarketRowProps> = ({

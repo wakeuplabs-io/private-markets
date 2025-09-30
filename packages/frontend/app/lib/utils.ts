@@ -6,13 +6,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export const formatDate = (date: Date | null | undefined) => {
-  return safeFormatDate(date, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
-}
+export const formatDate = (date: Date | null | undefined, prefix?: string) => {
+  const formattedDate = safeFormatDate(
+      date,
+      {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+      },
+      "TBD"
+  );
+  return prefix ? `${prefix}: ${formattedDate}` : formattedDate;
+};
 
 export const formatTime = (date: Date | null | undefined) => {
   return safeFormatDate(date, {
