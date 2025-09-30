@@ -26,7 +26,7 @@ export function AdminPage() {
         useState<CreateMarketFormData | null>(null);
     const [createdMarket, setCreatedMarket] = useState<Market | null>(null);
 
-    const isLoading = adminLoading || marketsLoading;
+    const isLoading = adminLoading;
 
     if (isLoading) {
         return (
@@ -88,9 +88,7 @@ export function AdminPage() {
             <div className="container mx-auto px-8 py-8">
                 <div className="flex justify-between items-center mb-8">
                     <div className="mb-2">
-                        <h1 className="heading-h1">
-                            Market Management
-                        </h1>
+                        <h1 className="heading-h1">Market Management</h1>
                         <p className="text-muted-foreground"></p>
                     </div>
                     <Button

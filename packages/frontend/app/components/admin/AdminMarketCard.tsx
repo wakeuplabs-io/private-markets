@@ -13,6 +13,7 @@ import {
   safeFormatDate,
   safeFormatNumber
 } from '@/utils/typeGuards'
+import { formatDate, formatTime } from '@/lib/utils'
 
 interface AdminMarketCardProps {
   market: AdminMarket | null | undefined
@@ -44,20 +45,7 @@ export const AdminMarketCard: React.FC<AdminMarketCardProps> = ({
     }
   }
 
-  const formatDate = (date: Date | null | undefined) => {
-    return safeFormatDate(date, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    })
-  }
-
-  const formatTime = (date: Date | null | undefined) => {
-    return safeFormatDate(date, {
-      hour: '2-digit',
-      minute: '2-digit'
-    }, 'Unknown time')
-  }
+ 
 
   const getEngagementColor = (engagement: number | null | undefined) => {
     if (typeof engagement !== 'number' || isNaN(engagement)) return 'text-gray-400'
