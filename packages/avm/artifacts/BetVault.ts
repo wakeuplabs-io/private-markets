@@ -14,7 +14,6 @@ import {
   type ContractInstanceWithAddress,
   type ContractMethod,
   type ContractStorageLayout,
-  type ContractNotes,
   decodeFromAbi,
   DeployMethod,
   EthAddress,
@@ -26,7 +25,6 @@ import {
   loadContractArtifact,
   loadContractArtifactForPublic,
   type NoirCompiledContract,
-  NoteSelector,
   Point,
   type PublicKey,
   PublicKeys,
@@ -78,14 +76,14 @@ export class BetVaultContract extends ContractBase {
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet, token_address: AztecAddressLike) {
+  public static deploy(wallet: Wallet, token_address: AztecAddressLike, wormhole_address: AztecAddressLike, admin: AztecAddressLike) {
     return new DeployMethod<BetVaultContract>(PublicKeys.default(), wallet, BetVaultContractArtifact, BetVaultContract.at, Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public keys hash to derive the address.
    */
-  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, token_address: AztecAddressLike) {
+  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, token_address: AztecAddressLike, wormhole_address: AztecAddressLike, admin: AztecAddressLike) {
     return new DeployMethod<BetVaultContract>(publicKeys, wallet, BetVaultContractArtifact, BetVaultContract.at, Array.from(arguments).slice(2));
   }
 
@@ -123,35 +121,35 @@ export class BetVaultContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'processed_bets' | 'token_address'> {
+  public static get storage(): ContractStorageLayout<'processed_bets' | 'token_address' | 'wormhole_address' | 'admin'> {
       return {
         processed_bets: {
       slot: new Fr(1n),
     },
 token_address: {
       slot: new Fr(2n),
+    },
+wormhole_address: {
+      slot: new Fr(4n),
+    },
+admin: {
+      slot: new Fr(6n),
     }
-      } as ContractStorageLayout<'processed_bets' | 'token_address'>;
+      } as ContractStorageLayout<'processed_bets' | 'token_address' | 'wormhole_address' | 'admin'>;
     }
     
-
-  public static get notes(): ContractNotes<'UintNote'> {
-    return {
-      UintNote: {
-          id: new NoteSelector(0),
-        }
-    } as ContractNotes<'UintNote'>;
-  }
-  
 
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** bet(market_id: field, outcome: integer, amount: integer, commitment: field, bet_id: field, authwit_nonce: field, from: struct, msg: array) */
-    bet: ((market_id: FieldLike, outcome: (bigint | number), amount: (bigint | number), commitment: FieldLike, bet_id: FieldLike, authwit_nonce: FieldLike, from: AztecAddressLike, msg: (bigint | number)[][]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** bet(market_id: field, outcome: integer, amount: integer, commitment: field, bet_id: field, authwit_nonce: field, from: struct, _msg: array) */
+    bet: ((market_id: FieldLike, outcome: (bigint | number), amount: (bigint | number), commitment: FieldLike, bet_id: FieldLike, authwit_nonce: FieldLike, from: AztecAddressLike, _msg: (bigint | number)[][]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** constructor(token_address: struct) */
-    constructor: ((token_address: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** constructor(token_address: struct, wormhole_address: struct, admin: struct) */
+    constructor: ((token_address: AztecAddressLike, wormhole_address: AztecAddressLike, admin: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** get_admin() */
+    get_admin: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_token_address() */
     get_token_address: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

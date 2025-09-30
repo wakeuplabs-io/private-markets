@@ -1,6 +1,6 @@
 import { AztecAddress } from "@aztec/aztec.js";
 import { TokenContract } from "@aztec/noir-contracts.js/Token";
-import { BetVaultContract } from "../vault/artifacts/BetVault";
+import { BetVaultContract } from "../vault/src/artifacts/BetVault";
 import { aztecSetup } from "./lib/aztec-setup.js";
 import { fieldToString } from "./lib/utils.js";
 
@@ -125,6 +125,7 @@ async function main(): Promise<void> {
   const vaultDeployTxOptions = await aztecSetup.getTxOptions(deployer.getAddress());
   const contract = await BetVaultContract.deploy(
     deployer,
+    AztecAddress.fromString(finalTokenAddress),
     AztecAddress.fromString(finalTokenAddress)
   ).send(vaultDeployTxOptions).deployed();
 
