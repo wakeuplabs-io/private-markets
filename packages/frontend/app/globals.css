@@ -36,6 +36,7 @@ body {
     --aztec-green-shine: 81 85% 67%;   /* #BBF451 - Primary buttons */
     --aztec-white: 0 0% 100%;          /* #FFFFFF - Pure white text */
     --aztec-white-soft: 220 13% 69%;   /* #9CA3AF - Muted text */
+    --aztec-white-opacity: 0 0% 100% / 0.1; /* #FFFFFF with 10% opacity - Subtle borders */
     --aztec-grey-blue: 210 24% 26%;    /* #314158 - Secondary buttons */
     --aztec-overlay: 220 50% 9% / 0.8; /* #0F172B with opacity - Modal overlay */
     --aztec-modal-bg: 220 50% 9%;      /* #0F172B without opacity - Modal content */
@@ -47,7 +48,7 @@ body {
     --no-button: 0 0% 45%;              /* #737373 - No button neutral gray */
 
     /* Error and Success States */
-    --error: 0 84% 60%;                 /* #EF4444 - Error red */
+    --error: 0 84% 70%;               /* #FF6467 - Error red in HSL */
     --error-foreground: 0 0% 100%;      /* #FFFFFF - Error text */
     --success: 142 76% 36%;             /* #059669 - Success green */
     --success-foreground: 0 0% 100%;    /* #FFFFFF - Success text */
@@ -103,12 +104,12 @@ body {
     --primary-foreground: var(--aztec-dark-blue);
     --secondary: var(--aztec-grey-blue);
     --secondary-foreground: var(--aztec-white);
-    --muted: var(--aztec-light-blue);
-    --muted-foreground: var(--aztec-white-opacity);
+    --muted: var(--aztec-input);
+    --muted-foreground: var(--aztec-white-soft);
     --accent: var(--aztec-green-shine);
     --accent-foreground: var(--aztec-dark-blue);
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: var(--aztec-white);
+    --destructive: var(--error);
+    --destructive-foreground: var(--error-foreground);
     --border: var(--aztec-white-opacity);
     --input: var(--aztec-light-blue);
     --ring: var(--aztec-green-shine);

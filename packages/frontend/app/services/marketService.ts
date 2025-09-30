@@ -123,18 +123,25 @@ export class MarketService {
   }
 
   static async getMarketsByState(state: number): Promise<ContractMarket[]> {
-    if (!CONTRACT_ADDRESS) {
-      throw new Error('Contract address not configured')
+    try {
+      if (!CONTRACT_ADDRESS) {
+        throw new Error('Contract address not configured')
+      }
+  
+      const result = await readContract(config, {
+        address: CONTRACT_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'getMarketsByState',
+        args: [state],
+      })
+  
+      console.log('Markets by state result:', result)
+      return result as ContractMarket[]  
+    } catch (error) {
+      console.warn('Failed to get markets by state from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
+      return []
     }
-
-    const result = await readContract(config, {
-      address: CONTRACT_ADDRESS,
-      abi: PREDICTION_MARKET_ABI,
-      functionName: 'getMarketsByState',
-      args: [state],
-    })
-
-    return result as ContractMarket[]
+    
   }
 
   static async createMarket(question: string, closingTime: Date): Promise<string> {
