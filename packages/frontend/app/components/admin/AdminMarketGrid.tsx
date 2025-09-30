@@ -7,13 +7,11 @@ import { Button } from "@/components/ui/Button";
 import {
     SafeRender,
     EmptyState,
-    LoadingState,
     InvalidDataState,
 } from "@/components/ui/Fallbacks";
 import {
     isValidArray,
     isValidMarket,
-    safeFormatDate,
     safeGetMarketWinningOption,
 } from "@/utils/typeGuards";
 import { cn, formatDate } from "@/lib/utils";
