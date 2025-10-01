@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Layout } from '@/components/layout'
 import { MarketGrid } from './MarketGrid'
 import { PlaceBetModal } from '@/components/betting'
 import { Market, PlaceBetData, MarketOption } from '@/types'
@@ -69,26 +68,11 @@ export function MarketsPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="container mx-auto px-8 py-16">
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-center space-y-4">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-muted-foreground">Loading markets...</p>
-            </div>
-          </div>
-        </div>
-      </Layout>
-    )
-  }
-
   return (
-    <Layout>
+    <>
       <div className="container mx-auto px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+          <h1 className="heading-h1 mb-2">
             Prediction Markets
           </h1>
           <p className="text-muted-foreground">
@@ -101,6 +85,7 @@ export function MarketsPage() {
           onOptionClick={handleOptionClick}
           onConnectWallet={handleConnectWallet}
           isWalletConnected={isConnected}
+          isLoading={isLoading}
           emptyState={
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center">
@@ -126,6 +111,6 @@ export function MarketsPage() {
           isLoading={isPlacingBet}
         />
       </div>
-    </Layout>
+    </>
   )
 }

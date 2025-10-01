@@ -179,6 +179,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
       // Connect using wallet service
       const walletInfo = await walletService.connectWithPersistence(connector)
+      console.log('[WalletContext] connectWallet - walletInfo:', walletInfo)
 
       if (CONTRACT_ADDRESSES.TOKEN) {
         tokenService.initialize(CONTRACT_ADDRESSES.TOKEN)
