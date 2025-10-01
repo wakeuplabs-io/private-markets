@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { AztecAddress } from "@aztec/aztec.js";
 import type { TokenActions, TokenActionsState } from "@/types/token";
-import { tokenService } from "@/services/tokenService";
+import { tokenService } from "@/services/token";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
 
 /**

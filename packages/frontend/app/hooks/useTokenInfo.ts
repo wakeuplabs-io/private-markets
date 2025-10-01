@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AztecAddress } from "@aztec/aztec.js";
 import type { TokenInfoState } from "@/types/token";
-import { tokenService } from "@/services/tokenService";
+import { tokenService } from "@/services/token";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
 import { useWallet } from "@/context";
 export function useTokenInfo(contractAddress?: string, includePrivateBalance = false) {

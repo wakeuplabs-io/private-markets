@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { vaultService } from '@/services/vaultService';
+import { vaultService } from '@/services/vault';
 
 interface UseBetResult {
   placeBet: (params: {
