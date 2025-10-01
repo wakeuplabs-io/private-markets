@@ -35,7 +35,7 @@ const setupTestSuite = async () => {
   return { pxe, store, deployer, wallets };
 };
 
-describe.skip('Token - Single PXE', () => {
+describe('Token - Single PXE', () => {
   let pxe: PXE;
   let store: AztecLmdbStore;
 

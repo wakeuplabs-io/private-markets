@@ -162,3 +162,70 @@ export async function setPublicAuthWit(
   await account.createAuthWit(intent);
   await (await account.setPublicAuthWit(intent, true)).send({ from: account.getAddress() }).wait();
 }
+
+/**
+ * Places a bet on the vault with optional parameters.
+ * @param vault - The BetVault contract instance.
+ * @param token - The Token contract instance.
+ * @param better - The wallet placing the bet.
+ * @param admin - The admin wallet that will receive the tokens.
+ * @param amount - The amount to bet.
+ * @param options - Optional parameters (marketId, outcome, commitment, betId, authwitNonce).
+ * @returns The transaction receipt and bet details.
+ */
+export async function placeBet(
+  vault: BetVaultContract,
+  token: TokenContract,
+  better: AccountWallet,
+  admin: AccountWallet,
+  amount: bigint,
+  options?: {
+    marketId?: Fr;
+    outcome?: bigint;
+    commitment?: Fr;
+    betId?: Fr;
+    authwitNonce?: Fr;
+  },
+) {
+  const marketId = options?.marketId ?? Fr.random();
+  const outcome = options?.outcome ?? 1n;
+  const commitment = options?.commitment ?? Fr.random();
+  const betId = options?.betId ?? Fr.random();
+  const authwitNonce = options?.authwitNonce ?? Fr.random();
+
+  const mockMsg: bigint[][] = Array(7).fill(Array(31).fill(0n));
+
+  const transferAction = token.methods.transfer_private_to_private(
+    better.getAddress(),
+    admin.getAddress(),
+    amount,
+    authwitNonce,
+  );
+
+  const witness = await setPrivateAuthWit(vault.address, transferAction, better);
+
+  const betTx = await vault
+    .withWallet(better)
+    .methods.bet(
+      marketId,
+      outcome,
+      amount,
+      commitment,
+      betId,
+      authwitNonce,
+      better.getAddress(),
+      mockMsg,
+    )
+    .with({ authWitnesses: [witness] })
+    .send({ from: better.getAddress() })
+    .wait();
+
+  return {
+    tx: betTx,
+    marketId,
+    outcome,
+    commitment,
+    betId,
+    authwitNonce,
+  };
+}

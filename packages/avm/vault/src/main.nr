@@ -1,18 +1,21 @@
 use dep::aztec::macros::aztec;
 
+pub mod types;
+
 #[aztec]
 pub contract BetVault {
     use dep::aztec::{
-        macros::{storage::storage, events::event, functions::{private, public, internal, view, initializer}},
-        state_vars::{map::Map, public_mutable::PublicMutable, public_immutable::PublicImmutable},
+        macros::{storage::storage, events::event, functions::{private, public, internal, view, initializer, utility}},
+        state_vars::{map::Map, public_mutable::PublicMutable, public_immutable::PublicImmutable, private_set::PrivateSet},
         protocol_types::address::AztecAddress,
-        // context::PrivateContext,
+        note::note_viewer_options::NoteViewerOptions,
+        messages::logs::note,
         event::{event_interface::{MessageDelivery, emit_event_in_private}},
-        // messaging::process_l1_to_l2_message,
-        // oracle::rand::rand,
     };
     use dep::token::Token;
+    use crate::types::bet_note::BetNote;
     // use dep::wormhole::Wormhole;
+
     #[event]
     struct BetPlaced {
         market_id: Field,
@@ -28,6 +31,7 @@ pub contract BetVault {
         token_address: PublicImmutable<AztecAddress, Context>,
         wormhole_address: PublicImmutable<AztecAddress, Context>,
         admin: PublicImmutable<AztecAddress, Context>,
+        user_bets: Map<AztecAddress, PrivateSet<BetNote, Context>, Context>,
     }
 
     #[public]
@@ -95,6 +99,13 @@ pub contract BetVault {
             authwit_nonce
         ).call(&mut context);
 
+        // Store bet in user's private set
+        let bet_note = BetNote::new(from, market_id, outcome, amount, bet_id, commitment);
+
+        storage.user_bets.at(from)
+          .insert(bet_note)
+          .emit(note::encode_and_encrypt_note(&mut context, from));
+
         BetVault::at(context.this_address())._mark_bet_processed(bet_id).enqueue(&mut context);
 
         emit_event_in_private(
@@ -132,6 +143,18 @@ pub contract BetVault {
         //     context.msg_sender(),
         //     authwit_nonce
         // ).call(&mut context);
+    }
+
+    #[utility]
+    unconstrained fn getMyBets(
+        owner: AztecAddress,
+        offset: u32,
+        limit: u32
+    ) -> pub BoundedVec<BetNote, 10> {
+        let mut options = NoteViewerOptions::<BetNote, 7>::new();
+        options = options.set_offset(offset);
+        options = options.set_limit(limit);
+        storage.user_bets.at(owner).view_notes(options)
     }
 }
 

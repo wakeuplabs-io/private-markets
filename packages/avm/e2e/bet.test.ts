@@ -9,6 +9,7 @@ import {
   AMOUNT,
   deployVaultWithToken,
   expectTokenBalances,
+  placeBet,
   setPrivateAuthWit,
   setupPXE,
   wad,
@@ -33,7 +34,6 @@ describe('BetVault - E2E Tests', () => {
   let store: AztecLmdbStore;
 
   let wallets: AccountWalletWithSecretKey[];
-  let deployer: AccountWalletWithSecretKey;
 
   let alice: AccountWalletWithSecretKey;
   let bob: AccountWalletWithSecretKey;
@@ -45,7 +45,7 @@ describe('BetVault - E2E Tests', () => {
   let admin: AccountWalletWithSecretKey;
 
   beforeAll(async () => {
-    ({ pxe, store, deployer, wallets } = await setupTestSuite());
+    ({ pxe, store, wallets } = await setupTestSuite());
     [alice, bob, carl] = wallets;
     admin = bob;
     wormholeAddress = await AztecAddress.random();
@@ -59,7 +59,7 @@ describe('BetVault - E2E Tests', () => {
     await store.delete();
   });
 
-  it.skip('deploys vault and token correctly', async () => {
+  it('deploys vault and token correctly', async () => {
     expect(vault.address).toBeDefined();
     expect(token.address).toBeDefined();
 
@@ -100,45 +100,25 @@ describe('BetVault - E2E Tests', () => {
     await expectTokenBalances(token, alice, 0, AMOUNT);
 
     const marketId = Fr.random();
-    const outcome = 1;
+    const outcome = 1n;
     const commitment = Fr.random();
     const betId = Fr.random();
     const authwitNonce = Fr.random();
-
-    const mockMsg: bigint[][] = Array(7).fill(Array(31).fill(0n));
 
     const isProcessedBefore = await vault.methods
       .is_processed(betId)
       .simulate({ from: alice.getAddress() });
     expect(isProcessedBefore).toBe(false);
 
-    const transferAction = token
-      .methods.transfer_private_to_private(
-        alice.getAddress(),
-        admin.getAddress(),
-        AMOUNT,
-        authwitNonce
-      );
+    const { tx } = await placeBet(vault, token, alice, admin, AMOUNT, {
+      marketId,
+      outcome,
+      commitment,
+      betId,
+      authwitNonce,
+    });
 
-    const witness = await setPrivateAuthWit(vault.address, transferAction, alice);
-
-    const betTx = await vault
-      .withWallet(alice)
-      .methods.bet(
-        marketId,
-        outcome,
-        AMOUNT,
-        commitment,
-        betId,
-        authwitNonce,
-        alice.getAddress(),
-        mockMsg
-      )
-      .with({ authWitnesses: [witness] })
-      .send({ from: alice.getAddress() })
-      .wait();
-
-    expect(betTx.status).toBe(TxStatus.SUCCESS);
+    expect(tx.status).toBe(TxStatus.SUCCESS);
     await token.methods.sync_private_state().simulate({ from: alice.getAddress() });
     await token.methods.sync_private_state().simulate({ from: admin.getAddress() });
 
@@ -149,5 +129,36 @@ describe('BetVault - E2E Tests', () => {
     console.log('------FINAL BALANCES------');
     await expectTokenBalances(token, alice, 0, 0);
     await expectTokenBalances(token, admin, 0, AMOUNT);
+  }, 300_000);
+
+  it('should retrieve user bets with getMyBets', async () => {
+    await token
+      .withWallet(alice)
+      .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT)
+      .send({ from: alice.getAddress() })
+      .wait();
+
+    await expectTokenBalances(token, alice, 0, AMOUNT);
+
+    const { tx, marketId, outcome, commitment, betId } = await placeBet(
+      vault,
+      token,
+      alice,
+      admin,
+      AMOUNT,
+    );
+
+    expect(tx.status).toBe(TxStatus.SUCCESS);
+
+    const aliceBets = await vault.methods.getMyBets(alice.getAddress(), 0, 10).simulate({ from: alice.getAddress() });
+
+    console.log('Alice bets:', aliceBets);
+    expect(aliceBets.len).toBe(1n);
+    expect(aliceBets.storage[0].owner).toEqual(alice.getAddress());
+    expect(aliceBets.storage[0].market_id).toEqual(marketId.toBigInt());
+    expect(aliceBets.storage[0].outcome).toBe(outcome);
+    expect(aliceBets.storage[0].amount).toBe(BigInt(AMOUNT));
+    expect(aliceBets.storage[0].bet_id).toEqual(betId.toBigInt());
+    expect(aliceBets.storage[0].commitment).toEqual(commitment.toBigInt());
   }, 300_000);
 });

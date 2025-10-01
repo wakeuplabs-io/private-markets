@@ -121,7 +121,7 @@ export class BetVaultContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'processed_bets' | 'token_address' | 'wormhole_address' | 'admin'> {
+  public static get storage(): ContractStorageLayout<'processed_bets' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'> {
       return {
         processed_bets: {
       slot: new Fr(1n),
@@ -134,8 +134,11 @@ wormhole_address: {
     },
 admin: {
       slot: new Fr(6n),
+    },
+user_bets: {
+      slot: new Fr(8n),
     }
-      } as ContractStorageLayout<'processed_bets' | 'token_address' | 'wormhole_address' | 'admin'>;
+      } as ContractStorageLayout<'processed_bets' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'>;
     }
     
 
@@ -153,6 +156,9 @@ admin: {
 
     /** get_token_address() */
     get_token_address: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** getMyBets(owner: struct, offset: integer, limit: integer) */
+    getMyBets: ((owner: AztecAddressLike, offset: (bigint | number), limit: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** is_processed(bet_id: field) */
     is_processed: ((bet_id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
