@@ -40,6 +40,13 @@ export const setupPXE = async () => {
 
 // --- Token Utils ---
 
+export const toBigInt = (val: bigint | number | Fr) => {
+  if (typeof val === 'bigint') return val;
+  if (typeof val === 'number') return BigInt(val);
+  if (val instanceof Fr) return val.toBigInt();
+  throw new Error('Unsupported type for balance');
+};
+
 export const expectUintNote = (note: UniqueNote, amount: bigint, owner: AztecAddress) => {
   expect(note.note.items[0]).toEqual(new Fr(owner.toBigInt()));
   expect(note.note.items[2]).toEqual(new Fr(amount));
@@ -56,16 +63,8 @@ export const expectTokenBalances = async (
   logger.info('checking balances for', aztecAddress.toString());
   const t = caller ? token.withWallet(caller) : token;
 
-  // Helper to cast to bigint if not already
-  const toBigInt = (val: bigint | number | Fr) => {
-    if (typeof val === 'bigint') return val;
-    if (typeof val === 'number') return BigInt(val);
-    if (val instanceof Fr) return val.toBigInt();
-    throw new Error('Unsupported type for balance');
-  };
   const publicBalanceRetrieved = await t.methods.balance_of_public(aztecAddress).simulate({ from: aztecAddress });
   const privateBalanceRetrieved = await t.methods.balance_of_private(aztecAddress).simulate({ from: aztecAddress });
-  console.log({publicBalanceRetrieved, privateBalanceRetrieved});
 
   expect(publicBalanceRetrieved).toBe(toBigInt(publicBalance));
   expect(privateBalanceRetrieved).toBe(toBigInt(privateBalance));

@@ -12,6 +12,7 @@ import {
   placeBet,
   setPrivateAuthWit,
   setupPXE,
+  toBigInt,
   wad,
 } from './utils.js';
 import { PXE } from '@aztec/stdlib/interfaces/client';
@@ -30,7 +31,6 @@ const setupTestSuite = async () => {
 };
 
 describe('BetVault - E2E Tests', () => {
-  let pxe: PXE;
   let store: AztecLmdbStore;
 
   let wallets: AccountWalletWithSecretKey[];
@@ -45,7 +45,7 @@ describe('BetVault - E2E Tests', () => {
   let admin: AccountWalletWithSecretKey;
 
   beforeAll(async () => {
-    ({ pxe, store, wallets } = await setupTestSuite());
+    ({ store, wallets } = await setupTestSuite());
     [alice, bob, carl] = wallets;
     admin = bob;
     wormholeAddress = await AztecAddress.random();
@@ -126,12 +126,11 @@ describe('BetVault - E2E Tests', () => {
       .is_processed(betId)
       .simulate({ from: alice.getAddress() });
     expect(isProcessedAfter).toBe(true);
-    console.log('------FINAL BALANCES------');
     await expectTokenBalances(token, alice, 0, 0);
     await expectTokenBalances(token, admin, 0, AMOUNT);
   }, 300_000);
 
-  it('should retrieve user bets with getMyBets', async () => {
+  it.only('should retrieve user bets with getMyBets', async () => {
     await token
       .withWallet(alice)
       .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT)
@@ -155,10 +154,36 @@ describe('BetVault - E2E Tests', () => {
     console.log('Alice bets:', aliceBets);
     expect(aliceBets.len).toBe(1n);
     expect(aliceBets.storage[0].owner).toEqual(alice.getAddress());
-    expect(aliceBets.storage[0].market_id).toEqual(marketId.toBigInt());
+    expect(aliceBets.storage[0].market_id).toEqual(toBigInt(marketId));
     expect(aliceBets.storage[0].outcome).toBe(outcome);
-    expect(aliceBets.storage[0].amount).toBe(BigInt(AMOUNT));
-    expect(aliceBets.storage[0].bet_id).toEqual(betId.toBigInt());
-    expect(aliceBets.storage[0].commitment).toEqual(commitment.toBigInt());
+    expect(aliceBets.storage[0].amount).toBe(toBigInt(AMOUNT));
+    expect(aliceBets.storage[0].bet_id).toEqual(toBigInt(betId));
+    expect(aliceBets.storage[0].commitment).toEqual(toBigInt(commitment));
+
+    const aliceBetsByBob = await vault.methods.getMyBets(alice.getAddress(), 0, 10).simulate({ from: bob.getAddress() });
+    expect(aliceBetsByBob.len).toBe(0n);
+
+  }, 300_000);
+
+
+  it('should retrieve user bets with pagination', async () => {
+    await token
+      .withWallet(alice)
+      .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT * 11n)
+      .send({ from: alice.getAddress() })
+      .wait();
+
+    await expectTokenBalances(token, alice, 0, AMOUNT * 11n);
+
+    for (let i = 0; i < 11; i++) {
+      const { tx } = await placeBet(vault, token, alice, admin, AMOUNT);
+      expect(tx.status).toBe(TxStatus.SUCCESS);
+    }
+
+    const firstPage = await vault.methods.getMyBets(alice.getAddress(), 0, 10).simulate({ from: alice.getAddress() });
+    expect(firstPage.len).toBe(10n);
+
+    const secondPage = await vault.methods.getMyBets(alice.getAddress(), 10, 10).simulate({ from: alice.getAddress() });
+    expect(secondPage.len).toBe(1n);
   }, 300_000);
 });

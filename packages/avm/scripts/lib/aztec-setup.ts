@@ -107,7 +107,7 @@ export class AztecSetup {
       });
       console.log("Sponsored FPC contract registered");
     } catch (error) {
-      console.warn("⚠️  Failed to register contracts (may already be registered):", error);
+      console.warn("Failed to register contracts (may already be registered):", error);
     }
   }
 

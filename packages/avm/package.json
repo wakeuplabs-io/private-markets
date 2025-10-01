@@ -9,7 +9,6 @@
     "build": "npm run compile && npm run postprocess && npm run codegen",
     "deploy:token": "node --import tsx/esm scripts/deploy_token.ts",
     "deploy:vault": "node --import tsx/esm scripts/deploy_vault.ts",
-    "deploy:vault:with-token": "node --import tsx/esm scripts/deploy_vault.ts",
     "call:bet": "node --import tsx/esm scripts/call_bet.ts",
     "mint:azguard": "node --import tsx/esm scripts/mint_to_azguard.ts",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
