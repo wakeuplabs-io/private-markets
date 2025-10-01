@@ -5,29 +5,8 @@ import { useUserActivity } from "@/hooks/useUserActivity";
 import { ActivityGrid } from "@/components/activity/ActivityGrid";
 
 export function ActivityPage() {
-    const {
-        activityData,
-        isLoading,
-        error,
-        connectionStatus,
-        refreshActivity,
-        claimReward,
-    } = useUserActivity();
+    const { activityData, isLoading, error, refreshActivity, claimReward } = useUserActivity();
 
-    if (isLoading) {
-        return (
-            <div className="container mx-auto px-8 py-16">
-                <div className="flex items-center justify-center min-h-[400px]">
-                    <div className="text-center space-y-4">
-                        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-                        <p className="text-muted-foreground">
-                            Loading your activity...
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
 
     if (error) {
         return (
@@ -61,7 +40,6 @@ export function ActivityPage() {
                     </p>
                 </div>
             </div>
-
 
             <ActivityGrid
                 activityData={activityData}

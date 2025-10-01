@@ -25,7 +25,7 @@ interface ActivityGridProps {
 
 export const ActivityGrid: React.FC<ActivityGridProps> = ({
     activityData,
-    isLoading = false,
+    isLoading = true,
     onClaimReward,
     onRefresh,
 }) => {
@@ -33,7 +33,7 @@ export const ActivityGrid: React.FC<ActivityGridProps> = ({
     
     const ICON_DIMENSIONS = { width: 24, height: 24 } as const;
     
-    const getStatusIcon = (status: string | null | undefined): React.JSX.Element => {
+    const getStatusIcon = (status: MarketStatus): React.JSX.Element => {
         const iconInfo = getStatusIconInfo(status);
         return <Image src={iconInfo.src} alt={iconInfo.alt} {...ICON_DIMENSIONS} />;
     };
@@ -67,7 +67,7 @@ export const ActivityGrid: React.FC<ActivityGridProps> = ({
 interface ActivityGridContentProps {
     bets: UserBet[];
     onClaimReward: (betId: string) => Promise<void>;
-    getStatusIcon: (status: string | null | undefined) => React.JSX.Element;
+    getStatusIcon: (status: MarketStatus) => React.JSX.Element;
     getStatusColor: (status: MarketStatus) => string;
     formatDate: (date: Date | null | undefined, prefix?: string) => string;
     isLoading?: boolean;
@@ -159,8 +159,8 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
 interface ActivityRowProps {
     bet: UserBet;
     onClaimReward: (betId: string) => Promise<void>;
-    getStatusIcon: (status: string | null | undefined) => React.JSX.Element;
-    getStatusColor: (status: string) => string;
+    getStatusIcon: (status: MarketStatus) => React.JSX.Element;
+    getStatusColor: (status: MarketStatus) => string;
     formatDate: (date: Date | null | undefined, prefix?: string) => string;
 }
 
@@ -223,8 +223,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                         </div>
                     </div>
                 </div>
-
-                {/* Bet Amount Column */}
                 <div className="col-span-2">
                     <div className={cn("text-lg font-semibold", textColor)}>
                         {bet.amount} ETH
@@ -236,7 +234,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                     )}
                 </div>
 
-                {/* Option Column */}
                 <div className="col-span-2">
                     <div className="flex flex-col">
                         <div className={cn("text-sm font-medium", textColor)}>
@@ -248,7 +245,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                     </div>
                 </div>
 
-                {/* State Column */}
                 <div className="col-span-2">
                     <div className="flex flex-col">
                         <div className={cn("text-sm font-bold capitalize", textColor)}>
@@ -257,7 +253,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                     </div>
                 </div>
 
-                {/* Action Column */}
                 <div className="col-span-2">
                     {bet.isClaimable && (
                         <Button
