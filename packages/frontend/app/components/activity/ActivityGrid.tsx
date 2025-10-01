@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { UserActivityData, UserBet } from "@/types";
+import { UserActivityData, UserBet, MarketStatus } from "@/types";
 import { Button } from "@/components/ui/Button";
 import {
     SafeRender,
@@ -14,6 +14,7 @@ import {
     isValidArray,
 } from "@/utils/typeGuards";
 import { cn, formatDate } from "@/lib/utils";
+import { useStatus } from "@/hooks/useStatus";
 
 interface ActivityGridProps {
     activityData: UserActivityData | null;
@@ -28,40 +29,13 @@ export const ActivityGrid: React.FC<ActivityGridProps> = ({
     onClaimReward,
     onRefresh,
 }) => {
+    const { getStatusIconInfo, getMarketStatusColor } = useStatus();
+    
     const ICON_DIMENSIONS = { width: 24, height: 24 } as const;
-    const STATUS_ICON_STRATEGIES = {
-        open: { src: "/clock.svg", alt: "Open" },
-        finalized: { src: "/warning.svg", alt: "Finalized" },
-        resolved: { src: "/success.svg", alt: "Resolved" },
-        default: { src: "/file.svg", alt: "Unknown" }
-    } as const;
-
-    const getStatusIcon = (status: string | null | undefined) => {
-        const strategy = STATUS_ICON_STRATEGIES[status as keyof typeof STATUS_ICON_STRATEGIES] 
-            || STATUS_ICON_STRATEGIES.default;
-        
-        return <Image src={strategy.src} alt={strategy.alt} {...ICON_DIMENSIONS} />;
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'confirmed':
-                return 'text-foreground'
-            case 'claimable':
-                return 'text-foreground'
-            case 'claimed':
-                return 'text-foreground/50'
-            case 'won':
-                return 'text-foreground/50'
-            case 'lost':
-                return 'text-foreground/50'
-            case 'failed':
-                return 'text-foreground/50'
-            case 'pending':
-                return 'text-foreground'
-            default:
-                return 'text-foreground'
-        }
+    
+    const getStatusIcon = (status: string | null | undefined): React.JSX.Element => {
+        const iconInfo = getStatusIconInfo(status);
+        return <Image src={iconInfo.src} alt={iconInfo.alt} {...ICON_DIMENSIONS} />;
     };
 
     return (
@@ -80,7 +54,7 @@ export const ActivityGrid: React.FC<ActivityGridProps> = ({
                     bets={validBets}
                     onClaimReward={onClaimReward}
                     getStatusIcon={getStatusIcon}
-                    getStatusColor={getStatusColor}
+                    getStatusColor={getMarketStatusColor}
                     formatDate={formatDate}
                     isLoading={isLoading}
                 />
@@ -94,7 +68,7 @@ interface ActivityGridContentProps {
     bets: UserBet[];
     onClaimReward: (betId: string) => Promise<void>;
     getStatusIcon: (status: string | null | undefined) => React.JSX.Element;
-    getStatusColor: (status: string) => string;
+    getStatusColor: (status: MarketStatus) => string;
     formatDate: (date: Date | null | undefined, prefix?: string) => string;
     isLoading?: boolean;
 }
@@ -182,7 +156,6 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
     );
 };
 
-// Individual activity row component
 interface ActivityRowProps {
     bet: UserBet;
     onClaimReward: (betId: string) => Promise<void>;
@@ -223,13 +196,11 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
         return 'Pending';
     };
 
-    // Use same text color logic as admin
     const textColor = bet.marketStatus === "resolved" ? "text-foreground/50" : "text-foreground";
 
     return (
-        <div className="rounded-lg bg-[#1D293D]/65 backdrop-blur-sm h-[100px] overflow-hidden flex items-center">
+        <div className="rounded-lg bg-[#1D293D]/65 h-[100px] overflow-hidden flex items-center">
             <div className="grid grid-cols-12 gap-4 h-full items-center px-6 w-full">
-                {/* Market Column */}
                 <div className="col-span-4">
                     <div className="flex items-start space-x-3">
                         <span className="text-lg mt-0.5 w-6 h-6">
@@ -297,16 +268,7 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                             {isClaiming ? 'Claiming...' : 'Claim'}
                         </Button>
                     )}
-                    {bet.status === 'claimed' && (
-                        <div className="text-sm text-green-400 font-medium">
-                            Claimed
-                        </div>
-                    )}
-                    {bet.status === 'lost' && (
-                        <div className="text-sm text-red-400 font-medium">
-                            Lost
-                        </div>
-                    )}
+                   
                 </div>
             </div>
         </div>

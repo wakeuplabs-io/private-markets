@@ -14,6 +14,7 @@ import {
   safeFormatNumber
 } from '@/utils/typeGuards'
 import { formatDate, formatTime } from '@/lib/utils'
+import { useStatus } from '@/hooks/useStatus'
 
 interface AdminMarketCardProps {
   market: AdminMarket | null | undefined
@@ -31,19 +32,7 @@ export const AdminMarketCard: React.FC<AdminMarketCardProps> = ({
   isLoading = false
 }) => {
   const [showResolveOptions, setShowResolveOptions] = useState(false)
-
-  const getStatusColor = (status: AdminMarket['status']) => {
-    switch (status) {
-      case "open":
-        return 'bg-green-500/20 text-green-400 border-green-500/30'
-      case "finalized":
-        return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-      case "resolved":
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-      default:
-        return 'bg-muted text-muted-foreground'
-    }
-  }
+  const { getMarketStatusColor } = useStatus()
 
  
 
@@ -77,7 +66,7 @@ export const AdminMarketCard: React.FC<AdminMarketCardProps> = ({
           formatDate={formatDate}
           formatTime={formatTime}
           getEngagementColor={getEngagementColor}
-          getStatusColor={getStatusColor}
+          getStatusColor={getMarketStatusColor}
         />
       )}
     </SafeRender>
