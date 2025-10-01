@@ -1,7 +1,7 @@
 import { readContract, writeContract } from 'wagmi/actions'
 import { config } from '@/config/wagmi'
 import { PREDICTION_MARKET_ABI } from '@/constants/contracts'
-import { Market, MarketStatus, BlockchainConnectionStatus } from '@/types'
+import { Market, MarketStatus, BlockchainConnectionStatus, Bet } from '@/types'
 import { BlockchainStatusService } from './blockchainStatusService'
 import { MockDataFactory } from '@/lib/mockData'
 
@@ -461,5 +461,84 @@ export class MarketService {
   static async getConnectionStatus(): Promise<BlockchainConnectionStatus> {
     const status = await BlockchainStatusService.getStatus()
     return status.evm
+  }
+
+  // === User Activity Methods ===
+
+  /**
+   * Get user's betting activity (bets placed by the user)
+   */
+  static async getUserBets(): Promise<Bet[]> {
+    try {
+      // For now, return mock data. In a real implementation, this would:
+      // 1. Query the blockchain for user's bet events
+      // 2. Parse the events to extract bet information
+      // 3. Return structured bet data
+      
+      const mockBets: Bet[] = [
+        {
+          id: 'bet-1',
+          marketId: 'mock-000', // Open market
+          option: 'yes',
+          amount: 0.1,
+          status: 'confirmed',
+          placedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+          txHash: '0x123...',
+          userAddress: '0x456...'
+        },
+        {
+          id: 'bet-2',
+          marketId: 'mock-001', // Resolved market
+          option: 'yes', // Changed to 'yes' to match winning option
+          amount: 0.05,
+          status: 'claimable',
+          placedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+          txHash: '0x789...',
+          userAddress: '0x456...'
+        },
+        {
+          id: 'bet-3',
+          marketId: 'mock-002', // Finalized market
+          option: 'yes',
+          amount: 0.2,
+          status: 'claimed',
+          placedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
+          txHash: '0xabc...',
+          claimTxHash: '0xdef...',
+          claimedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
+          userAddress: '0x456...'
+        }
+      ]
+
+      return mockBets
+    } catch (error) {
+      console.error('Error fetching user bets:', error)
+      throw new Error('Failed to fetch user bets')
+    }
+  }
+
+  /**
+   * Claim reward for a winning bet
+   */
+  static async claimReward(betId: string): Promise<void> {
+    try {
+      // For now, simulate a successful claim
+      // In a real implementation, this would:
+      // 1. Verify the bet is claimable
+      // 2. Generate ZK proof if needed
+      // 3. Submit claim transaction to blockchain
+      // 4. Wait for confirmation
+      
+      console.log(`Claiming reward for bet ${betId}`)
+      
+      // Simulate async operation
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // In real implementation, update bet status to 'claimed'
+      // and store claim transaction hash
+    } catch (error) {
+      console.error('Error claiming reward:', error)
+      throw new Error('Failed to claim reward')
+    }
   }
 }
