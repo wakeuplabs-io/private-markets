@@ -10,7 +10,6 @@ import {
   isValidAdminMarket,
   safeGetMarketOptions,
   safeGetProperty,
-  safeFormatDate,
   safeFormatNumber
 } from '@/utils/typeGuards'
 import { formatDate, formatTime } from '@/lib/utils'

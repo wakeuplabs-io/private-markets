@@ -115,7 +115,7 @@ contract DeployPredictionMarket is Script {
         console.log("");
         console.log("=== Deployment Summary ===");
         console.log("Treasury Contract:", address(treasury));
-        console.log("PredictionMarketCore Contract:", address(predictionMarketCore));
+        console.log("[OK] PredictionMarketCore Contract:", address(predictionMarketCore));
         console.log("WormholeReceiver Contract:", address(wormholeReceiver));
         console.log("");
         console.log("=== Ownership Architecture ===");

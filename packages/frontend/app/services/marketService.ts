@@ -76,7 +76,6 @@ export class MarketService {
     }
 
     try {
-      console.log('Getting all markets:', { offset, limit, contractAddress: CONTRACT_ADDRESS })
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,

@@ -27,3 +27,5 @@ lcov.info
 crytic-export
 
 docs
+
+*.mdb

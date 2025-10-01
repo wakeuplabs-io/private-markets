@@ -39,7 +39,6 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
 
       // Load markets regardless of blockchain status (fallback to mock if offline)
       const adminMarkets = await MarketService.getAdminMarkets()
-      console.log('Admin markets:', adminMarkets)
       setMarkets(adminMarkets)
 
       // Clear any previous errors if we successfully loaded data

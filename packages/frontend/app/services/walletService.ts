@@ -31,7 +31,6 @@ export class WalletService {
 
       const addressObj = account.getAddress();
       const addressString = addressObj.toString();
-      console.log('[WalletService] connect - addressObj:', addressObj, 'addressString:', addressString);
 
       const walletInfo: WalletInfo = {
         connector,
