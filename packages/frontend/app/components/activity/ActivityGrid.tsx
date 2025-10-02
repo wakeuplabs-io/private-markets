@@ -101,7 +101,6 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
             />
         );
     }
-
     return (
         <div className="space-y-6">
             <div className="overflow-hidden">
@@ -130,10 +129,9 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
 
                         {isLoading ? (
                             <div className="space-y-6 mt-4">
-                                <AdminMarketCardSkeleton />
-                                <AdminMarketCardSkeleton />
-                                <AdminMarketCardSkeleton />
-                                <AdminMarketCardSkeleton />
+                                {Array.from({ length: 4 }).map((_, index) => (
+                                    <AdminMarketCardSkeleton key={`skeleton-${index}`} />
+                                ))}
                             </div>
                         ) : (
                             <div className="space-y-6 mt-4">
@@ -168,7 +166,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
     bet,
     onClaimReward,
     getStatusIcon,
-    getStatusColor,
     formatDate,
 }) => {
     const [isClaiming, setIsClaiming] = React.useState(false);
@@ -197,7 +194,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
     };
 
     const textColor = bet.marketStatus === "resolved" ? "text-foreground/50" : "text-foreground";
-
     return (
         <div className="rounded-lg bg-[#1D293D]/65 h-[100px] overflow-hidden flex items-center">
             <div className="grid grid-cols-12 gap-4 h-full items-center px-6 w-full">

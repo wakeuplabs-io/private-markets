@@ -1,3 +1,4 @@
+import { Bet } from "@/types";
 import { walletService } from "../walletService";
 import { PrivateVaultProvider } from "./PrivateVaultProvider";
 import { PublicVaultProvider } from "./PublicVaultProvider";
@@ -105,12 +106,7 @@ export class VaultService implements IVaultService {
     const authwitNonce = `0x${(Date.now() + Math.floor(Math.random() * 1000)).toString(16)}`;
 
     // Format market ID to hex if needed
-    let formattedMarketId = params.marketId;
-    if (!formattedMarketId.startsWith('0x')) {
-      const encoder = new TextEncoder();
-      const bytes = encoder.encode(formattedMarketId);
-      formattedMarketId = '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
+    const formattedMarketId = params.marketId;
 
     // Create message array (7x31 matrix of zeros)
     const msg: number[][] = Array(7).fill(null).map(() => Array(31).fill(0));
@@ -197,6 +193,17 @@ export class VaultService implements IVaultService {
       console.error('[VAULT] Failed to get token address:', error);
       throw new Error(`Failed to get token address: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  async getUserBets(): Promise<Bet[]> {
+    if (!walletService.isConnected()) {
+      throw new Error('Wallet must be connected to get user bets');
+    }
+    const provider = this.getProvider();
+    if (!provider.getUserBets) {
+      throw new Error('Get user bets operation not supported by current provider');
+    }
+    return await provider.getUserBets();
   }
 
   /**

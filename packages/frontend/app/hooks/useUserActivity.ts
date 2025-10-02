@@ -4,7 +4,8 @@ import { useState, useCallback } from 'react'
 import useSWR from 'swr'
 import { useAccount } from 'wagmi'
 import { MarketService } from '@/services/marketService'
-import { UserBet, UserActivityData, BetStatus, BlockchainConnectionStatus } from '@/types'
+import { UserBet, UserActivityData, BlockchainConnectionStatus } from '@/types'
+import { vaultService } from '@/services/vault'
 
 interface UseUserActivityReturn {
   activityData: UserActivityData | null
@@ -15,49 +16,59 @@ interface UseUserActivityReturn {
   claimReward: (betId: string) => Promise<void>
 }
 
-// Fetcher function for SWR
 const fetchUserActivity = async (): Promise<UserActivityData> => {
-  // Load user bets and markets data
-  const [userBets, markets] = await Promise.all([
-    MarketService.getUserBets(),
-    MarketService.getUserMarkets()
-  ])
+  try {
+    const [userBets, markets] = await Promise.all([
+      vaultService.getUserBets(),
+      MarketService.getActiveMarkets()
+    ])
+    const userBetsWithMarketInfo: UserBet[] = userBets.map(bet => {
+      const market = markets.find(m => m.id === bet.marketId)
+      const isWinning = market?.status === 'resolved' &&
+                       market?.winningOption?.id === bet.option
 
-  // Transform bets into UserBet format with market info
-  const userBetsWithMarketInfo: UserBet[] = userBets.map(bet => {
-    const market = markets.find(m => m.id === bet.marketId)
-    
-    // Calculate if this bet is winning
-    const isWinning = market?.status === 'resolved' && 
-                     market?.winningOption?.id === bet.option
+      const isClaimable = market?.status === 'resolved' &&
+                         isWinning &&
+                         bet.status !== 'claimed'
 
-    // Calculate if this bet is claimable
-    const isClaimable = market?.status === 'resolved' && 
-                       isWinning && 
-                       bet.status !== 'claimed'
+      // TODO: Calculate potential reward (simplified - in real app this would use odds)
+      const potentialReward = isWinning ? bet.amount * 2 : 0
 
-    // TODO: Calculate potential reward (simplified - in real app this would use odds)
-    const potentialReward = isWinning ? bet.amount * 2 : 0
+      return {
+          ...bet,
+          marketQuestion: market?.question || 'Unknown Market',
+          marketStatus: market?.status || 'open',
+          marketWinningOption: market?.winningOption?.id as 'yes' | 'no' | null || null,
+          marketResolvedAt: market?.resolvedAt || null,
+          isWinning,
+          isClaimable,
+          potentialReward
+      }
+    })
 
     return {
-        ...bet,
-        marketQuestion: market?.question || 'Unknown Market',
-        marketStatus: market?.status || 'open',
-        marketWinningOption: market?.winningOption?.id as 'yes' | 'no' | null || null,
-        marketResolvedAt: market?.resolvedAt || null,
-        isWinning,
-        isClaimable,
-        potentialReward
+      bets: userBetsWithMarketInfo,
+      totalBets: userBetsWithMarketInfo.length,
+      totalWon: 0,
+      totalLost: 0,
+      totalClaimable: 0,
+      totalClaimed: 0
     }
-  })
-
-  return {
-    bets: userBetsWithMarketInfo,
-    totalBets: userBetsWithMarketInfo.length,
-    totalWon: 0,
-    totalLost: 0,
-    totalClaimable: 0,
-    totalClaimed: 0
+  } catch (error) {
+    // If wallet is not connected, return empty activity data instead of throwing
+    if (error instanceof Error && error.message.includes('Wallet must be connected')) {
+      console.warn('[useUserActivity] Wallet not connected, returning empty data');
+      return {
+        bets: [],
+        totalBets: 0,
+        totalWon: 0,
+        totalLost: 0,
+        totalClaimable: 0,
+        totalClaimed: 0
+      }
+    }
+    // Re-throw other errors
+    throw error
   }
 }
 
@@ -65,7 +76,6 @@ export function useUserActivity(): UseUserActivityReturn {
   const [connectionStatus, setConnectionStatus] = useState<BlockchainConnectionStatus>('connecting')
   const { isConnected } = useAccount()
 
-  // SWR configuration
   const { data: activityData, error, isLoading, mutate } = useSWR(
     isConnected ? 'user-activity' : null, // Only fetch when connected
     fetchUserActivity,

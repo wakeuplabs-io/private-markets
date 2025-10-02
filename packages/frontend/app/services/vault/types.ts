@@ -1,3 +1,5 @@
+import { Bet } from "@/types";
+
 export interface BetParams {
   marketId: string;
   outcome: number;
@@ -27,6 +29,7 @@ export interface IVaultProvider {
   placeBet?(params: BetParams): Promise<string>;
   isProcessed(betId: string): Promise<boolean>;
   getTokenAddress(): Promise<string>;
+  getUserBets?(): Promise<Bet[]>;
   clearCache(): void;
 }
 

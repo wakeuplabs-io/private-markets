@@ -5,9 +5,26 @@ import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
 import type { IVaultProvider, BetParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
+import { Bet } from "@/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAccount = any;
+
+/**
+ * Blockchain bet structure (as returned from Aztec contract)
+ * Uses snake_case and BigInt types
+ */
+interface BlockchainBet {
+  owner: bigint;
+  market_id: bigint;
+  outcome: bigint;
+  amount: bigint;
+  bet_id: bigint;
+  commitment: bigint;
+  randomness: bigint;
+  // Optional fields that might be added by the contract
+  marketId?: string;
+}
 
 /**
  * Wallet account interface
@@ -192,6 +209,33 @@ export class PrivateVaultProvider implements IVaultProvider {
 
       return FALLBACK_VALUES.TOKEN_ADDRESS;
     }
+  }
+
+  async getUserBets(): Promise<Bet[]> {
+    const contract = await this.getContract();
+    const account = await ensureWalletConnected();
+    const from = AztecAddress.fromString(account.getAddress().toString());
+
+    const result: { storage: BlockchainBet[], len: bigint } = await contract.methods
+      .getMyBets(from, 0, 10)
+      .simulate({ from });
+
+    const validBetsCount = Number(result.len);
+    const blockchainBets = result.storage.slice(0, validBetsCount);
+
+    // Transform blockchain format to application Bet format
+    const bets: Bet[] = blockchainBets.map(blockchainBet => ({
+      id: blockchainBet.bet_id.toString(),
+      marketId: blockchainBet.market_id.toString(),
+      option: blockchainBet.outcome === BigInt(1) ? 'yes' : 'no',
+      amount: Number(blockchainBet.amount) / 1e18, // Convert from e18 to normal units
+      status: 'confirmed' as const,
+      placedAt: new Date(), // TODO: Get actual timestamp from blockchain
+      // Optional fields that might come from blockchain
+      userAddress: blockchainBet.owner.toString(),
+    }));
+
+    return bets;
   }
 
   /**
