@@ -1,6 +1,7 @@
 import { AztecAddress, Fr, Contract } from "@aztec/aztec.js";
-import { TokenContract } from "@aztec/noir-contracts.js/Token";
+import { TokenContract } from "@/lib/contracts/Token";
 import { ensureWalletConnected } from "@/lib/wallet";
+import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
 import type { IVaultProvider, BetParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
@@ -18,48 +19,6 @@ interface WalletAccount {
 }
 
 /**
- * Helper class to wrap Token contract with proper typing
- */
-class Token {
-  private contract: Contract;
-
-  constructor(contract: Contract) {
-    this.contract = contract;
-  }
-
-  static async at(address: AztecAddress, wallet: AnyAccount): Promise<Token> {
-    const { Contract } = await import("@aztec/aztec.js");
-    const contract = await Contract.at(address, TokenContract.artifact, wallet);
-    return new Token(contract);
-  }
-
-  get methods() {
-    return this.contract.methods;
-  }
-}
-
-/**
- * Helper class to wrap BetVault contract with proper typing
- */
-class BetVault {
-  private contract: Contract;
-
-  constructor(contract: Contract) {
-    this.contract = contract;
-  }
-
-  static async at(address: AztecAddress, wallet: AnyAccount): Promise<BetVault> {
-    const { Contract } = await import("@aztec/aztec.js");
-    const contract = await Contract.at(address, BetVaultContract.artifact, wallet);
-    return new BetVault(contract);
-  }
-
-  get methods() {
-    return this.contract.methods;
-  }
-}
-
-/**
  * Private Vault Provider
  *
  * Handles vault contract interactions using the connected user's wallet.
@@ -72,14 +31,14 @@ class BetVault {
  * Use case: Production environment with real user wallets
  */
 export class PrivateVaultProvider implements IVaultProvider {
-  private contract: BetVault | null = null;
+  private contract: Contract | null = null;
 
   constructor(private contractAddress: string) {}
 
   /**
    * Get or create vault contract instance with connected wallet
    */
-  async getContract(): Promise<BetVault> {
+  async getContract(): Promise<Contract> {
     try {
       // Return cached contract if available
       if (this.contract) {
@@ -91,7 +50,7 @@ export class PrivateVaultProvider implements IVaultProvider {
       const address = AztecAddress.fromString(this.contractAddress);
 
       // Create contract instance with user's wallet
-      this.contract = await BetVault.at(address, account as AnyAccount);
+      this.contract = await Contract.at(address, BetVaultContract.artifact, account as AnyAccount);
 
       return this.contract;
     } catch (error) {
@@ -116,56 +75,54 @@ export class PrivateVaultProvider implements IVaultProvider {
       const vaultContract = await this.getContract();
       const account = await ensureWalletConnected() as WalletAccount;
 
-      const userAddress = account.getAddress();
+      const fromAddress = AztecAddress.fromString(account.getAddress().toString());
+
+      // Convert amount to e18 (wei equivalent for 18 decimals)
+      const amountInE18 = BigInt(params.amount) * BigInt(10 ** 18);
+
+      // Get admin address from vault contract (must match what the contract will use)
+      const adminAddress = await vaultContract.methods.get_admin().simulate({ from: fromAddress });
 
       console.log('[VAULT:PRIVATE] Creating token authorization witness...');
+      console.log('[VAULT:PRIVATE] Amount:', params.amount, '→', amountInE18.toString(), '(e18)');
 
       // Create token contract instance for authorization
-      const tokenContract = await Token.at(
+      const tokenContract = await Contract.at(
         AztecAddress.fromString(params.tokenAddress),
+        TokenContract.artifact,
         account as AnyAccount
       );
 
-      // Create authorization action for token transfer
-      const action = tokenContract.methods.transfer_in_private(
-        AztecAddress.fromString(userAddress.toString()),
-        AztecAddress.fromString(this.contractAddress),
-        BigInt(params.amount),
+      // Create authorization action for token transfer (using e18 amount)
+      const transferAction = tokenContract.methods.transfer_private_to_private(
+        fromAddress,
+        adminAddress,
+        amountInE18,
         Fr.fromString(params.authwitNonce)
       );
 
-      // Create authorization witness
+      // Create authorization witness - vault contract will call the transfer
       const authwit = await (account as AnyAccount).createAuthWit({
         caller: AztecAddress.fromString(this.contractAddress),
-        action: action
+        action: transferAction
       });
 
       console.log('[VAULT:PRIVATE] Submitting bet transaction...');
 
-      const fromAddress = AztecAddress.fromString(userAddress.toString());
+      // OPTION 1: Using wallet connection manager (delegated approach)
+      const interaction = vaultContract.methods.bet(
+        Fr.fromString(params.marketId),
+        params.outcome,
+        amountInE18,
+        Fr.fromString(params.commitment),
+        Fr.fromString(params.betId),
+        Fr.fromString(params.authwitNonce),
+        fromAddress,
+        params.msg
+      );
+      await walletConnectionManager.sendTransaction(interaction, [authwit], fromAddress);
 
-      // Submit bet transaction with authorization
-      const tx = await vaultContract.methods
-        .bet(
-          Fr.fromString(params.marketId),
-          params.outcome,
-          params.amount,
-          Fr.fromString(params.commitment),
-          Fr.fromString(params.betId),
-          Fr.fromString(params.authwitNonce),
-          fromAddress,
-          params.msg
-        )
-        .send({
-          from: fromAddress,
-          authWitnesses: [authwit]
-        })
-        .wait();
-
-      const txHash = tx.txHash.toString();
-      console.log('[VAULT:PRIVATE] Bet placed successfully:', txHash);
-
-      return txHash;
+      return 'Transaction sent successfully';
     } catch (error) {
       console.error('[VAULT:PRIVATE] Failed to place bet:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';

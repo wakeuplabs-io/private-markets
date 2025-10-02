@@ -12,7 +12,7 @@ export function MarketsPage() {
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null)
   const [isBetModalOpen, setIsBetModalOpen] = useState(false)
 
-  const { markets, isLoading } = useUserMarkets()
+  const { markets, activeMarkets, isLoading } = useUserMarkets()
   const { placeBet, isLoading: isPlacingBet, clearError } = useVault()
   const { wallet, connectWallet, isConnected } = useWallet()
 
@@ -81,7 +81,7 @@ export function MarketsPage() {
         </div>
 
         <MarketGrid
-          markets={markets}
+          markets={activeMarkets}
           onOptionClick={handleOptionClick}
           onConnectWallet={handleConnectWallet}
           isWalletConnected={isConnected}

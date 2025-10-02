@@ -1,4 +1,5 @@
 import type { IWalletProvider, IWalletAccount, IExtendedWalletProvider, WalletConnector } from "@/types/wallet";
+import type { AuthWitness, AztecAddress } from "@aztec/aztec.js";
 import { walletRegistry } from "./WalletRegistry";
 
 /**
@@ -170,9 +171,11 @@ export class WalletConnectionManager {
   /**
    * Send a transaction using the connected wallet
    * @param interaction - The transaction interaction object
+   * @param authWitnesses - Optional array of authorization witnesses
+   * @param from - Optional from address for the transaction
    * @returns Promise that resolves when transaction is sent
    */
-  async sendTransaction(interaction: unknown): Promise<void> {
+  async sendTransaction(interaction: unknown, authWitnesses?: AuthWitness[], from?: AztecAddress): Promise<void> {
     if (!this.currentProvider) {
       throw new Error("No wallet connected. Please connect a wallet first.");
     }
@@ -182,7 +185,7 @@ export class WalletConnectionManager {
       throw new Error(`Current wallet provider does not support sending transactions`);
     }
 
-    return extendedProvider.sendTransaction(interaction);
+    return extendedProvider.sendTransaction(interaction, authWitnesses, from);
   }
 
   /**

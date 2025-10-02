@@ -9,26 +9,6 @@ import { FALLBACK_VALUES } from "./types";
 type AnyAccount = any;
 
 /**
- * Helper class to wrap Token contract with proper typing
- */
-class Token {
-  private contract: Contract;
-
-  constructor(contract: Contract) {
-    this.contract = contract;
-  }
-
-  static async at(address: AztecAddress, wallet: AnyAccount): Promise<Token> {
-    const contract = await Contract.at(address, TokenContract.artifact, wallet);
-    return new Token(contract);
-  }
-
-  get methods() {
-    return this.contract.methods;
-  }
-}
-
-/**
  * Private Token Provider
  *
  * Handles token contract interactions using the connected user's wallet.
@@ -41,7 +21,7 @@ class Token {
  * Use case: Production environment with real user wallets
  */
 export class PrivateTokenProvider implements ITokenProvider {
-  private contract: Token | null = null;
+  private contract: Contract | null = null;
   private contractAddress: string | null = null;
 
   /**
@@ -57,7 +37,7 @@ export class PrivateTokenProvider implements ITokenProvider {
   /**
    * Get or create token contract instance with connected wallet
    */
-  async getContract(address: string): Promise<Token> {
+  async getContract(address: string): Promise<Contract> {
     try {
       // Return cached contract if address matches
       if (this.contract && this.contractAddress === address) {
@@ -69,7 +49,7 @@ export class PrivateTokenProvider implements ITokenProvider {
       const aztecAddress = AztecAddress.fromString(address);
 
       // Create contract instance with user's wallet
-      this.contract = await Token.at(aztecAddress, account as AnyAccount);
+      this.contract = await Contract.at(aztecAddress, TokenContract.artifact, account as AnyAccount);
       this.contractAddress = address;
 
       return this.contract;

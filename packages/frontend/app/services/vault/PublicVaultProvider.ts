@@ -1,8 +1,7 @@
 import { AztecAddress, Fr, createPXEClient } from "@aztec/aztec.js";
-import { TokenContract } from "@aztec/noir-contracts.js/Token";
 import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
-import type { IVaultProvider, BetParams } from "./types";
+import type { IVaultProvider } from "./types";
 import { FALLBACK_VALUES } from "./types";
 
 /**

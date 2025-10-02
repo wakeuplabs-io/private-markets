@@ -4,7 +4,6 @@ import React from "react";
 import { MarketCard } from "./MarketCard";
 import { cn } from "@/lib/utils";
 import { Market } from "@/types";
-import { MarketCardSkeleton } from "../ui/Fallbacks";
 
 interface MarketGridProps {
     markets: Market[];
@@ -60,6 +59,13 @@ const MarketGrid: React.FC<MarketGridProps> = ({
         >
             {isLoading ? (
                 <>
+                    <MarketCard isLoading={isLoading} market={null} />
+                    <MarketCard isLoading={isLoading} market={null} />
+                    <MarketCard isLoading={isLoading} market={null} />
+                    <MarketCard isLoading={isLoading} market={null} />
+                    <MarketCard isLoading={isLoading} market={null} />
+                    <MarketCard isLoading={isLoading} market={null} />
+                    <MarketCard isLoading={isLoading} market={null} />
                     <MarketCard isLoading={isLoading} market={null} />
                     <MarketCard isLoading={isLoading} market={null} />
                     <MarketCard isLoading={isLoading} market={null} />

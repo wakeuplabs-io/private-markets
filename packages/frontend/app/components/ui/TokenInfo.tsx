@@ -141,7 +141,8 @@ export function TokenInfoBadge({
     }
 
     const fractionalStr = fractionalPart.toString().padStart(decimals, '0');
-    const trimmedFractional = fractionalStr.replace(/0+$/, '');
+    const limitedFractional = fractionalStr.slice(0, 2);
+    const trimmedFractional = limitedFractional.replace(/0+$/, '');
 
     if (trimmedFractional === '') {
       return integerPart.toString();

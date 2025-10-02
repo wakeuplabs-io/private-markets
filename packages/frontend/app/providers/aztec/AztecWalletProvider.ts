@@ -14,6 +14,7 @@ import {
   getContractInstanceFromInstantiationParams,
   ContractFunctionInteraction,
   SponsoredFeePaymentMethod,
+  AuthWitness,
   type PXE,
   AccountWallet,
   GrumpkinScalar,
@@ -227,15 +228,21 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     return this.connectedAccount !== null;
   }
 
-  async sendTransaction(interaction: unknown): Promise<void> {
+  async sendTransaction(interaction: unknown, authWitnesses?: AuthWitness[], from?: AztecAddress): Promise<void> {
     if (!this.connectedAccount) {
       throw new Error("No account connected. Please connect an account first.");
     }
 
-    const contractInteraction = interaction as ContractFunctionInteraction;
+    let contractInteraction = interaction as ContractFunctionInteraction;
+
+    // Apply auth witnesses if provided
+    if (authWitnesses && authWitnesses.length > 0) {
+      contractInteraction = contractInteraction.with({ authWitnesses });
+    }
+
     const sponsoredPFCContract = await this.#getSponsoredFPCContract();
     const provenInteraction = await contractInteraction.prove({
-      from: this.connectedAccount.getAddress(),
+      from: from ?? this.connectedAccount.getAddress(),
       fee: {
         paymentMethod: new SponsoredFeePaymentMethod(
           sponsoredPFCContract.address
