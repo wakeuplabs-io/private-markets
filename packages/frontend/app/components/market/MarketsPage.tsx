@@ -7,11 +7,12 @@ import { Market, PlaceBetData, MarketOption } from '@/types'
 import { useVault } from '@/hooks/useVault'
 import { useWallet } from '@/context/WalletContext'
 import { useUserMarkets } from '@/hooks/useUserMarkets'
+import { MarketDetailModal } from './MarketDetailModal'
 
 export function MarketsPage() {
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null)
   const [isBetModalOpen, setIsBetModalOpen] = useState(false)
-
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const { markets, isLoading } = useUserMarkets()
   const { placeBet, isLoading: isPlacingBet, clearError } = useVault()
   const { wallet, connectWallet, isConnected } = useWallet()
@@ -68,6 +69,12 @@ export function MarketsPage() {
     }
   }
 
+  const handleSelectMarket = (market: Market) => {
+    console.log('handleSelectMarket', market)
+    setSelectedMarket(market)
+    setIsDetailModalOpen(true)
+  }
+
   return (
     <>
       <div className="container mx-auto px-8 py-8">
@@ -86,6 +93,7 @@ export function MarketsPage() {
           onConnectWallet={handleConnectWallet}
           isWalletConnected={isConnected}
           isLoading={isLoading}
+          onSelectMarket={handleSelectMarket}
           emptyState={
             <div className="text-center space-y-4">
               <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center">
@@ -102,7 +110,13 @@ export function MarketsPage() {
             </div>
           }
         />
-
+        <MarketDetailModal
+          isOpen={isDetailModalOpen}
+          onClose={() => setIsDetailModalOpen(false)}
+          onBack={() => setIsDetailModalOpen(false)}
+          market={selectedMarket}
+          bets={null}
+        />
         <PlaceBetModal
           isOpen={isBetModalOpen}
           onClose={handleCloseModal}

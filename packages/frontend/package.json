@@ -21,6 +21,7 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-qr-code": "^2.0.15",
+    "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "viem": "^2.27.0",
     "wagmi": "^2.17.2"

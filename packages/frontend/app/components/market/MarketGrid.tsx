@@ -17,6 +17,7 @@ interface MarketGridProps {
     className?: string;
     emptyState?: React.ReactNode;
     isLoading?: boolean;
+    onSelectMarket?: (market: Market) => void;
 }
 
 const MarketGrid: React.FC<MarketGridProps> = ({
@@ -27,6 +28,7 @@ const MarketGrid: React.FC<MarketGridProps> = ({
     className,
     emptyState,
     isLoading,
+    onSelectMarket,
 }) => {
     if (!isLoading && markets.length === 0) {
         return (
@@ -75,6 +77,7 @@ const MarketGrid: React.FC<MarketGridProps> = ({
                         onOptionClick={onOptionClick}
                         onConnectWallet={onConnectWallet}
                         isWalletConnected={isWalletConnected}
+                        onSelectMarket={onSelectMarket}
                     />
                 ))
             )}

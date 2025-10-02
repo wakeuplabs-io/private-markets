@@ -1,3 +1,5 @@
 export { useUserMarkets } from './useUserMarkets'
 export { useAdminMarkets } from './useAdminMarkets'
 export { useBetting } from './useBetting'
+export { useUserActivity } from './useUserActivity'
+export { useStatus } from './useStatus'
