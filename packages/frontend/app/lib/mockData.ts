@@ -57,9 +57,15 @@ function generateMockMarket(id: string, questionIndex: number): Market {
   const hoursFromNow = (seedValue % 48) - 24 // -24 to +24 hours
   const closingDate = new Date(Date.now() + hoursFromNow * 60 * 60 * 1000)
 
-  // Status based on closing date
+  // Status based on closing date, with specific states for first 3 markets
   let status: MarketStatus
-  if (closingDate.getTime() > Date.now()) {
+  if (id === 'mock-000') {
+    status = 'open' // First market is always open
+  } else if (id === 'mock-001') {
+    status = 'resolved' // Second market is always resolved
+  } else if (id === 'mock-002') {
+    status = 'finalized' // Third market is always finalized
+  } else if (closingDate.getTime() > Date.now()) {
     status = 'open'
   } else if (seedValue % 3 === 0) {
     status = 'resolved'
@@ -86,7 +92,12 @@ function generateMockMarket(id: string, questionIndex: number): Market {
   // Add resolved fields for resolved markets
   if (status === 'resolved') {
     market.resolvedAt = new Date(closingDate.getTime() + 24 * 60 * 60 * 1000)
-    market.winningOption = options[seedValue % 2] // Random winner
+    // For mock-001, make sure it has a winning option
+    if (id === 'mock-001') {
+      market.winningOption = options[0] // Yes wins for this specific market
+    } else {
+      market.winningOption = options[seedValue % 2] // Random winner for others
+    }
   }
 
   return market

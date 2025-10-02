@@ -74,6 +74,13 @@ const Header: React.FC<HeaderProps> = ({
               Markets
             </Link>
 
+            <Link
+              href="/activity"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              My Activity
+            </Link>
+
             {true && (
               <Link
                 href="/admin"

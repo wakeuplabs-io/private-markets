@@ -24,6 +24,7 @@ interface MarketCardProps {
     isWalletConnected?: boolean;
     isLoading?: boolean;
     className?: string;
+    onSelectMarket?: (market: Market) => void;
 }
 
 const MarketCard: React.FC<MarketCardProps> = ({
@@ -33,6 +34,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
     isWalletConnected = false,
     isLoading = false,
     className,
+    onSelectMarket,
 }) => {
     // Show skeleton while loading
     if (isLoading) {
@@ -53,6 +55,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
                     onConnectWallet={onConnectWallet}
                     isWalletConnected={isWalletConnected}
                     className={className}
+                    onSelectMarket={onSelectMarket}
                 />
             )}
         </SafeRender>
@@ -66,6 +69,7 @@ interface MarketCardContentProps {
     onConnectWallet?: () => void;
     isWalletConnected: boolean;
     className?: string;
+    onSelectMarket?: (market: Market) => void;
 }
 
 const MarketCardContent: React.FC<MarketCardContentProps> = ({
@@ -74,6 +78,7 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
     onConnectWallet,
     isWalletConnected,
     className,
+    onSelectMarket,
 }) => {
     const closingDate = safeGetMarketClosingDate(market);
 
@@ -125,7 +130,7 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
             )}
         >
             <div>
-                <div className="flex items-start gap-5">
+                <div className="flex items-start gap-5 cursor-pointer" onClick={() => onSelectMarket?.(market)}>
                     <div className="w-12 h-12 rounded bg-muted/50 overflow-hidden flex-shrink-0">
                         {safeImageUrl ? (
                             <Image
