@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
 import { walletService, type WalletInfo } from "@/services/walletService"
 import type { AccountStatus } from "@/types/wallet"
-import { tokenService } from "@/services/tokenService"
-import { vaultService } from "@/services/vaultService"
+import { tokenService } from "@/services/token"
+import { vaultService } from "@/services/vault"
 import { CONTRACT_ADDRESSES } from "@/config/contracts"
 import type { WalletConnector } from "@/lib/wallet"
 

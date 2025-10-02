@@ -76,9 +76,6 @@ export function useUserMarkets(): UseUserMarketsReturn {
     return () => clearInterval(interval)
   }, [isConnected, error, loadMarkets])
 
-  console.log('markets', markets)
-  console.log('activeMarkets', activeMarkets)
-  console.log('isLoading', isLoading)
   return {
     markets,
     activeMarkets,

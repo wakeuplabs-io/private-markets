@@ -134,7 +134,6 @@ export class MarketService {
         args: [state],
       })
   
-      console.log('Markets by state result:', result)
       return result as ContractMarket[]  
     } catch (error) {
       console.warn('Failed to get markets by state from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')

@@ -18,7 +18,7 @@ async function main(): Promise<void> {
   } else {
     const existingTokenAddress = aztecSetup.loadContractAddress("token");
     if (!existingTokenAddress) {
-      console.error("❌ No token address found. Please:");
+      console.error("  No token address found. Please:");
       console.error("   1. Run 'npm run deploy:token' first, OR");
       console.error("   2. Provide token address as argument: npm run deploy:vault <TOKEN_ADDRESS>");
       process.exit(1);
