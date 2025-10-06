@@ -121,7 +121,7 @@ function walletReducer(state: WalletState, action: WalletAction): WalletState {
       return {
         ...state,
         status: 'disconnected',
-        accountStatus: 'checking',
+        accountStatus: 'none',
         wallet: null,
         error: null
       }
@@ -129,7 +129,7 @@ function walletReducer(state: WalletState, action: WalletAction): WalletState {
       return {
         ...state,
         status: 'disconnected',
-        accountStatus: 'checking',
+        accountStatus: 'none',
         wallet: null,
         error: null
       }
@@ -195,8 +195,9 @@ export function WalletProvider({ children }: WalletProviderProps) {
       }
     }
 
+    // Only run auto-check on initial mount, not on every re-render
     checkInitialAccountStatusAndReconnect()
-  }, [])
+  }, []) // Empty dependency array ensures this only runs once on mount
 
   const connectWallet = async (connector: WalletConnector) => {
     try {
