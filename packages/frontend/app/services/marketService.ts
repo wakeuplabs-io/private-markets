@@ -1,4 +1,4 @@
-import { readContract, writeContract } from 'wagmi/actions'
+import { readContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions'
 import { config } from '@/config/wagmi'
 import { PREDICTION_MARKET_ABI } from '@/constants/contracts'
 import { Market, MarketStatus, BlockchainConnectionStatus, Bet } from '@/types'
@@ -168,6 +168,12 @@ export class MarketService {
         functionName: 'createMarket',
         args: [question, closingTimestamp],
       })
+
+      const waitForConfirmation = await waitForTransactionReceipt(config, {
+        hash,
+      })
+
+      console.log("WaitFor confirmation:", waitForConfirmation)
 
       return hash
     } catch (error) {
