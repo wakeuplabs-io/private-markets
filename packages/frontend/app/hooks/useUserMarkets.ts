@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
+import useSWR from 'swr'
 import { useAccount } from 'wagmi'
 import { MarketService } from '@/services/marketService'
 import { Market, BlockchainConnectionStatus } from '@/types'
@@ -11,77 +12,66 @@ interface UseUserMarketsReturn {
   isLoading: boolean
   error: string | null
   connectionStatus: BlockchainConnectionStatus
-  refreshMarkets: () => Promise<void>
+}
+
+const fetchUserMarkets = async (): Promise<{ markets: Market[], activeMarkets: Market[], connectionStatus: BlockchainConnectionStatus }> => {
+  try {
+    // Get blockchain connection status
+    const blockchainStatus = await MarketService.getConnectionStatus()
+    
+    // Load markets regardless of blockchain status (fallback to mock if offline)
+    const [allMarkets, openMarkets] = await Promise.all([
+      MarketService.getUserMarkets(),
+      MarketService.getActiveMarkets()
+    ])
+    
+    return {
+      markets: allMarkets,
+      activeMarkets: openMarkets,
+      connectionStatus: blockchainStatus
+    }
+  } catch (error) {
+    console.error('Error loading user markets:', error)
+    //throw error
+    return {
+      markets: [],
+      activeMarkets: [],
+      connectionStatus: 'error'
+    }
+  }
 }
 
 export function useUserMarkets(): UseUserMarketsReturn {
-  const [markets, setMarkets] = useState<Market[]>([])
-  const [activeMarkets, setActiveMarkets] = useState<Market[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<BlockchainConnectionStatus>('connecting')
   const { isConnected } = useAccount()
 
-  const loadMarkets = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      setError(null)
-      setConnectionStatus('connecting')
-
-      // Get blockchain connection status
-      const blockchainStatus = await MarketService.getConnectionStatus()
-      setConnectionStatus(blockchainStatus)
-
-      if (!isConnected) {
-        setError('Please connect your wallet to view markets')
-        return
+  const { data: marketsData, error, isLoading } = useSWR(
+    isConnected ? 'user-markets' : null, // Only fetch when connected
+    fetchUserMarkets,
+    {
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      dedupingInterval: 2000,
+      errorRetryCount: 3,
+      onError: (err) => {
+        console.error('Error loading user markets:', err)
+        setConnectionStatus('error')
+      },
+      onSuccess: (data) => {
+        setConnectionStatus(data.connectionStatus)
       }
-
-      // Load markets regardless of blockchain status (fallback to mock if offline)
-      const [allMarkets, openMarkets] = await Promise.all([
-        MarketService.getUserMarkets(),
-        MarketService.getActiveMarkets()
-      ])
-
-      setMarkets(allMarkets)
-      setActiveMarkets(openMarkets)
-
-      // Clear any previous errors if we successfully loaded data
-      setError(null)
-    } catch (err) {
-      console.error('Error loading user markets:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load markets')
-      setConnectionStatus('error')
-    } finally {
-      setIsLoading(false)
     }
-  }, [isConnected])
+  )
 
-  const refreshMarkets = async () => {
-    await loadMarkets()
-  }
-
-  useEffect(() => {
-    loadMarkets()
-  }, [loadMarkets])
-
-  // Auto-refresh every 10 seconds when connected
-  useEffect(() => {
-    if (!isConnected || error) return
-
-    const interval = setInterval(() => {
-      loadMarkets()
-    }, 10000)
-
-    return () => clearInterval(interval)
-  }, [isConnected, error, loadMarkets])
+  const errorMessage = error ? 
+    (error instanceof Error ? error.message : 'Failed to load markets') :
+    (!isConnected ? 'Please connect your wallet to view markets' : null)
 
   return {
-    markets,
-    activeMarkets,
+    markets: marketsData?.markets || [],
+    activeMarkets: marketsData?.activeMarkets || [],
     isLoading,
-    error,
-    connectionStatus,
-    refreshMarkets
+    error: errorMessage,
+    connectionStatus
   }
 }
