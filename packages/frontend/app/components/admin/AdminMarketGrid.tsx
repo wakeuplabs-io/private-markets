@@ -109,7 +109,14 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
                 message="Create your first prediction market to get started"
                 actionLabel="Create Market"
                 onAction={onCreateMarket}
-                icon="📊"
+                icon={
+                    <Image
+                        src="/activity.svg"
+                        alt="No markets found"
+                        width={36}
+                        height={36}
+                    />
+                }
             />
         );
     }

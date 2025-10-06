@@ -129,7 +129,7 @@ interface EmptyStateProps {
     message?: string;
     actionLabel?: string;
     onAction?: () => void;
-    icon?: string;
+    icon?: string | React.ReactNode;
     className?: string;
     variant?: "default" | "card";
 }
@@ -145,33 +145,45 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
     if (variant === "card") {
         return (
-            <Card className={cn("p-8 text-center", className)}>
-                <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center mb-4">
-                    <span className="text-2xl">{icon}</span>
+            <div className={cn("empty-state-card", className)}>
+                <div className="empty-state-icon">
+                    {typeof icon === "string" ? (
+                        <span className="text-2xl">{icon}</span>
+                    ) : (
+                        icon
+                    )}
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                    {title}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">{message}</p>
-                {actionLabel && onAction && (
-                    <Button onClick={onAction}>{actionLabel}</Button>
-                )}
-            </Card>
+                <div className="empty-state-content">
+                    <h3 className="empty-state-title">{title}</h3>
+                    <p className="empty-state-description">{message}</p>
+                    {actionLabel && onAction && (
+                        <Button onClick={onAction} className="mt-4">
+                            {actionLabel}
+                        </Button>
+                    )}
+                </div>
+            </div>
         );
     }
 
     return (
-        <div className={cn("text-center py-12", className)}>
-            <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center mb-4">
-                <span className="text-2xl">{icon}</span>
+        <div className={cn("empty-state-card", className)}>
+            <div className="empty-state-icon">
+                {typeof icon === "string" ? (
+                    <span className="text-2xl">{icon}</span>
+                ) : (
+                    icon
+                )}
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-                {title}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">{message}</p>
-            {actionLabel && onAction && (
-                <Button onClick={onAction}>{actionLabel}</Button>
-            )}
+            <div className="empty-state-content">
+                <h3 className="empty-state-title">{title}</h3>
+                <p className="empty-state-description">{message}</p>
+                {actionLabel && onAction && (
+                    <Button onClick={onAction} className="mt-4">
+                        {actionLabel}
+                    </Button>
+                )}
+            </div>
         </div>
     );
 };
@@ -238,7 +250,7 @@ export const MarketCardSkeleton: React.FC<{ className?: string }> = ({
 export const AdminMarketCardSkeleton: React.FC<{ className?: string }> = ({
     className,
 }) => (
-    <div className="w-full bg-card/50 backdrop-blur-sm rounded-md p-6 grid grid-cols-12 gap-4">
+    <div className={cn("w-full bg-card/50 backdrop-blur-sm rounded-md p-6 grid grid-cols-12 gap-4", className)}>
         <div className="flex items-center justify-start space-x-4 col-span-8">
             <div className="size-12 rounded-full bg-muted animate-pulse"></div>
             <div className="h-6 w-full max-w-xl rounded-lg bg-muted animate-pulse"></div>

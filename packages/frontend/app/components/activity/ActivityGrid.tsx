@@ -93,11 +93,18 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
     if (!isLoading && sortedBets.length === 0) {
         return (
             <EmptyState
-                title="No activity found"
-                message="You haven't placed any bets yet. Start betting on prediction markets to see your activity here."
+                title="No recent activity"
+                message="You haven't placed any bets yet. Start exploring markets and make your first prediction!"
                 actionLabel="Browse Markets"
                 onAction={() => window.location.href = '/markets'}
-                icon="🎯"
+                icon={
+                    <Image
+                        src="/activity.svg"
+                        alt="No recent activity"
+                        width={36}
+                        height={36}
+                    />
+                }
             />
         );
     }

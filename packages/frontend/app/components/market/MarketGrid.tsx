@@ -4,6 +4,7 @@ import React from "react";
 import { MarketCard } from "./MarketCard";
 import { cn } from "@/lib/utils";
 import { Market } from "@/types";
+import { EmptyState } from "@/components/ui/Fallbacks";
 
 interface MarketGridProps {
     markets: Market[];
@@ -33,20 +34,11 @@ const MarketGrid: React.FC<MarketGridProps> = ({
         return (
             <div className={cn("py-16", className)}>
                 {emptyState || (
-                    <div className="text-center space-y-4">
-                        <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center">
-                            <span className="text-2xl">📊</span>
-                        </div>
-                        <div className="space-y-2">
-                            <h3 className="text-lg font-semibold text-foreground">
-                                No markets available
-                            </h3>
-                            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                                There are currently no prediction markets to
-                                display.
-                            </p>
-                        </div>
-                    </div>
+                    <EmptyState
+                        title="No markets available"
+                        message="There are currently no prediction markets to display."
+                        icon="📊"
+                    />
                 )}
             </div>
         );
