@@ -171,6 +171,7 @@ export class MarketService {
 
       const waitForConfirmation = await waitForTransactionReceipt(config, {
         hash,
+        confirmations: 1,
       })
 
       console.log("WaitFor confirmation:", waitForConfirmation)
