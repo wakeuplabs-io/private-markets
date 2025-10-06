@@ -16,6 +16,7 @@ import {
     safeGetMarketWinningOption,
 } from "@/utils/typeGuards";
 import { cn, formatDate } from "@/lib/utils";
+import { useStatus } from "@/hooks";
 
 interface AdminMarketGridProps {
     markets: Market[] | null | undefined;
@@ -32,19 +33,11 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
     onResolveMarket,
 }) => {
 
-    const ICON_DIMENSIONS = { width: 24, height: 24 } as const;
-    const STATUS_ICON_STRATEGIES = {
-        open: { src: "/clock.svg", alt: "Open" },
-        finalized: { src: "/warning.svg", alt: "Finalized" },
-        resolved: { src: "/success.svg", alt: "Resolved" },
-        default: { src: "/file.svg", alt: "Unknown" }
-    } as const;
-
+    const { getStatusIconInfo } = useStatus();
+    const ICON_DIMENSIONS = { width: 24, height: 24 };
     const getStatusIcon = (status: string | null | undefined) => {
-        const strategy = STATUS_ICON_STRATEGIES[status as keyof typeof STATUS_ICON_STRATEGIES] 
-            || STATUS_ICON_STRATEGIES.default;
-        
-        return <Image src={strategy.src} alt={strategy.alt} {...ICON_DIMENSIONS} />;
+        const strategy = getStatusIconInfo(status);
+        return <Image src={strategy.src} alt={strategy.alt} width={ICON_DIMENSIONS.width} height={ICON_DIMENSIONS.height} />;
     };
 
     
