@@ -124,7 +124,7 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
     return (
         <div
             className={cn(
-                "bg-card/50 rounded p-4 h-[240px] max-h-[240px]",
+                "bg-card/50 w-full rounded p-4 h-[240px] max-h-[240px]",
                 "flex flex-col justify-between gap-4 hover:bg-card/80 transition-colors",
                 className
             )}
