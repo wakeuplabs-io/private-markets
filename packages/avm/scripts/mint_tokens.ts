@@ -10,8 +10,10 @@ async function main(): Promise<void> {
   console.log(`Network: ${network.toUpperCase()}\n`);
 
   const deployer = await aztecSetup.getOrCreateWallet("deployer");
+  const executor = await aztecSetup.getOrCreateWallet("executor");
   const deployerAddress = deployer.getAddress();
-  console.log("✅ Deployer address:", deployerAddress.toString());
+  const executorAddress = executor.getAddress();
+  console.log("✅ Executor address:", executorAddress.toString());
 
   const tokenAddress = aztecSetup.loadContractAddress("token");
   if (!tokenAddress) {
@@ -30,18 +32,18 @@ async function main(): Promise<void> {
   console.log("\n📊 Checking initial balance...");
 
   const initialBalance = await token.methods
-    .balance_of_private(deployerAddress)
-    .simulate({ from: deployerAddress });
+    .balance_of_private(executorAddress)
+    .simulate({ from: executorAddress });
 
   console.log(`   Initial balance: ${initialBalance.toString()} tokens\n`);
 
   const amountToMint = 1000n * 10n ** 18n;
-  console.log(`🪙 Minting ${amountToMint.toString()} tokens to deployer...`);
+  console.log(`🪙 Minting ${amountToMint.toString()} tokens to executor...`);
 
   const txOptions = await aztecSetup.getTxOptions(deployerAddress);
 
   const mintTx = await token.methods
-    .mint_to_private(deployerAddress, deployerAddress, amountToMint)
+    .mint_to_private(deployerAddress, executorAddress, amountToMint)
     .send(txOptions);
 
   console.log("   Mint transaction sent, waiting for confirmation...");
@@ -54,8 +56,8 @@ async function main(): Promise<void> {
   console.log("📊 Checking final balance...");
 
   const finalBalance = await token.methods
-    .balance_of_private(deployerAddress)
-    .simulate({ from: deployerAddress });
+    .balance_of_private(executorAddress)
+    .simulate({ from: executorAddress });
 
   console.log(`   Final balance: ${finalBalance.toString()} tokens`);
 
@@ -65,7 +67,7 @@ async function main(): Promise<void> {
   console.log("=== MINT SUMMARY ===");
   console.log("  Network:        ", network);
   console.log("  Token:          ", tokenAddress);
-  console.log("  Recipient:      ", deployerAddress.toString());
+  console.log("  Recipient:      ", executorAddress.toString());
   console.log("  Amount Minted:  ", amountToMint.toString());
   console.log("  Initial Balance:", initialBalance.toString());
   console.log("  Final Balance:  ", finalBalance.toString());

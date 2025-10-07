@@ -16,6 +16,9 @@ async function main(): Promise<void> {
   const deployer = await aztecSetup.getOrCreateWallet("deployer");
   const deployerAddress = deployer.getAddress();
   console.log("✅ Deployer address:", deployerAddress.toString());
+  const executor = await aztecSetup.getOrCreateWallet("executor");
+  const executorAddress = executor.getAddress();
+  console.log("✅ Executor address:", executorAddress.toString());
 
   const tokenAddress = aztecSetup.loadContractAddress("token");
   if (!tokenAddress) {
@@ -39,12 +42,12 @@ async function main(): Promise<void> {
   await aztecSetup.registerContract(vaultAddr, BetVaultContract.artifact);
   await aztecSetup.registerContract(AztecAddress.fromString(WORMHOLE_ADDRESS), WormholeContract.artifact);
 
-  const token = await TokenContract.at(tokenAddr, deployer);
-  const vault = await BetVaultContract.at(vaultAddr, deployer);
+  const token = await TokenContract.at(tokenAddr, executor);
+  const vault = await BetVaultContract.at(vaultAddr, executor);
 
   const marketId = Fr.random();
   const outcome = 1n; // 1 = YES, 0 = NO
-  const amount = 100n * 10n ** 18n; // 100 tokens
+  const amount = 10n * 10n ** 18n; // 10 tokens
   const commitment = Fr.random();
   const betId = Fr.random();
   const authwitNonce = Fr.random();
@@ -59,7 +62,7 @@ async function main(): Promise<void> {
   console.log("\n🔍 Checking if bet is already processed...");
   const isProcessedBefore = await vault.methods
     .is_processed(betId)
-    .simulate({ from: deployerAddress });
+    .simulate({ from: executorAddress });
 
   console.log("  Processed before:", isProcessedBefore);
 
@@ -70,8 +73,8 @@ async function main(): Promise<void> {
 
   console.log("\n💰 Checking token balance before bet...");
   const balanceBefore = await token.methods
-    .balance_of_private(deployerAddress)
-    .simulate({ from: deployerAddress });
+    .balance_of_private(executorAddress)
+    .simulate({ from: executorAddress });
   console.log("  Balance before: ", balanceBefore.toString());
 
   if (balanceBefore < amount) {
@@ -82,7 +85,7 @@ async function main(): Promise<void> {
 
   console.log("\n🔐 Creating authorization witness for token transfer...");
   const transferAction = token.methods.transfer_private_to_private(
-    deployerAddress,
+    executorAddress,
     deployerAddress,
     amount,
     authwitNonce,
@@ -93,11 +96,11 @@ async function main(): Promise<void> {
     action: transferAction,
   };
 
-  const witness = await deployer.createAuthWit(intent);
+  const witness = await executor.createAuthWit(intent);
   console.log("✅ Authorization witness created");
 
   console.log("\n🎲 Placing bet...");
-  const txOptions = await aztecSetup.getTxOptions(deployerAddress);
+  const txOptions = await aztecSetup.getTxOptions(executorAddress);
 
   const betTx = await vault.methods
     .bet(
@@ -107,7 +110,7 @@ async function main(): Promise<void> {
       commitment,
       betId,
       authwitNonce,
-      deployerAddress,
+      executorAddress,
     )
     .with({ authWitnesses: [witness] })
     .send(txOptions);
@@ -125,7 +128,7 @@ async function main(): Promise<void> {
   console.log("\n🔍 Checking if bet is now processed...");
   const isProcessedAfter = await vault.methods
     .is_processed(betId)
-    .simulate({ from: deployerAddress });
+    .simulate({ from: executorAddress });
 
   console.log("  Processed after: ", isProcessedAfter);
 
@@ -134,12 +137,12 @@ async function main(): Promise<void> {
   }
 
   console.log("\n🔄 Syncing private state...");
-  await token.methods.sync_private_state().simulate({ from: deployerAddress });
+  await token.methods.sync_private_state().simulate({ from: executorAddress });
 
   console.log("\n💰 Checking token balance after bet...");
   const balanceAfter = await token.methods
-    .balance_of_private(deployerAddress)
-    .simulate({ from: deployerAddress });
+    .balance_of_private(executorAddress)
+    .simulate({ from: executorAddress });
   console.log("  Balance after:  ", balanceAfter.toString());
 
   const spent = balanceBefore - balanceAfter;
@@ -149,7 +152,7 @@ async function main(): Promise<void> {
   console.log("  Network:          ", network);
   console.log("  Token:            ", tokenAddress);
   console.log("  Vault:            ", vaultAddress);
-  console.log("  Bettor:           ", deployerAddress.toString());
+  console.log("  Bettor:           ", executorAddress.toString());
   console.log("  Market ID:        ", marketId.toString());
   console.log("  Outcome:          ", outcome === 1n ? "YES" : "NO");
   console.log("  Amount:           ", amount.toString());

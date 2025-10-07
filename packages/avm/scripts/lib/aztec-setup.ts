@@ -418,6 +418,15 @@ export class AztecSetup {
     return this.pxe;
   }
 
+  getNodeClient(): any {
+    return this.nodeClient;
+  }
+
+  loadAllAccounts(): DeployedAccounts | null {
+    if (!fs.existsSync(this.accountsFile)) return null;
+    return JSON.parse(fs.readFileSync(this.accountsFile, "utf8"));
+  }
+
   async registerSender(address: AztecAddress): Promise<void> {
     if (!this.pxe) throw new Error("PXE not initialized");
 

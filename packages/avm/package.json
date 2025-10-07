@@ -22,6 +22,7 @@
     "place:bet:sandbox": "NODE_URL=http://localhost:8080 node --import tsx/esm scripts/place_bet.ts",
     "call:bet": "node --import tsx/esm scripts/call_bet.ts",
     "mint:azguard": "node --import tsx/esm scripts/mint_to_azguard.ts",
+    "check:accounts": "node --import tsx/esm scripts/check_accounts.ts",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch"
   },
