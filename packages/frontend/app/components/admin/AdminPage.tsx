@@ -30,7 +30,7 @@ export function AdminPage() {
 
     if (isLoading) {
         return (
-            <div className="container mx-auto px-8 py-16">
+            <div className="container py-8">
                 <div className="flex items-center justify-center min-h-[400px]">
                     <div className="text-center space-y-4">
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
@@ -85,7 +85,7 @@ export function AdminPage() {
 
     return (
         <>
-            <div className="container mx-auto px-8 py-8">
+            <div className="container py-8">
                 <div className="flex justify-between items-center mb-8">
                     <div className="mb-2">
                         <h1 className="heading-h1">Market Management</h1>

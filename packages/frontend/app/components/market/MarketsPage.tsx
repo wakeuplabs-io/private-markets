@@ -96,7 +96,7 @@ export function MarketsPage() {
 
     return (
         <>
-            <div className="container mx-auto px-8 py-8">
+            <div className="container py-8">
                 <div className="mb-8">
                     <h1 className="heading-h1 mb-2">Prediction Markets</h1>
                     <p className="text-muted-foreground">
