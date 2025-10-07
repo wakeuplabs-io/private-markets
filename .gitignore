@@ -29,3 +29,6 @@ crytic-export
 docs
 
 *.mdb
+
+# Aztec PXE store
+**/pxe-store

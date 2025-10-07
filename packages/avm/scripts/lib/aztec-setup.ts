@@ -8,19 +8,43 @@ import {
   Fr,
   SponsoredFeePaymentMethod,
   type ContractInstanceWithAddress,
+  createAztecNodeClient,
 } from "@aztec/aztec.js";
 import { getInitialTestAccountsWallets } from "@aztec/accounts/testing";
 import { getSchnorrAccount } from "@aztec/accounts/schnorr";
 import { deriveSigningKey } from "@aztec/stdlib/keys";
 import { getContractInstanceFromInstantiationParams } from "@aztec/stdlib/contract";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
+import { SchnorrAccountContractArtifact } from "@aztec/noir-contracts.js/SchnorrAccount";
 import { SPONSORED_FPC_SALT } from "@aztec/constants";
+import { createPXEService } from "@aztec/pxe/server";
+import { getPXEServiceConfig } from "@aztec/pxe/config";
+import { createStore } from "@aztec/kv-store/lmdb";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * AztecSetup - Connection and account management for Aztec
+ * 
+ * Important environment variables:
+ * - NODE_URL: URL of the Aztec node (determines the network: local sandbox or remote testnet)
+ *   - Sandbox: http://localhost:8080 (default)
+ *   - Testnet: https://aztec-testnet-fullnode.zkv.xyz/ (default)
+ * 
+ * - PXE_URL: Only used in sandbox mode to connect to an existing PXE
+ *   - Default: http://localhost:8080
+ *   - In testnet, a local PXE is created connected to NODE_URL
+ * 
+ * The network (sandbox vs testnet) is determined by NODE_URL, NOT by PXE_URL
+ * 
+ * Behavior:
+ * - Sandbox: Uses createPXEClient() to connect to a PXE running locally
+ * - Testnet: Creates a local PXE with createPXEService() connected to the remote node
+ */
 
 export type NetworkType = "sandbox" | "testnet";
 
@@ -48,13 +72,23 @@ export interface ContractAddresses {
 
 export class AztecSetup {
   private pxe: PXE | null = null;
+  private nodeClient: any = null; // AztecNode client for testnet
   private network: NetworkType | null = null;
+  private nodeUrl: string;
   private deploysDir: string;
   private keysFile: string;
   private accountsFile: string;
   private contractsFile: string;
 
   constructor() {
+    const envNodeUrl = process.env.NODE_URL;
+    
+    if (envNodeUrl) {
+      this.nodeUrl = envNodeUrl;
+    } else {
+      this.nodeUrl = "https://aztec-testnet-fullnode.zkv.xyz/";
+    }
+    
     this.deploysDir = path.join(__dirname, "..", "deploys");
     this.keysFile = path.join(this.deploysDir, "keys.json");
     this.accountsFile = path.join(this.deploysDir, "accounts.json");
@@ -68,8 +102,7 @@ export class AztecSetup {
   }
 
   private detectNetwork(): NetworkType {
-    const pxeUrl = process.env.PXE_URL || "http://localhost:8080";
-    return pxeUrl.includes("localhost") || pxeUrl.includes("127.0.0.1")
+    return this.nodeUrl.includes("localhost") || this.nodeUrl.includes("127.0.0.1")
       ? "sandbox"
       : "testnet";
   }
@@ -77,18 +110,44 @@ export class AztecSetup {
   async setupPXE(): Promise<PXE> {
     if (this.pxe) return this.pxe;
 
-    const pxeUrl = process.env.PXE_URL || "http://localhost:8080";
     this.network = this.detectNetwork();
 
-    console.log(`Connecting to ${this.network} PXE at: ${pxeUrl}`);
-
-    this.pxe = createPXEClient(pxeUrl);
-    await waitForPXE(this.pxe);
-
-    console.log(`Connected to ${this.network} PXE`);
+    console.log(`Connecting to ${this.network} network`);
+    console.log(`  NODE_URL: ${this.nodeUrl}`);
 
     if (this.network === "testnet") {
+      console.log("Creating local PXE connected to testnet node...");
+      
+      this.nodeClient = createAztecNodeClient(this.nodeUrl);
+      
+      const storeDir = path.join(this.deploysDir, "pxe-store");
+      const store = await createStore("pxe", {
+        dataDirectory: storeDir,
+        dataStoreMapSizeKB: 1e6,
+      });
+      
+      const config = getPXEServiceConfig();
+      const l1Contracts = await this.nodeClient.getL1ContractAddresses();
+      const fullConfig = {
+        ...config,
+        l1Contracts,
+        proverEnabled: this.network === "testnet"
+      };
+      
+      this.pxe = await createPXEService(this.nodeClient, fullConfig, { store });
+      await waitForPXE(this.pxe);
+      console.log("Local PXE created and connected to testnet node");
+      console.log(`   Store directory: ${storeDir}`);
+      
       await this.registerContractsForTestnet();
+    } else {
+      // Para sandbox, usar el cliente PXE directo
+      const pxeUrl = process.env.PXE_URL || "http://localhost:8080";
+      console.log(`  PXE_URL: ${pxeUrl}`);
+      
+      this.pxe = createPXEClient(pxeUrl);
+      await waitForPXE(this.pxe);
+      console.log(`Connected to sandbox PXE`);
     }
 
     return this.pxe;
@@ -180,7 +239,32 @@ export class AztecSetup {
       saltFr.toBigInt()
     );
 
-    return await schnorrAccount.getWallet();
+    const accountAddress = schnorrAccount.getAddress();
+
+    // Para testnet con PXE local, necesitamos registrar la instancia del contrato de cuenta
+    if (this.network === "testnet" && this.nodeClient) {
+      console.log(`  Fetching account contract instance from node...`);
+      try {
+        const accountInstance = await this.nodeClient.getContract(accountAddress);
+        if (accountInstance) {
+          console.log(`  Registering account contract with PXE...`);
+          await this.pxe.registerContract({
+            instance: accountInstance,
+            artifact: SchnorrAccountContractArtifact
+          });
+          console.log(`Account contract registered`);
+        } else {
+          console.warn(`Account contract instance not found on node`);
+        }
+      } catch (error) {
+        console.warn(`Could not fetch/register account instance:`, error);
+      }
+    }
+
+    const wallet = await schnorrAccount.getWallet();
+    
+    console.log(`Wallet loaded: ${wallet.getAddress().toString()}`);
+    return wallet;
   }
 
   private async deploySchnorrAccount(keys: AccountKeys): Promise<Wallet> {
@@ -208,10 +292,14 @@ export class AztecSetup {
 
       console.log("Schnorr account deployed successfully");
     } catch (error) {
-      console.warn("Account deployment failed (may already exist):", error);
+      console.warn("⚠️ Account deployment failed (may already exist):", error);
     }
 
-    return await schnorrAccount.getWallet();
+    // Obtener wallet SIN re-registrar (mantiene las notas)
+    const wallet = await schnorrAccount.getWallet();
+    
+    console.log(`Account ready: ${wallet.getAddress().toString()}`);
+    return wallet;
   }
 
   async getOrCreateWallet(accountName: string = "deployer"): Promise<Wallet> {
@@ -229,7 +317,7 @@ export class AztecSetup {
         deployed: true,
       });
 
-      console.log(`Sandbox account ${accountName}: ${wallet.getAddress().toString()}`);
+      console.log(`Account ${accountName}: ${wallet.getAddress().toString()}`);
       return wallet;
     }
 
@@ -310,7 +398,7 @@ export class AztecSetup {
   }
 
   /**
-   * Get transaction options with mandatory 'from' parameter for Aztec 2.0.2+
+  * Get transaction options with mandatory "from" parameter for Aztec 2.0.2+
    * Includes sponsored fee payment for testnet if available
    */
   async getTxOptions(fromAddress: AztecAddress): Promise<any> {
@@ -335,80 +423,42 @@ export class AztecSetup {
 
     try {
       await this.pxe.registerSender(address);
-      console.log(`Registered sender: ${address.toString()}`);
+      console.log("Registered sender: " + address.toString());
     } catch (error) {
-      console.warn(`Failed to register sender (may already be registered):`, error);
+      console.warn(" Failed to register sender (may already be registered):", error);
     }
   }
 
   /**
-   * Utility function to extract and save sandbox account keys for testing/development
-   * This is useful when you want to migrate from sandbox to testnet with known accounts
+   * Register a deployed contract instance with the PXE
+   * This is required when using a local PXE connected to testnet
    */
-  async extractAndSaveSandboxKeys(): Promise<void> {
-    if (this.network !== "sandbox") {
-      console.warn("This function only works in sandbox environment");
+  async registerContract(address: AztecAddress, artifact: any): Promise<void> {
+    if (!this.pxe) throw new Error("PXE not initialized");
+    if (!this.nodeClient) {
+      console.log("Skipping contract registration (sandbox mode or no node client)");
       return;
     }
 
-    if (!this.pxe) throw new Error("PXE not initialized");
+    try {
+      console.log(`Fetching contract instance from node for ${address.toString()}...`);
+      const contractInstance = await this.nodeClient.getContract(address);
 
-    console.log("Extracting sandbox account keys...");
-    const wallets = await getInitialTestAccountsWallets(this.pxe);
+      if (!contractInstance) {
+        console.warn(`⚠️  Contract instance not found on node for ${address.toString()}`);
+        return;
+      }
 
-    const accountNames = ["deployer", "user", "alice", "bob"];
-
-    for (let i = 0; i < Math.min(wallets.length, accountNames.length); i++) {
-      const wallet = wallets[i];
-      const accountName = accountNames[i];
-
-      // Note: In a real scenario, you'd need access to the private keys
-      // For sandbox testing, we can create placeholder keys or use known test keys
-      const placeholderKeys: AccountKeys = {
-        privateKey: `0x${"0".repeat(63)}${i + 1}`, // Placeholder
-        salt: `0x${"0".repeat(63)}${i + 1}`, // Placeholder
-      };
-
-      this.saveKeys(accountName, placeholderKeys);
-      this.saveAccountInfo(accountName, {
-        address: wallet.getAddress().toString(),
-        deployed: true,
+      console.log(`Registering contract with PXE...`);
+      await this.pxe.registerContract({
+        instance: contractInstance,
+        artifact: artifact
       });
 
-      console.log(`Saved ${accountName}: ${wallet.getAddress().toString()}`);
+      console.log(`✅ Contract registered: ${address.toString()}`);
+    } catch (error: any) {
+      console.warn(`⚠️  Failed to register contract (may already be registered):`, error.message);
     }
-
-    console.log("Sandbox keys extraction complete");
-  }
-
-  /**
-   * Display current account status
-   */
-  displayAccountStatus(): void {
-    console.log("\n=== ACCOUNT STATUS ===");
-    console.log(`Network: ${this.getNetwork()}`);
-
-    if (fs.existsSync(this.accountsFile)) {
-      const accounts: DeployedAccounts = JSON.parse(fs.readFileSync(this.accountsFile, "utf8"));
-      console.log("Accounts:");
-      Object.entries(accounts).forEach(([name, info]) => {
-        console.log(`  ${name}: ${info.address} (deployed: ${info.deployed})`);
-      });
-    } else {
-      console.log("No accounts file found");
-    }
-
-    if (fs.existsSync(this.contractsFile)) {
-      const contracts: ContractAddresses = JSON.parse(fs.readFileSync(this.contractsFile, "utf8"));
-      console.log("Contracts:");
-      Object.entries(contracts).forEach(([name, address]) => {
-        console.log(`  ${name}: ${address}`);
-      });
-    } else {
-      console.log("No contracts file found");
-    }
-
-    console.log("========================\n");
   }
 }
 

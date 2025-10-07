@@ -145,8 +145,8 @@ user_bets: {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** bet(market_id: field, outcome: integer, amount: integer, commitment: field, bet_id: field, authwit_nonce: field, from: struct, _msg: array) */
-    bet: ((market_id: FieldLike, outcome: (bigint | number), amount: (bigint | number), commitment: FieldLike, bet_id: FieldLike, authwit_nonce: FieldLike, from: AztecAddressLike, _msg: (bigint | number)[][]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** bet(market_id: field, outcome: integer, amount: integer, commitment: field, bet_id: field, authwit_nonce: field, from: struct) */
+    bet: ((market_id: FieldLike, outcome: (bigint | number), amount: (bigint | number), commitment: FieldLike, bet_id: FieldLike, authwit_nonce: FieldLike, from: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** constructor(token_address: struct, wormhole_address: struct, admin: struct) */
     constructor: ((token_address: AztecAddressLike, wormhole_address: AztecAddressLike, admin: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

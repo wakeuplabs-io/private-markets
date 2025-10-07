@@ -14,7 +14,10 @@
     "avm:deploy:token": "npm run deploy:token --workspace=packages/avm",
     "avm:deploy:vault": "npm run deploy:vault --workspace=packages/avm",
     "avm:call:bet": "npm run call:bet --workspace=packages/avm",
-    "evm:deploy:market": "cd packages/evm && forge script script/DeployPredictionMarket.s.sol --fork-url http://localhost:9555 --broadcast"
+    "evm:deploy:market": "cd packages/evm && forge script script/DeployPredictionMarket.s.sol --fork-url http://localhost:9555 --broadcast",
+    "e2e:test": "npm run test --workspace=packages/e2e-cross-chain",
+    "e2e:test:watch": "npm run test:watch --workspace=packages/e2e-cross-chain",
+    "e2e:setup": "npm run setup --workspace=packages/e2e-cross-chain"
   },
   "keywords": [],
   "author": "",
