@@ -6,22 +6,22 @@ import { Button } from '@/components/ui/Button'
 export default function Home() {
   return (
     <>
-      <div className="relative min-h-screen">
-        <div className="container mx-auto px-8 py-24">
+      <div className="relative w-full overflow-x-hidden">
+        <div className="py-24">
           <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-6xl md:text-7xl font-bold text-foreground mb-6 leading-tight">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6 leading-tight">
               PRIVATE{' '}
               <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                 MARKETS
               </span>
             </h1>
 
-            <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-lg sm:text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed px-4">
               Private betting with zero-knowledge proofs on cross-chain markets.
               Trade predictions while preserving your privacy.
             </p>
 
-            <div className="grid md:grid-cols-3 gap-8 mb-12 max-w-4xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-6 sm:gap-8 mb-12 max-w-4xl mx-auto px-4">
               <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-6">
                 <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
                   <span className="text-2xl">🔒</span>
@@ -53,7 +53,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center px-4">
               <Link href="/markets">
                 <Button
                   variant="default"
@@ -74,7 +74,7 @@ export default function Home() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-16 max-w-2xl mx-auto">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8 mt-16 max-w-2xl mx-auto px-4">
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-primary mb-1">100%</div>
                 <div className="text-sm text-muted-foreground">Private</div>

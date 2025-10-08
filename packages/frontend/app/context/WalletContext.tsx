@@ -121,7 +121,7 @@ function walletReducer(state: WalletState, action: WalletAction): WalletState {
       return {
         ...state,
         status: 'disconnected',
-        accountStatus: 'checking',
+        accountStatus: 'none',
         wallet: null,
         error: null
       }
@@ -129,7 +129,7 @@ function walletReducer(state: WalletState, action: WalletAction): WalletState {
       return {
         ...state,
         status: 'disconnected',
-        accountStatus: 'checking',
+        accountStatus: 'none',
         wallet: null,
         error: null
       }
@@ -157,12 +157,37 @@ export function WalletProvider({ children }: WalletProviderProps) {
     }
   }
 
-  // Auto-detect account status on component mount
+  // Auto-detect account status and reconnect on component mount
   useEffect(() => {
-    const checkInitialAccountStatus = async () => {
+    const checkInitialAccountStatusAndReconnect = async () => {
       try {
         // Use 'aztec' as the default connector for auto-detection
-        await checkAccountStatus('aztec')
+        const accountStatus = await walletService.getAccountStatus('aztec')
+        
+        // If an account exists but we're not connected, try to reconnect automatically
+        if (accountStatus === 'exists') {
+          console.log('Found existing account, attempting to reconnect...')
+          // Start connecting state immediately to prevent showing "Connect Wallet" button
+          dispatch({ type: 'CONNECT_START' })
+          
+          try {
+            const walletInfo = await walletService.connectWithPersistence('aztec')
+            console.log('[WalletContext] Auto-reconnect successful:', walletInfo)
+            
+            if (CONTRACT_ADDRESSES.TOKEN) {
+              tokenService.initialize(CONTRACT_ADDRESSES.TOKEN)
+            }
+            
+            dispatch({ type: 'CONNECT_SUCCESS', payload: walletInfo })
+          } catch (reconnectError) {
+            console.warn('Auto-reconnect failed, user will need to connect manually:', reconnectError)
+            // Set account status to 'exists' so user can manually connect
+            dispatch({ type: 'CHECK_ACCOUNT_SUCCESS', payload: 'exists' })
+          }
+        } else {
+          // No account exists, just set the status
+          dispatch({ type: 'CHECK_ACCOUNT_SUCCESS', payload: accountStatus })
+        }
       } catch (error) {
         console.warn('Failed to check initial account status:', error)
         // Set to 'none' if check fails to prevent infinite loading
@@ -170,8 +195,9 @@ export function WalletProvider({ children }: WalletProviderProps) {
       }
     }
 
-    checkInitialAccountStatus()
-  }, [])
+    // Only run auto-check on initial mount, not on every re-render
+    checkInitialAccountStatusAndReconnect()
+  }, []) // Empty dependency array ensures this only runs once on mount
 
   const connectWallet = async (connector: WalletConnector) => {
     try {

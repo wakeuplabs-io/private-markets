@@ -4,6 +4,7 @@ import React from "react";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 // Loading states
 interface LoadingStateProps {
@@ -57,68 +58,38 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
 interface ErrorStateProps {
     title?: string;
     message?: string;
-    onRetry?: () => void;
     className?: string;
-    variant?: "default" | "minimal" | "card";
+    icon?: string | React.ReactNode;
 }
 
 export const ErrorState: React.FC<ErrorStateProps> = ({
     title = "Something went wrong",
     message = "There was an error loading this content.",
-    onRetry,
     className,
-    variant = "default",
+    icon,
 }) => {
-    if (variant === "minimal") {
-        return (
-            <div
-                className={cn(
-                    "flex items-center gap-2 text-destructive",
-                    className
-                )}
-            >
-                <span className="text-lg">⚠️</span>
-                <span className="text-sm">{message}</span>
-                {onRetry && (
-                    <Button variant="ghost" size="sm" onClick={onRetry}>
-                        Retry
-                    </Button>
-                )}
-            </div>
-        );
-    }
-
-    if (variant === "card") {
-        return (
-            <Card className={cn("p-8 text-center", className)}>
-                <div className="w-12 h-12 mx-auto bg-destructive/20 rounded-full flex items-center justify-center mb-4">
-                    <span className="text-2xl">⚠️</span>
-                </div>
-                <h3 className="font-semibold text-foreground mb-2">{title}</h3>
-                <p className="text-sm text-muted-foreground mb-4">{message}</p>
-                {onRetry && (
-                    <Button onClick={onRetry} variant="secondary" size="sm">
-                        Try Again
-                    </Button>
-                )}
-            </Card>
-        );
-    }
-
     return (
-        <div className={cn("text-center py-12", className)}>
-            <div className="w-16 h-16 mx-auto bg-destructive/20 rounded-full flex items-center justify-center mb-4">
-                <span className="text-2xl">⚠️</span>
+        <div className={cn("empty-state-card", className)}>
+            <div className="empty-state-icon bg-destructive/20">
+                {icon ? (
+                    typeof icon === "string" ? (
+                        <span className="text-2xl">{icon}</span>
+                    ) : (
+                        icon
+                    )
+                ) : (
+                    <Image
+                        src="/error.svg"
+                        alt="Error"
+                        width={36}
+                        height={36}
+                    />
+                )}
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-                {title}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">{message}</p>
-            {onRetry && (
-                <Button onClick={onRetry} variant="secondary">
-                    Try Again
-                </Button>
-            )}
+            <div className="empty-state-content">
+                <h3 className="empty-state-title text-destructive">{title}</h3>
+                <p className="empty-state-description">{message}</p>
+            </div>
         </div>
     );
 };
@@ -129,7 +100,7 @@ interface EmptyStateProps {
     message?: string;
     actionLabel?: string;
     onAction?: () => void;
-    icon?: string;
+    icon?: string | React.ReactNode;
     className?: string;
     variant?: "default" | "card";
 }
@@ -145,33 +116,45 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
     if (variant === "card") {
         return (
-            <Card className={cn("p-8 text-center", className)}>
-                <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center mb-4">
-                    <span className="text-2xl">{icon}</span>
+            <div className={cn("empty-state-card", className)}>
+                <div className="empty-state-icon">
+                    {typeof icon === "string" ? (
+                        <span className="text-2xl">{icon}</span>
+                    ) : (
+                        icon
+                    )}
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                    {title}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">{message}</p>
-                {actionLabel && onAction && (
-                    <Button onClick={onAction}>{actionLabel}</Button>
-                )}
-            </Card>
+                <div className="empty-state-content">
+                    <h3 className="empty-state-title">{title}</h3>
+                    <p className="empty-state-description">{message}</p>
+                    {actionLabel && onAction && (
+                        <Button onClick={onAction} className="mt-4">
+                            {actionLabel}
+                        </Button>
+                    )}
+                </div>
+            </div>
         );
     }
 
     return (
-        <div className={cn("text-center py-12", className)}>
-            <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center mb-4">
-                <span className="text-2xl">{icon}</span>
+        <div className={cn("empty-state-card", className)}>
+            <div className="empty-state-icon">
+                {typeof icon === "string" ? (
+                    <span className="text-2xl">{icon}</span>
+                ) : (
+                    icon
+                )}
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-                {title}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">{message}</p>
-            {actionLabel && onAction && (
-                <Button onClick={onAction}>{actionLabel}</Button>
-            )}
+            <div className="empty-state-content">
+                <h3 className="empty-state-title">{title}</h3>
+                <p className="empty-state-description">{message}</p>
+                {actionLabel && onAction && (
+                    <Button onClick={onAction} className="mt-4">
+                        {actionLabel}
+                    </Button>
+                )}
+            </div>
         </div>
     );
 };
@@ -238,7 +221,7 @@ export const MarketCardSkeleton: React.FC<{ className?: string }> = ({
 export const AdminMarketCardSkeleton: React.FC<{ className?: string }> = ({
     className,
 }) => (
-    <div className="w-full bg-card/50 backdrop-blur-sm rounded-md p-6 grid grid-cols-12 gap-4">
+    <div className={cn("w-full bg-card/50 backdrop-blur-sm rounded-md p-6 grid grid-cols-12 gap-4", className)}>
         <div className="flex items-center justify-start space-x-4 col-span-8">
             <div className="size-12 rounded-full bg-muted animate-pulse"></div>
             <div className="h-6 w-full max-w-xl rounded-lg bg-muted animate-pulse"></div>

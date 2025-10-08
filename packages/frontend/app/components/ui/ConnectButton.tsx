@@ -26,6 +26,14 @@ export default function ConnectButton() {
 
   const defaultConnector = 'aztec';
 
+  console.log("Wallet status:", status);
+  console.log("Wallet account status:", accountStatus);
+  console.log("Wallet wallet:", wallet);
+  console.log("Wallet error:", error);
+  console.log("Wallet is connecting:", isConnecting);
+  console.log("Wallet is connected:", isConnected);
+  console.log("Wallet is checking account:", isCheckingAccount);
+  console.log("Wallet is creating account:", isCreatingAccount);
   const copyAddress = async () => {
     if (!wallet?.address) return;
 

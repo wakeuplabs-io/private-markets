@@ -26,6 +26,26 @@ body {
   .heading-h2 {
     @apply text-xl font-bold text-foreground;
   }
+  
+  .empty-state-card {
+    @apply text-center space-y-4 bg-card/50 w-full max-w-2xl mx-auto rounded-sm p-12;
+  }
+  
+  .empty-state-icon {
+    @apply w-20 h-20 mx-auto bg-[#F5F3FF33] rounded-full flex items-center justify-center;
+  }
+  
+  .empty-state-content {
+    @apply space-y-5;
+  }
+  
+  .empty-state-title {
+    @apply text-3xl font-bold text-foreground;
+  }
+  
+  .empty-state-description {
+    @apply text-sm text-foreground max-w-md mx-auto;
+  }
 }
 
 @layer base {

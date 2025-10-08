@@ -28,8 +28,9 @@ const fetchAdminData = async (): Promise<{
 }> => {
     try {
         const blockchainStatus = await MarketService.getConnectionStatus();
+        console.log("Blockchain status:", blockchainStatus);
         const adminMarkets = await MarketService.getAdminMarkets();
-
+        console.log("Admin markets:", adminMarkets);
         return {
             markets: adminMarkets,
             connectionStatus: blockchainStatus,
