@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {PredictionMarketCore} from "../../src/core/PredictionMarketCore.sol";
 import {Treasury} from "../../src/tokens/Treasury.sol";
 import {WormholeReceiver} from "../../src/wormhole/WormholeReceiver.sol";
+import {MockERC20} from "../../src/mocks/MockERC20.sol";
 
 import {IWormhole} from "wormhole-foundation/ethereum/contracts/interfaces/IWormhole.sol";
 
@@ -73,7 +74,7 @@ contract MockWormholeRelayer {
         require(!deliveryAttempted[deliveryHash], "Delivery already attempted");
 
         // 3. Calculate and validate payment (exactly like real relayer)
-        uint256 requiredCost = quoteEVMDeliveryPrice(0, receiverValue, gasLimit);
+        uint256 requiredCost = quoteEvmDeliveryPrice(0, receiverValue, gasLimit);
         require(msg.value >= requiredCost, "Insufficient payment for delivery");
 
         // 4. Mark delivery as attempted BEFORE execution (real relayer behavior)
@@ -122,7 +123,7 @@ contract MockWormholeRelayer {
     /**
      * @dev Quote delivery cost exactly like real WormholeRelayer.quoteEVMDeliveryPrice()
      */
-    function quoteEVMDeliveryPrice(
+    function quoteEvmDeliveryPrice(
         uint16 /* targetChain */,
         uint256 receiverValue,
         uint256 gasLimit
@@ -187,6 +188,7 @@ contract IntegrationBase is Test {
     // Contracts
     MockWormhole internal mockWormhole;
     MockWormholeRelayer internal mockWormholeRelayer;
+    MockERC20 internal mockErc20;
     Treasury internal treasury;
     PredictionMarketCore internal predictionMarket;
     WormholeReceiver internal wormholeReceiver;
@@ -205,8 +207,11 @@ contract IntegrationBase is Test {
         // Deploy realistic mock WormholeRelayer
         mockWormholeRelayer = new MockWormholeRelayer();
 
-        // Deploy Treasury
-        treasury = new Treasury("Prediction Market Token", "PMT", 0);
+        // Deploy MockERC20 (USDC-like token with 6 decimals)
+        mockErc20 = new MockERC20("Mock USDC", "USDC", 6, 1_000_000_000 * 10**6); // 1B initial supply
+
+        // Deploy Treasury with MockERC20
+        treasury = new Treasury(address(mockErc20));
 
         // Deploy PredictionMarketCore
         predictionMarket = new PredictionMarketCore(
@@ -234,11 +239,16 @@ contract IntegrationBase is Test {
         // Transfer ownership of PredictionMarketCore to WormholeReceiver
         predictionMarket.transferOwnership(address(wormholeReceiver));
 
-        // Transfer ownership of Treasury to PredictionMarketCore (so it can mint tokens)
+        // Transfer ownership of Treasury to PredictionMarketCore (so it can transfer payouts)
         treasury.transferOwnership(address(predictionMarket));
 
         // Fund the mock relayer for realistic tests
         vm.deal(address(mockWormholeRelayer), 10 ether);
+
+        // Mint MockERC20 to test users
+        mockErc20.mint(user1, 10_000 * 10**6); // 10k USDC
+        mockErc20.mint(user2, 10_000 * 10**6); // 10k USDC
+        mockErc20.mint(owner, 100_000 * 10**6); // 100k USDC
 
         vm.stopPrank();
 
@@ -328,9 +338,13 @@ contract IntegrationBase is Test {
         proof[0] = leaf; // Simplified single-element proof
     }
 
-    // Helper to fund contract with tokens
-    function fundTreasury(uint256 amount) internal {
+    // Helper to fund Treasury with MockERC20
+    function fundTreasury(uint256 marketId, address from, uint256 amount) internal {
+        vm.startPrank(from);
+        mockErc20.approve(address(treasury), amount);
+        vm.stopPrank();
+
         vm.prank(address(predictionMarket));
-        treasury.mint(address(treasury), amount);
+        treasury.deposit(marketId, from, amount);
     }
 }

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {PredictionMarketCore} from "../src/core/PredictionMarketCore.sol";
 import {Treasury} from "../src/tokens/Treasury.sol";
 import {WormholeReceiver} from "../src/wormhole/WormholeReceiver.sol";
+import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
@@ -39,6 +40,7 @@ import {console} from "forge-std/console.sol";
 contract DeployPredictionMarket is Script {
 
     struct DeploymentAddresses {
+        address mockErc20;
         address treasury;
         address predictionMarketCore;
         address wormholeReceiver;
@@ -62,15 +64,32 @@ contract DeployPredictionMarket is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // 1. Deploy Treasury contract
-        Treasury treasury = new Treasury(
-            "Prediction Market Token",
-            "PMT",
-            0 // Start with 0 supply, mint on demand
-        );
-        console.log("Treasury deployed to:", address(treasury));
+        // 1. Deploy collateral token (MockERC20 for local/test, real USDC for production)
+        address collateralToken;
+        MockERC20 mockErc20;
 
-        // 2. Deploy PredictionMarketCore contract
+        if (block.chainid == 31337) {
+            // Local Anvil - deploy MockERC20
+            mockErc20 = new MockERC20("Mock USDC", "USDC", 6, 1_000_000_000 * 10**6); // 1B initial supply
+            collateralToken = address(mockErc20);
+            console.log("MockERC20 deployed to:", collateralToken);
+        } else if (block.chainid == 421614) {
+            // Arbitrum Sepolia - use real USDC
+            collateralToken = 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d;
+            console.log("Using Arbitrum Sepolia USDC at:", collateralToken);
+        } else {
+            // Other chains - allow custom USDC address
+            collateralToken = vm.envOr("USDC_ADDRESS", address(0x0));
+            require(collateralToken != address(0), "USDC address not set");
+            console.log("Using custom USDC at:", collateralToken);
+        }
+
+        // 2. Deploy Treasury contract (V3: uses external USDC, no internal token)
+        Treasury treasury = new Treasury(collateralToken);
+        console.log("Treasury deployed to:", address(treasury));
+        console.log("Using collateral token at:", collateralToken);
+
+        // 3. Deploy PredictionMarketCore contract
         PredictionMarketCore predictionMarketCore = new PredictionMarketCore(
             payable(wormholeAddress),
             wormholeChainId,
@@ -80,7 +99,7 @@ contract DeployPredictionMarket is Script {
         );
         console.log("PredictionMarketCore deployed to:", address(predictionMarketCore));
 
-        // 3. Deploy WormholeReceiver contract
+        // 4. Deploy WormholeReceiver contract
         address wormholeRelayerAddress = _getWormholeRelayerAddress();
         WormholeReceiver wormholeReceiver = new WormholeReceiver(
             payable(wormholeAddress),
@@ -93,9 +112,9 @@ contract DeployPredictionMarket is Script {
         );
         console.log("WormholeReceiver deployed to:", address(wormholeReceiver));
 
-        // 4. Set up ownership architecture: owner → WormholeReceiver → PredictionMarketCore → Treasury
+        // 5. Set up ownership architecture: owner → WormholeReceiver → PredictionMarketCore → Treasury
 
-        // Transfer Treasury ownership to PredictionMarketCore so it can mint/transfer tokens
+        // Transfer Treasury ownership to PredictionMarketCore so it can transfer USDC payouts
         treasury.transferOwnership(address(predictionMarketCore));
         console.log("Treasury ownership transferred to PredictionMarketCore");
 
@@ -114,6 +133,9 @@ contract DeployPredictionMarket is Script {
         vm.stopBroadcast();
         console.log("");
         console.log("=== Deployment Summary ===");
+        if (address(mockErc20) != address(0)) {
+            console.log("MockERC20 Contract:", address(mockErc20));
+        }
         console.log("Treasury Contract:", address(treasury));
         console.log("[OK] PredictionMarketCore Contract:", address(predictionMarketCore));
         console.log("WormholeReceiver Contract:", address(wormholeReceiver));
@@ -130,18 +152,25 @@ contract DeployPredictionMarket is Script {
             console.log("Aztec emitter registered for chain ID 56");
         }
 
-        // Verify deployment by checking initial market count (should be 0)
-        uint256 initialMarketCount = predictionMarketCore.getMarketCount();
+        // Verify deployment by checking ownership chain
         console.log("=== Deployment Verification ===");
-        console.log("Initial market count:", initialMarketCount);
-        if (initialMarketCount == 0) {
-            console.log("[PASS] Verification PASSED: Market count is 0 as expected");
+        address treasuryOwner = treasury.owner();
+        address coreOwner = predictionMarketCore.owner();
+        bool ownershipCorrect = (treasuryOwner == address(predictionMarketCore)) && (coreOwner == address(wormholeReceiver));
+
+        if (ownershipCorrect) {
+            console.log("[PASS] Verification PASSED: Ownership chain configured correctly");
         } else {
-            console.log("[FAIL] Verification FAILED: Market count should be 0");
+            console.log("[FAIL] Verification FAILED: Ownership chain incorrect");
+            console.log("  Treasury owner:", treasuryOwner);
+            console.log("  Expected:", address(predictionMarketCore));
+            console.log("  Core owner:", coreOwner);
+            console.log("  Expected:", address(wormholeReceiver));
         }
         console.log("Deployment completed successfully!");
 
         return DeploymentAddresses({
+            mockErc20: address(mockErc20),
             treasury: address(treasury),
             predictionMarketCore: address(predictionMarketCore),
             wormholeReceiver: address(wormholeReceiver)

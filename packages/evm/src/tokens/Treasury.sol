@@ -1,120 +1,120 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ITreasury} from "../interfaces/ITreasury.sol";
 
 /**
  * @title Treasury
- * @dev ERC20 Treasury contract for the prediction market system
- * Handles minting tokens when bets are received and transferring payouts to winners
+ * @notice V3 Treasury for USDC custody in prediction markets
+ * @dev Uses external USDC token (no internal minting)
+ * @dev Implements per-market tracking to prevent over-distribution
+ * @dev Follows Checks-Effects-Interactions pattern for security
  */
-contract Treasury is ERC20, Ownable, ITreasury {
+contract Treasury is Ownable, ITreasury, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     // Custom Errors
-    error ZeroAddress();
     error ZeroAmount();
-    error InsufficientTreasuryBalance(uint256 requested, uint256 available);
-    error UnauthorizedTreasuryTransfer(address caller, address owner);
-    /**
-     * @dev Event emitted when tokens are minted for a bet
-     * @param amount The amount of tokens minted
-     */
-    event TokensMinted(uint256 amount);
+    error ZeroAddress();
+    error InsufficientMarketBalance(uint256 marketId, uint256 requested, uint256 available);
+    error InsufficientContractBalance(uint256 requested, uint256 available);
+
+    // Immutable token reference
+    IERC20 public immutable COLLATERAL_TOKEN;
+
+    // Per-market accounting
+    mapping(uint256 => uint256) public marketDeposits;  // Total deposited per market
+    mapping(uint256 => uint256) public marketPaidOut;   // Total paid out per market
 
     /**
-     * @dev Event emitted when a payout is transferred
-     * @param to The recipient address
-     * @param amount The payout amount
+     * @dev Constructor initializes with collateral token (USDC)
+     * @param _collateralToken Address of the USDC token contract
      */
-    event PayoutTransferred(address indexed to, uint256 amount);
+    constructor(address _collateralToken) Ownable(msg.sender) {
+        if (_collateralToken == address(0)) revert ZeroAddress();
+        COLLATERAL_TOKEN = IERC20(_collateralToken);
+    }
 
     /**
-     * @dev Constructor to initialize the Treasury token
-     * @param name_ Token name (e.g., "Prediction Market Token")
-     * @param symbol_ Token symbol (e.g., "PMT")
-     * @param initialSupply Initial token supply (can be 0 for mint-on-demand model)
+     * @notice Deposit collateral for a specific market
+     * @dev Follows CEI pattern: Checks → Effects → Interactions
+     * @dev Only callable by owner (PredictionMarketCore)
+     * @param marketId The market ID to deposit for
+     * @param from The address providing the collateral
+     * @param amount The amount of USDC to deposit
      */
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        uint256 initialSupply
-    ) ERC20(name_, symbol_) Ownable(msg.sender) {
-        if (initialSupply > 0) {
-            _mint(msg.sender, initialSupply);
+    function deposit(uint256 marketId, address from, uint256 amount)
+        external
+        onlyOwner
+        nonReentrant
+    {
+        // 1. CHECKS
+        if (amount == 0) revert ZeroAmount();
+        if (from == address(0)) revert ZeroAddress();
+
+        // 2. EFFECTS
+        marketDeposits[marketId] += amount;
+
+        // 3. INTERACTIONS
+        COLLATERAL_TOKEN.safeTransferFrom(from, address(this), amount);
+
+        emit Deposited(marketId, from, amount);
+    }
+
+    /**
+     * @notice Transfer payout to a claim winner
+     * @dev Follows CEI pattern: Checks → Effects → Interactions
+     * @dev Validates market has sufficient balance before transferring
+     * @dev Only callable by owner (PredictionMarketCore)
+     * @param marketId The market ID to pay from
+     * @param recipient The address receiving the payout
+     * @param amount The amount of USDC to transfer
+     */
+    function transferPayout(uint256 marketId, address recipient, uint256 amount)
+        external
+        onlyOwner
+        nonReentrant
+    {
+        // 1. CHECKS
+        if (amount == 0) revert ZeroAmount();
+        if (recipient == address(0)) revert ZeroAddress();
+
+        // Check market-specific balance
+        uint256 deposited = marketDeposits[marketId];
+        uint256 paidOut = marketPaidOut[marketId];
+        uint256 availableForMarket = deposited - paidOut;
+
+        if (availableForMarket < amount) {
+            revert InsufficientMarketBalance(marketId, amount, availableForMarket);
         }
-    }
 
-    /**
-     * @notice Mint new tokens (only owner/PredictionMarketCore)
-     * @param to Address to receive the tokens
-     * @param amount Amount to mint (in wei units)
-     */
-    function mint(address to, uint256 amount) external onlyOwner {
-        if (to == address(0)) revert ZeroAddress();
-        if (amount == 0) revert ZeroAmount();
-
-        _mint(to, amount);
-        emit TokensMinted(amount);
-    }
-
-    /**
-     * @notice Transfer tokens for payout (only owner/PredictionMarketCore)
-     * @param to Address to receive the tokens
-     * @param amount Amount to transfer (in wei units)
-     * @return bool True if transfer succeeded
-     */
-    function transfer(address to, uint256 amount) public override(ERC20, ITreasury) onlyOwner returns (bool) {
-        if (to == address(0)) revert ZeroAddress();
-        if (amount == 0) revert ZeroAmount();
-        uint256 currentBalance = balanceOf(address(this));
-        if (currentBalance < amount) revert InsufficientTreasuryBalance(amount, currentBalance);
-
-        _transfer(address(this), to, amount);
-        emit PayoutTransferred(to, amount);
-        return true;
-    }
-
-    /**
-     * @notice Get the treasury's token balance
-     * @return uint256 The treasury's current token balance
-     */
-    function treasuryBalance() external view returns (uint256) {
-        return balanceOf(address(this));
-    }
-
-    /**
-     * @notice Get balance of any account (override from both ERC20 and ITreasury)
-     * @param account Address to check balance for
-     * @return uint256 The account's token balance
-     */
-    function balanceOf(address account) public view override(ERC20, ITreasury) returns (uint256) {
-        return super.balanceOf(account);
-    }
-
-    /**
-     * @notice Emergency withdrawal function (only owner)
-     * @dev Should only be used in emergency situations
-     * @param to Address to receive the tokens
-     * @param amount Amount to withdraw
-     */
-    function emergencyWithdraw(address to, uint256 amount) external onlyOwner {
-        if (to == address(0)) revert ZeroAddress();
-        if (amount == 0) revert ZeroAmount();
-        uint256 currentBalance = balanceOf(address(this));
-        if (currentBalance < amount) revert InsufficientTreasuryBalance(amount, currentBalance);
-
-        _transfer(address(this), to, amount);
-    }
-
-    /**
-     * @dev Override transferFrom to prevent unauthorized transfers from treasury
-     */
-    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
-        // Only allow transfers if not from the treasury address, or if called by owner
-        if (from == address(this)) {
-            if (msg.sender != owner()) revert UnauthorizedTreasuryTransfer(msg.sender, owner());
+        // Check contract has actual USDC balance
+        uint256 contractBalance = COLLATERAL_TOKEN.balanceOf(address(this));
+        if (contractBalance < amount) {
+            revert InsufficientContractBalance(amount, contractBalance);
         }
-        return super.transferFrom(from, to, amount);
+
+        // 2. EFFECTS
+        marketPaidOut[marketId] += amount;
+
+        // 3. INTERACTIONS
+        COLLATERAL_TOKEN.safeTransfer(recipient, amount);
+
+        emit PayoutTransferred(marketId, recipient, amount);
+    }
+
+    /**
+     * @notice Get available balance for a specific market
+     * @param marketId The market ID to query
+     * @return The amount of USDC available for payouts in this market
+     */
+    function getAvailableBalance(uint256 marketId) external view returns (uint256) {
+        uint256 deposited = marketDeposits[marketId];
+        uint256 paidOut = marketPaidOut[marketId];
+        return deposited - paidOut;
     }
 }
