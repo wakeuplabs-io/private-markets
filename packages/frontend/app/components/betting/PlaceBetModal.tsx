@@ -113,9 +113,9 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
       onClose={handleClose}
       className={cn('max-w-md', className)}
     >
-      <div className="p-8 space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold text-foreground">
+      <div className="p-8 space-y-8">
+        <div className="text-left space-y-2">
+          <h2 className="text-2xl font-bold text-foreground ">
             Place Your Bet
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -141,7 +141,7 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
               amount={amount}
               handleAmountChange={handleAmountChange}
               error={error}
-              isValid={isValid}
+              isValid={isValid || false}
               isLoading={isLoading}
               handleSubmit={handleSubmit}
               handleClose={handleClose}
@@ -201,8 +201,8 @@ const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
   }
 
   return (
-    <>
-      <div className="p-4 rounded-lg bg-muted space-y-3">
+    <div className="space-y-8">
+      <div className="p-4 rounded-lg bg-muted space-y-3 mb-8">
         <h3 className="font-semibold text-foreground">
           {market.question || 'Untitled Market'}
         </h3>
@@ -254,7 +254,7 @@ const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
           )}
         </Button>
       </div>
-    </>
+    </div>
   )
 }
 

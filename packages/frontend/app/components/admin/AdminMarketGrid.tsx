@@ -16,6 +16,7 @@ import {
     safeGetMarketWinningOption,
 } from "@/utils/typeGuards";
 import { cn, formatDate } from "@/lib/utils";
+import { useStatus } from "@/hooks";
 
 interface AdminMarketGridProps {
     markets: Market[] | null | undefined;
@@ -32,19 +33,11 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
     onResolveMarket,
 }) => {
 
-    const ICON_DIMENSIONS = { width: 24, height: 24 } as const;
-    const STATUS_ICON_STRATEGIES = {
-        open: { src: "/clock.svg", alt: "Open" },
-        finalized: { src: "/warning.svg", alt: "Finalized" },
-        resolved: { src: "/success.svg", alt: "Resolved" },
-        default: { src: "/file.svg", alt: "Unknown" }
-    } as const;
-
+    const { getStatusIconInfo } = useStatus();
+    const ICON_DIMENSIONS = { width: 24, height: 24 };
     const getStatusIcon = (status: string | null | undefined) => {
-        const strategy = STATUS_ICON_STRATEGIES[status as keyof typeof STATUS_ICON_STRATEGIES] 
-            || STATUS_ICON_STRATEGIES.default;
-        
-        return <Image src={strategy.src} alt={strategy.alt} {...ICON_DIMENSIONS} />;
+        const strategy = getStatusIconInfo(status);
+        return <Image src={strategy.src} alt={strategy.alt} width={ICON_DIMENSIONS.width} height={ICON_DIMENSIONS.height} />;
     };
 
     
@@ -109,7 +102,14 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
                 message="Create your first prediction market to get started"
                 actionLabel="Create Market"
                 onAction={onCreateMarket}
-                icon="📊"
+                icon={
+                    <Image
+                        src="/activity.svg"
+                        alt="No markets found"
+                        width={36}
+                        height={36}
+                    />
+                }
             />
         );
     }
@@ -117,10 +117,10 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
     return (
         <div className="space-y-6">
             <div className="overflow-hidden">
-                <div className="overflow-x-auto">
-                    <div className="w-full min-w-[800px]">
+                <div className="overflow-x-auto lg:overflow-visible">
+                    <div className="w-full lg:min-w-[800px]">
                         {/* Header */}
-                        <div className="bg-muted rounded-lg p-4">
+                        <div className="bg-muted rounded-lg p-4 hidden md:block">
                             <div className="grid grid-cols-12 gap-4">
                                 <div className="col-span-8 font-normal text-muted-foreground">
                                     Market
@@ -179,18 +179,18 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
     const textColor =
         market.status === "resolved" ? "text-foreground/50" : "text-foreground";
     return (
-        <div className="rounded-lg bg-[#1D293D]/65 backdrop-blur-sm h-[100px] overflow-hidden flex items-center">
-            <div className="grid grid-cols-12 gap-4 h-full items-center px-6 w-full">
+        <div className="rounded-lg bg-[#1D293D]/65 backdrop-blur-sm overflow-hidden">
+            <div className="grid grid-cols-12 gap-4 items-center px-4 sm:px-6 py-4 md:py-0 md:h-[100px] w-full">
                 {/* Market Column */}
-                <div className="col-span-8">
-                    <div className="flex items-start space-x-3 ">
+                <div className="col-span-12 md:col-span-8">
+                    <div className="flex items-start space-x-3">
                         <span className="text-lg mt-0.5 w-6 h-6">
                             {getStatusIcon(market.status)}
                         </span>
                         <div className="flex-1">
                             <h3
                                 className={cn(
-                                    "font-bold text-2xl mb-2 leading-tight",
+                                    "font-bold text-lg sm:text-xl md:text-2xl mb-2 leading-tight",
                                     textColor
                                 )}
                             >
@@ -198,7 +198,7 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
                             </h3>
                             <div
                                 className={cn(
-                                    "flex space-x-6 text-base font-normal",
+                                    "flex flex-wrap gap-x-4 gap-y-1 text-sm md:text-base font-normal",
                                     textColor
                                 )}
                             >
@@ -231,9 +231,9 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
                 </div>
 
                 {/* Options Column */}
-                <div className="col-span-3">
+                <div className="col-span-12 md:col-span-3">
                     {market.status === "open" && (
-                        <div className="flex space-x-3 items-end">
+                        <div className="flex gap-2 md:space-x-3 items-end md:justify-start">
                             <Button disabled className="rounded-button">
                                 Yes
                             </Button>
@@ -244,18 +244,18 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
                     )}
 
                     {market.status === "finalized" && (
-                        <div className="flex space-x-3 items-end">
+                        <div className="flex flex-col sm:flex-row gap-2 md:space-x-3 items-stretch md:items-end">
                             <Button
                                 onClick={() =>
                                     onResolveMarket(market.id, "yes")
                                 }
-                                className="rounded-button"
+                                className="rounded-button w-full sm:w-auto"
                             >
                                 Yes
                             </Button>
                             <Button
                                 onClick={() => onResolveMarket(market.id, "no")}
-                                className="rounded-button"
+                                className="rounded-button w-full sm:w-auto"
                             >
                                 No
                             </Button>
@@ -263,7 +263,7 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
                     )}
 
                     {market.status === "resolved" && (
-                        <div className="flex space-x-3 items-end">
+                        <div className="flex gap-2 md:space-x-3 items-end">
                             {winningOption?.name?.toLowerCase() === "yes" ? (
                                 <Button
                                     disabled
@@ -286,7 +286,7 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
                 </div>
 
                 {/* State Column */}
-                <div className="col-span-1">
+                <div className="col-span-12 md:col-span-1 mt-3 md:mt-0">
                     <div className="flex flex-col items-start">
                         <div
                             className={cn(

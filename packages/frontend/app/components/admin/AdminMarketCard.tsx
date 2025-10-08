@@ -117,8 +117,8 @@ const AdminMarketCardContent: React.FC<AdminMarketCardContentProps> = ({
 
   return (
     <Card className="h-full bg-card/50 backdrop-blur-sm border border-border">
-      <div className="p-6 space-y-4">
-        <div className="flex items-start justify-between">
+      <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <h3 className="font-semibold text-foreground text-sm leading-tight mb-2">
               {market.question || 'Untitled Market'}
@@ -134,7 +134,7 @@ const AdminMarketCardContent: React.FC<AdminMarketCardContentProps> = ({
               alt={market.question || "Market"}
               width={48}
               height={48}
-              className="w-12 h-12 rounded-lg object-cover ml-3"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover flex-shrink-0"
             />
           )}
         </div>
@@ -152,7 +152,7 @@ const AdminMarketCardContent: React.FC<AdminMarketCardContentProps> = ({
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4 py-3 border-t border-border">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 py-3 border-t border-border">
           <div>
             <p className="text-xs text-muted-foreground">Total Bets</p>
             <p className="text-sm font-semibold text-foreground">{safeFormatNumber(bets.total)}</p>
@@ -212,49 +212,51 @@ const AdminMarketCardContent: React.FC<AdminMarketCardContentProps> = ({
 
         <div className="pt-4 border-t border-border">
           {!showResolveOptions ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2">
               {adminActions.canResolve && (market.status === "open" || market.status === "finalized") && (
                 <Button
                   variant="default"
                   size="sm"
                   onClick={() => setShowResolveOptions(true)}
-                  className="flex-1"
+                  className="w-full"
                 >
                   Resolve Market
                 </Button>
               )}
 
-              {adminActions.canEdit && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={onEdit}
-                  className="flex-1"
-                >
-                  Edit
-                </Button>
-              )}
+              <div className="flex flex-col sm:flex-row gap-2">
+                {adminActions.canEdit && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={onEdit}
+                    className="w-full sm:flex-1"
+                  >
+                    Edit
+                  </Button>
+                )}
 
-              {adminActions.canDelete && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={onDelete}
-                  className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                >
-                  Delete
-                </Button>
-              )}
+                {adminActions.canDelete && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={onDelete}
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/20 w-full sm:flex-1"
+                  >
+                    Delete
+                  </Button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">Select winning option:</p>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <Button
                   variant="default"
                   size="sm"
                   onClick={() => onResolve('yes')}
-                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  className="w-full bg-green-600 hover:bg-green-700"
                 >
                   YES Wins
                 </Button>
@@ -262,7 +264,7 @@ const AdminMarketCardContent: React.FC<AdminMarketCardContentProps> = ({
                   variant="default"
                   size="sm"
                   onClick={() => onResolve('no')}
-                  className="flex-1 bg-red-600 hover:bg-red-700"
+                  className="w-full bg-red-600 hover:bg-red-700"
                 >
                   NO Wins
                 </Button>
