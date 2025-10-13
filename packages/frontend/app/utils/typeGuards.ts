@@ -215,7 +215,7 @@ export const createSafeComponent = <T extends Record<string, unknown>>(
   requiredProps: (keyof T)[],
   component: React.ComponentType<T>
 ) => {
-  return (props: T) => {
+  const SafeComponent = (props: T) => {
     const hasAllRequiredProps = requiredProps.every(prop => {
       const value = props[prop]
       return value !== null && value !== undefined
@@ -228,4 +228,7 @@ export const createSafeComponent = <T extends Record<string, unknown>>(
 
     return React.createElement(component, props)
   }
+
+  SafeComponent.displayName = `Safe(${component.displayName || component.name || 'Component'})`
+  return SafeComponent
 }

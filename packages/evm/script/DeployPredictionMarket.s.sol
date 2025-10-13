@@ -68,21 +68,24 @@ contract DeployPredictionMarket is Script {
         address collateralToken;
         MockERC20 mockErc20;
 
-        if (block.chainid == 31337) {
-            // Local Anvil - deploy MockERC20
-            mockErc20 = new MockERC20("Mock USDC", "USDC", 6, 1_000_000_000 * 10**6); // 1B initial supply
-            collateralToken = address(mockErc20);
-            console.log("MockERC20 deployed to:", collateralToken);
-        } else if (block.chainid == 421614) {
-            // Arbitrum Sepolia - use real USDC
-            collateralToken = 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d;
-            console.log("Using Arbitrum Sepolia USDC at:", collateralToken);
-        } else {
-            // Other chains - allow custom USDC address
-            collateralToken = vm.envOr("USDC_ADDRESS", address(0x0));
-            require(collateralToken != address(0), "USDC address not set");
-            console.log("Using custom USDC at:", collateralToken);
-        }
+        mockErc20 = new MockERC20("Mock USDC", "USDC", 6, 1_000_000_000 * 10**6); // 1B initial supply
+        collateralToken = address(mockErc20);
+        console.log("MockERC20 deployed to:", collateralToken);
+        // if (block.chainid == 31337) {
+        //     // Local Anvil - deploy MockERC20
+        //     mockErc20 = new MockERC20("Mock USDC", "USDC", 6, 1_000_000_000 * 10**6); // 1B initial supply
+        //     collateralToken = address(mockErc20);
+        //     console.log("MockERC20 deployed to:", collateralToken);
+        // } else if (block.chainid == 421614) {
+        //     // Arbitrum Sepolia - use real USDC
+        //     collateralToken = 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d;
+        //     console.log("Using Arbitrum Sepolia USDC at:", collateralToken);
+        // } else {
+        //     // Other chains - allow custom USDC address
+        //     collateralToken = vm.envOr("USDC_ADDRESS", address(0x0));
+        //     require(collateralToken != address(0), "USDC address not set");
+        //     console.log("Using custom USDC at:", collateralToken);
+        // }
 
         // 2. Deploy Treasury contract (V3: uses external USDC, no internal token)
         Treasury treasury = new Treasury(collateralToken);
@@ -197,7 +200,7 @@ contract DeployPredictionMarket is Script {
             wormholeAddress = vm.envOr("WORMHOLE_ADDRESS", address(0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35));
             wormholeChainId = uint16(vm.envOr("WORMHOLE_CHAIN_ID", uint256(10003))); // Official Arbitrum Sepolia Wormhole Chain ID
             finality = uint8(vm.envOr("FINALITY", uint256(2)));
-            aztecEmitter = vm.envOr("AZTEC_EMITTER_ADDRESS", bytes32(0)); // Must be provided for production
+            aztecEmitter = vm.envOr("AZTEC_EMITTER_ADDRESS", bytes32(0x19898ea9cd3f19e20a95d5a9448a7b0e9b4eb3ce2c9daa1d4f4606344997e014)); // Must be provided for production
         } else {
             revert(string.concat("Unsupported chain ID: ", vm.toString(block.chainid), " (only local and testnet supported)"));
         }

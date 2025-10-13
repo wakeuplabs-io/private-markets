@@ -1,8 +1,10 @@
 import { AztecAddress, Fr, Contract } from "@aztec/aztec.js";
+import { CopyCatAccountWallet } from '@aztec/accounts/copy-cat/lazy';
 import { TokenContract } from "@/lib/contracts/Token";
 import { ensureWalletConnected } from "@/lib/wallet";
 import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
+import { pxeService } from "@/services/pxeService";
 import type { IVaultProvider, BetParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
@@ -154,19 +156,27 @@ export class PrivateVaultProvider implements IVaultProvider {
 
   /**
    * Check if a bet has been processed
+   * Uses CopyCatAccountWallet for proper simulation context
    *
    * @param betId - Bet ID to check
    * @returns true if bet has been processed, false otherwise
    */
   async isProcessed(betId: string): Promise<boolean> {
     try {
-      const contract = await this.getContract();
       const account = await ensureWalletConnected();
-      const from = AztecAddress.fromString(account.getAddress().toString());
+      const pxe = pxeService.getPXE();
+
+      // Create CopyCat wallet for simulation
+      const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+      const aztecAddress = AztecAddress.fromString(this.contractAddress);
+      const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
 
       const result = await contract.methods
         .is_processed(Fr.fromString(betId))
-        .simulate({ from });
+        .simulate({
+          from: account.getAddress(),
+          skipFeeEnforcement: true
+        });
 
       return Boolean(result);
     } catch (error) {
@@ -184,18 +194,26 @@ export class PrivateVaultProvider implements IVaultProvider {
 
   /**
    * Get the token address associated with the vault
+   * Uses CopyCatAccountWallet for proper simulation context
    *
    * @returns Token contract address
    */
   async getTokenAddress(): Promise<string> {
     try {
-      const contract = await this.getContract();
       const account = await ensureWalletConnected();
-      const from = AztecAddress.fromString(account.getAddress().toString());
+      const pxe = pxeService.getPXE();
+
+      // Create CopyCat wallet for simulation
+      const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+      const aztecAddress = AztecAddress.fromString(this.contractAddress);
+      const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
 
       const result = await contract.methods
         .get_token_address()
-        .simulate({ from });
+        .simulate({
+          from: account.getAddress(),
+          skipFeeEnforcement: true
+        });
 
       return result.toString();
     } catch (error) {
@@ -211,14 +229,26 @@ export class PrivateVaultProvider implements IVaultProvider {
     }
   }
 
+  /**
+   * Get user bets
+   * Uses CopyCatAccountWallet for proper simulation context
+   */
   async getUserBets(): Promise<Bet[]> {
-    const contract = await this.getContract();
     const account = await ensureWalletConnected();
-    const from = AztecAddress.fromString(account.getAddress().toString());
+    const pxe = pxeService.getPXE();
 
+    // Create CopyCat wallet for simulation
+    const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+    const aztecAddress = AztecAddress.fromString(this.contractAddress);
+    const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
+
+    const from = account.getAddress();
     const result: { storage: BlockchainBet[], len: bigint } = await contract.methods
       .getMyBets(from, 0, 10)
-      .simulate({ from });
+      .simulate({
+        from,
+        skipFeeEnforcement: true
+      });
 
     const validBetsCount = Number(result.len);
     const blockchainBets = result.storage.slice(0, validBetsCount);

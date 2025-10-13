@@ -31,7 +31,6 @@ export { VaultService, vaultService } from './VaultService';
 
 // Provider exports (for testing or advanced usage)
 export { PrivateVaultProvider } from './PrivateVaultProvider';
-export { PublicVaultProvider } from './PublicVaultProvider';
 
 // Type exports
 export type { IVaultService, IVaultProvider, BetParams, SimpleBetParams } from './types';

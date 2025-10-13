@@ -11,6 +11,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@aztec/foundation/testing': false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

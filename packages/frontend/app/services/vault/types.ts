@@ -22,7 +22,6 @@ export interface SimpleBetParams {
 /**
  * Vault provider interface
  * - PrivateVaultProvider: Full access (READ + WRITE)
- * - PublicVaultProvider: Read-only (throws on write ops)
  */
 export interface IVaultProvider {
   getContract(): Promise<unknown>;

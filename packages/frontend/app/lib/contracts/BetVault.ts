@@ -32,7 +32,7 @@ import {
   type U128Like,
   type WrappedFieldLike,
 } from '@aztec/aztec.js';
-import BetVaultContractArtifactJson from './vault-BetVault.json' with { type: 'json' };
+import BetVaultContractArtifactJson from './vault-BetVault.json';
 export const BetVaultContractArtifact = loadContractArtifact(BetVaultContractArtifactJson as NoirCompiledContract);
 
 

@@ -1,5 +1,16 @@
-import { createPXEClient, waitForPXE, type PXE, Wallet } from "@aztec/aztec.js";
+import {
+  createPXEClient,
+  waitForPXE,
+  type PXE,
+  Wallet,
+  createAztecNodeClient,
+  AztecAddress,
+} from "@aztec/aztec.js";
+import { createPXEService } from '@aztec/pxe/client/lazy';
+import { getPXEServiceConfig } from '@aztec/pxe/config';
 import { NETWORK_CONFIG } from "@/config/contracts";
+import { TokenContract } from "@/lib/contracts/Token";
+import { BetVaultContract } from "@/lib/contracts/BetVault";
 
 // Types for better error handling
 export type AztecConnectionStatus = "connected" | "connecting" | "disconnected" | "error";
@@ -19,6 +30,8 @@ export interface AztecConnectionError {
 class AztecService {
   private static instance: AztecService;
   private pxeClient: PXE | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private aztecNode: any = null; // AztecNode client for fetching contract instances
   private connectionPromise: Promise<PXE> | null = null;
   private connectedWallet: Wallet | null = null;
   private lastError: AztecConnectionError | null = null;
@@ -78,33 +91,131 @@ class AztecService {
   }
 
 
+  private isTestnet(nodeUrl: string): boolean {
+    return nodeUrl.includes('aztec-testnet') ||
+           (nodeUrl.includes('testnet') &&
+           !nodeUrl.includes('localhost') &&
+           !nodeUrl.includes('127.0.0.1'));
+  }
+
   private async createConnection(): Promise<PXE> {
-    const timeoutMs = 10000; // 10 seconds timeout
-    
+    const timeoutMs = 100000; // 100 seconds timeout
+
     try {
-      console.log(`[AztecService] Connecting to PXE at ${NETWORK_CONFIG.PXE_URL}...`);
-      
-      const pxe = createPXEClient(NETWORK_CONFIG.PXE_URL);
-      
-      // Create timeout promise
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`Connection timeout after ${timeoutMs/1000} seconds`));
-        }, timeoutMs);
-      });
-      
-      // Race between connection and timeout
-      await Promise.race([
-        waitForPXE(pxe),
-        timeoutPromise
-      ]);
-      
+      const nodeUrl = NETWORK_CONFIG.PXE_URL;
+      const isTestnet = this.isTestnet(nodeUrl);
+
+      console.log(`[AztecService] Connecting to ${isTestnet ? 'testnet' : 'sandbox'} at ${nodeUrl}...`);
+
+      let pxe: PXE;
+
+      if (isTestnet) {
+        // Testnet: Create local PXE in browser
+        console.log('[AztecService] Creating PXE service in browser for testnet');
+
+        this.aztecNode = await createAztecNodeClient(nodeUrl);
+
+        const config = getPXEServiceConfig();
+        config.l1Contracts = await this.aztecNode.getL1ContractAddresses();
+        config.proverEnabled = true;
+
+        pxe = await createPXEService(this.aztecNode, config, {
+          useLogSuffix: true,
+        });
+
+        console.log('[AztecService] PXE service created in browser');
+
+        // Register deployed contracts
+        await this.registerDeployedContracts();
+      } else {
+        // Sandbox: Connect to existing PXE HTTP server
+        console.log('[AztecService] Connecting to sandbox PXE');
+        pxe = createPXEClient(nodeUrl);
+
+        // Create timeout promise
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error(`Connection timeout after ${timeoutMs/1000} seconds`));
+          }, timeoutMs);
+        });
+
+        // Race between connection and timeout
+        await Promise.race([
+          waitForPXE(pxe),
+          timeoutPromise
+        ]);
+      }
+
       console.log(`[AztecService] Successfully connected to PXE`);
       return pxe;
     } catch (error) {
       console.error("[AztecService] Failed to connect to PXE:", error);
       throw error;
     }
+  }
+
+  private async registerDeployedContracts(): Promise<void> {
+    console.log('🔵 [AZTEC_SERVICE] Starting contract registration...');
+
+    // Skip if in sandbox mode (no aztecNode client)
+    if (!this.aztecNode || !this.pxeClient) {
+      console.log('🔵 [AZTEC_SERVICE] Sandbox mode or no PXE, skipping registration');
+      return;
+    }
+
+    // Register Token contract
+    const tokenAddress = process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ADDRESS;
+    console.log('🔵 [AZTEC_SERVICE] Token address from env:', tokenAddress);
+
+    if (tokenAddress) {
+      try {
+        const tokenAztecAddress = AztecAddress.fromString(tokenAddress);
+        console.log('🔵 [AZTEC_SERVICE] Fetching Token instance from node...');
+
+        const contractInstance = await this.aztecNode.getContract(tokenAztecAddress);
+        console.log('🔵 [AZTEC_SERVICE] Token instance result:', contractInstance);
+
+        if (contractInstance) {
+          await this.pxeClient.registerContract({
+            instance: contractInstance,
+            artifact: TokenContract.artifact,
+          });
+          console.log('✅ [AZTEC_SERVICE] Token contract registered');
+        } else {
+          console.warn('⚠️  [AZTEC_SERVICE] Token contract not found on node');
+        }
+      } catch (error) {
+        console.error('🔴 [AZTEC_SERVICE] Token registration error:', error);
+      }
+    }
+
+    // Register BetVault contract
+    const vaultAddress = process.env.NEXT_PUBLIC_VAULT_CONTRACT_ADDRESS;
+    console.log('🔵 [AZTEC_SERVICE] Vault address from env:', vaultAddress);
+
+    if (vaultAddress) {
+      try {
+        const vaultAztecAddress = AztecAddress.fromString(vaultAddress);
+        console.log('🔵 [AZTEC_SERVICE] Fetching Vault instance from node...');
+
+        const contractInstance = await this.aztecNode.getContract(vaultAztecAddress);
+        console.log('🔵 [AZTEC_SERVICE] Vault instance result:', contractInstance);
+
+        if (contractInstance) {
+          await this.pxeClient.registerContract({
+            instance: contractInstance,
+            artifact: BetVaultContract.artifact,
+          });
+          console.log('✅ [AZTEC_SERVICE] BetVault contract registered');
+        } else {
+          console.warn('⚠️  [AZTEC_SERVICE] Vault contract not found on node');
+        }
+      } catch (error) {
+        console.error('🔴 [AZTEC_SERVICE] Vault registration error:', error);
+      }
+    }
+
+    console.log('🔵 [AZTEC_SERVICE] Contract registration complete');
   }
 
   private handleConnectionError(error: unknown): void {

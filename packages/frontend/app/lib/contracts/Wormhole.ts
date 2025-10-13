@@ -32,7 +32,7 @@ import {
   type U128Like,
   type WrappedFieldLike,
 } from '@aztec/aztec.js';
-import WormholeContractArtifactJson from './wormhole_contracts-Wormhole.json' with { type: 'json' };
+import WormholeContractArtifactJson from './wormhole_contracts-Wormhole.json';
 export const WormholeContractArtifact = loadContractArtifact(WormholeContractArtifactJson as NoirCompiledContract);
 
 

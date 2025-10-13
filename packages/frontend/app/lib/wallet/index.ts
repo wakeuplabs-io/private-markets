@@ -20,6 +20,7 @@ export async function ensureWalletConnected() {
   const account = walletConnectionManager.getAccount();
 
   if ('getAccountWallet' in account && typeof account.getAccountWallet === 'function') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (account as any).getAccountWallet();
   }
 

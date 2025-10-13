@@ -26,7 +26,7 @@ export { TokenService, tokenService } from './TokenService';
 
 // Provider exports (for testing or advanced usage)
 export { PrivateTokenProvider } from './PrivateTokenProvider';
-export { PublicTokenProvider } from './PublicTokenProvider';
+// export { PublicTokenProvider } from './PublicTokenProvider';
 
 // Type exports
 export type { ITokenService, ITokenProvider, TokenInfo } from './types';
