@@ -39,9 +39,6 @@ export function MarketsPage() {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleOptionClick = (marketId: string, option: MarketOption) => {
-      console.log("handleOptionClick", marketId, option);
-      console.log("markets", markets);
-      console.log("activeMarkets", activeMarkets);
         const market = activeMarkets.find((m) => m.id === marketId);
         if (market) {
             setSelectedMarket(market);
