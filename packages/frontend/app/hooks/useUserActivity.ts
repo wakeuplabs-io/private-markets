@@ -22,29 +22,41 @@ const fetchUserActivity = async (): Promise<UserActivityData> => {
       vaultService.getUserBets(),
       MarketService.getActiveMarkets()
     ])
-    const userBetsWithMarketInfo: UserBet[] = userBets.map(bet => {
-      const market = markets.find(m => m.id === bet.marketId)
-      const isWinning = market?.status === 'resolved' &&
-                       market?.winningOption?.id === bet.option
+    console.log("userBets", userBets);
+    console.log("markets", markets);
 
-      const isClaimable = market?.status === 'resolved' &&
-                         isWinning &&
-                         bet.status !== 'claimed'
+    const userBetsWithMarketInfo: UserBet[] = userBets
+      .filter(bet => {
+        const hasMarket = markets.some(m => m.id === bet.marketId);
+        if (!hasMarket) {
+          console.warn(`[useUserActivity] Bet ${bet.id} has no matching market (marketId: ${bet.marketId})`);
+        }
+        return hasMarket;
+      })
+      .map(bet => {
+        const market = markets.find(m => m.id === bet.marketId)!;
 
-      // TODO: Calculate potential reward (simplified - in real app this would use odds)
-      const potentialReward = isWinning ? bet.amount * 2 : 0
+        const isWinning = market.status === 'resolved' &&
+                         market.winningOption?.id === bet.option
 
-      return {
-          ...bet,
-          marketQuestion: market?.question || 'Unknown Market',
-          marketStatus: market?.status || 'open',
-          marketWinningOption: market?.winningOption?.id as 'yes' | 'no' | null || null,
-          marketResolvedAt: market?.resolvedAt || null,
-          isWinning,
-          isClaimable,
-          potentialReward
-      }
-    })
+        const isClaimable = market.status === 'resolved' &&
+                           isWinning &&
+                           bet.status !== 'claimed'
+
+        // TODO: Calculate potential reward (simplified - in real app this would use odds)
+        const potentialReward = isWinning ? bet.amount * 2 : 0
+
+        return {
+            ...bet,
+            marketQuestion: market.question,
+            marketStatus: market.status,
+            marketWinningOption: (market.winningOption?.id as 'yes' | 'no') || null,
+            marketResolvedAt: market.resolvedAt || null,
+            isWinning,
+            isClaimable,
+            potentialReward
+        } as UserBet
+      })
 
     return {
       bets: userBetsWithMarketInfo,

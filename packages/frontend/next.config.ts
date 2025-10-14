@@ -13,9 +13,10 @@ const nextConfig: NextConfig = {
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
+      // Mock Aztec testing utilities for browser environment
       config.resolve.alias = {
         ...config.resolve.alias,
-        '@aztec/foundation/testing': false,
+        '@aztec/foundation/testing': require.resolve('./lib/aztec-test-mock.js'),
       };
     }
     return config;

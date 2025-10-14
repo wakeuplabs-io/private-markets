@@ -4,13 +4,10 @@ import {
   type PXE,
   Wallet,
   createAztecNodeClient,
-  AztecAddress,
 } from "@aztec/aztec.js";
 import { createPXEService } from '@aztec/pxe/client/lazy';
 import { getPXEServiceConfig } from '@aztec/pxe/config';
 import { NETWORK_CONFIG } from "@/config/contracts";
-import { TokenContract } from "@/lib/contracts/Token";
-import { BetVaultContract } from "@/lib/contracts/BetVault";
 
 // Types for better error handling
 export type AztecConnectionStatus = "connected" | "connecting" | "disconnected" | "error";
@@ -124,9 +121,6 @@ class AztecService {
         });
 
         console.log('[AztecService] PXE service created in browser');
-
-        // Register deployed contracts
-        await this.registerDeployedContracts();
       } else {
         // Sandbox: Connect to existing PXE HTTP server
         console.log('[AztecService] Connecting to sandbox PXE');
@@ -152,70 +146,6 @@ class AztecService {
       console.error("[AztecService] Failed to connect to PXE:", error);
       throw error;
     }
-  }
-
-  private async registerDeployedContracts(): Promise<void> {
-    console.log('🔵 [AZTEC_SERVICE] Starting contract registration...');
-
-    // Skip if in sandbox mode (no aztecNode client)
-    if (!this.aztecNode || !this.pxeClient) {
-      console.log('🔵 [AZTEC_SERVICE] Sandbox mode or no PXE, skipping registration');
-      return;
-    }
-
-    // Register Token contract
-    const tokenAddress = process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ADDRESS;
-    console.log('🔵 [AZTEC_SERVICE] Token address from env:', tokenAddress);
-
-    if (tokenAddress) {
-      try {
-        const tokenAztecAddress = AztecAddress.fromString(tokenAddress);
-        console.log('🔵 [AZTEC_SERVICE] Fetching Token instance from node...');
-
-        const contractInstance = await this.aztecNode.getContract(tokenAztecAddress);
-        console.log('🔵 [AZTEC_SERVICE] Token instance result:', contractInstance);
-
-        if (contractInstance) {
-          await this.pxeClient.registerContract({
-            instance: contractInstance,
-            artifact: TokenContract.artifact,
-          });
-          console.log('✅ [AZTEC_SERVICE] Token contract registered');
-        } else {
-          console.warn('⚠️  [AZTEC_SERVICE] Token contract not found on node');
-        }
-      } catch (error) {
-        console.error('🔴 [AZTEC_SERVICE] Token registration error:', error);
-      }
-    }
-
-    // Register BetVault contract
-    const vaultAddress = process.env.NEXT_PUBLIC_VAULT_CONTRACT_ADDRESS;
-    console.log('🔵 [AZTEC_SERVICE] Vault address from env:', vaultAddress);
-
-    if (vaultAddress) {
-      try {
-        const vaultAztecAddress = AztecAddress.fromString(vaultAddress);
-        console.log('🔵 [AZTEC_SERVICE] Fetching Vault instance from node...');
-
-        const contractInstance = await this.aztecNode.getContract(vaultAztecAddress);
-        console.log('🔵 [AZTEC_SERVICE] Vault instance result:', contractInstance);
-
-        if (contractInstance) {
-          await this.pxeClient.registerContract({
-            instance: contractInstance,
-            artifact: BetVaultContract.artifact,
-          });
-          console.log('✅ [AZTEC_SERVICE] BetVault contract registered');
-        } else {
-          console.warn('⚠️  [AZTEC_SERVICE] Vault contract not found on node');
-        }
-      } catch (error) {
-        console.error('🔴 [AZTEC_SERVICE] Vault registration error:', error);
-      }
-    }
-
-    console.log('🔵 [AZTEC_SERVICE] Contract registration complete');
   }
 
   private handleConnectionError(error: unknown): void {

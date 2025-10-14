@@ -3,8 +3,35 @@ import { config } from '@/config/wagmi'
 import { PREDICTION_MARKET_ABI } from '@/constants/contracts'
 import { Market, MarketStatus, BlockchainConnectionStatus, Bet } from '@/types'
 import { BlockchainStatusService } from './blockchainStatusService'
+import { parseUnits } from 'viem'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
+const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` // Arbitrum Sepolia USDC
+const TREASURY_ADDRESS = process.env.NEXT_PUBLIC_TREASURY_ADDRESS as `0x${string}`
+
+// Minimal ERC20 ABI for approve function
+const ERC20_ABI = [
+  {
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    name: 'allowance',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function'
+  }
+] as const
 
 export interface ContractMarket {
   id: bigint
@@ -95,7 +122,60 @@ export class MarketService {
     }
   }
 
-  static async createMarket(question: string, totalPool: number, closingTime: Date): Promise<string> {
+  /**
+   * Check USDC allowance for Treasury
+   */
+  static async checkUSDCAllowance(ownerAddress: string): Promise<bigint> {
+    if (!TREASURY_ADDRESS) {
+      throw new Error('Treasury address not configured')
+    }
+
+    try {
+      const allowance = await readContract(config, {
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [ownerAddress as `0x${string}`, TREASURY_ADDRESS],
+      })
+      return allowance as bigint
+    } catch (error) {
+      console.error('Failed to check USDC allowance:', error)
+      return 0n
+    }
+  }
+
+  /**
+   * Approve USDC for Treasury (required before creating markets)
+   */
+  static async approveUSDC(amount: bigint): Promise<string> {
+    if (!TREASURY_ADDRESS) {
+      throw new Error('Treasury address not configured')
+    }
+
+    try {
+      console.log(`Approving ${amount} USDC for Treasury...`)
+      const hash = await writeContract(config, {
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [TREASURY_ADDRESS, amount],
+        gas: 100000n, // Standard gas for ERC20 approve
+      })
+
+      await waitForTransactionReceipt(config, {
+        hash,
+        confirmations: 1,
+      })
+
+      console.log('USDC approved:', hash)
+      return hash
+    } catch (error) {
+      console.error('Failed to approve USDC:', error)
+      throw error
+    }
+  }
+
+  static async createMarket(question: string, totalPool: number, closingTime: Date, userAddress: string): Promise<string> {
     // Check if blockchain is available
     const isOnline = await BlockchainStatusService.isEVMOnline()
     console.log('EVM online:', isOnline)
@@ -108,15 +188,40 @@ export class MarketService {
       throw new Error('Contract address not configured')
     }
 
+    if (!userAddress) {
+      throw new Error('User address is required')
+    }
+
     try {
       const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
       const poolAmount = BigInt(totalPool)
+      // USDC has 6 decimals
+      const usdcAmount = parseUnits(totalPool.toString(), 6)
+
       console.log('Creating market with question:', question, 'poolAmount:', poolAmount, 'closingTimestamp:', closingTimestamp)
+      console.log('USDC amount (with 6 decimals):', usdcAmount)
+
+      // Step 1: Check current allowance
+      const currentAllowance = await this.checkUSDCAllowance(userAddress)
+      console.log('Current USDC allowance:', currentAllowance)
+
+      // Step 2: Approve USDC if needed
+      if (currentAllowance < usdcAmount) {
+        console.log('⚠️  Insufficient allowance. Requesting approval for', usdcAmount.toString(), 'USDC')
+        // Approve the exact poolAmount needed
+        await this.approveUSDC(usdcAmount)
+        console.log('✅ USDC approved')
+      } else {
+        console.log('✅ Sufficient allowance already exists')
+      }
+
+      // Step 3: Create market (poolAmount is the market size, NOT the USDC amount)
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: 'createMarket',
         args: [question, poolAmount, closingTimestamp],
+        gas: 500000n, // Reasonable gas limit for market creation
       })
 
       const waitForConfirmation = await waitForTransactionReceipt(config, {
@@ -127,8 +232,8 @@ export class MarketService {
       console.log("Market created:", waitForConfirmation)
       return hash
     } catch (error) {
-      console.warn('Failed to create market on blockchain, using mock creation:', error instanceof Error ? error.message : 'Unknown error')
-      return `mock-tx-${Date.now()}`
+      console.warn('Failed to create market on blockchain:', error instanceof Error ? error.message : 'Unknown error')
+      throw error
     }
   }
 
@@ -272,6 +377,7 @@ export class MarketService {
         abi: PREDICTION_MARKET_ABI,
         functionName: 'resolveMarket',
         args: [BigInt(marketId), winningOutcome],
+        gas: 200000n, // Reasonable gas limit for market resolution
       })
 
       await waitForTransactionReceipt(config, {
@@ -289,9 +395,8 @@ export class MarketService {
   // === Helper Methods ===
 
   static contractMarketToMarket(contractMarket: ContractMarket): Market {
-    const totalBets = contractMarket.yesTotal + contractMarket.noTotal
-    const yesTotal = contractMarket.yesTotal
-    const noTotal = contractMarket.noTotal
+    const{ yesTotal, noTotal, resolved, winningOutcome, createdAt, expiresAt } = contractMarket
+    const totalBets = yesTotal + noTotal
 
     const chancePercentage = totalBets > 0
       ? Number((yesTotal * BigInt(100)) / totalBets)
@@ -301,7 +406,7 @@ export class MarketService {
     const noOdds = noTotal > 0 ? Number(totalBets) / Number(noTotal) : 2.0
 
     let status: MarketStatus
-    if (contractMarket.resolved) {
+    if (resolved) {
       status = 'resolved'
     } else {
       const now = Date.now() / 1000
@@ -309,6 +414,13 @@ export class MarketService {
       status = expiresAt <= now ? 'finalized' : 'open'
     }
 
+    const winningOption = resolved ? {
+      id: winningOutcome ? 'yes' : 'no',
+      name: winningOutcome ? 'Yes' : 'No',
+      odds: winningOutcome ? yesOdds : noOdds
+    } : undefined
+    console.log({winningOption})
+    console.log({contractMarket})
     return {
       id: contractMarket.id.toString(),
       question: contractMarket.question,
@@ -326,9 +438,10 @@ export class MarketService {
         }
       ],
       chancePercentage,
-      createdAt: new Date(Number(contractMarket.createdAt) * 1000),
-      closingDate: new Date(Number(contractMarket.expiresAt) * 1000),
-      admin: contractMarket.owner
+      createdAt: new Date(Number(createdAt) * 1000),
+      closingDate: new Date(Number(expiresAt) * 1000),
+      admin: contractMarket.owner,
+      winningOption: resolved ? winningOption : undefined
     }
   }
 

@@ -6,32 +6,34 @@ import { useAccount } from 'wagmi'
 import { MarketService } from '@/services/marketService'
 import { Market, BlockchainConnectionStatus } from '@/types'
 
+/**
+ * Hook to fetch active markets for the markets grid/voting page
+ *
+ * Note: Despite the name, this hook fetches ALL active markets (not user-specific).
+ * It's used to populate the markets grid where users can place bets.
+ *
+ * Returns only `activeMarkets` - markets that are currently open for betting.
+ * Does NOT return user's created markets or user's bets.
+ */
 interface UseUserMarketsReturn {
-  markets: Market[]
   activeMarkets: Market[]
   isLoading: boolean
   error: string | null
   connectionStatus: BlockchainConnectionStatus
 }
 
-const fetchUserMarkets = async (userAddress: string | undefined): Promise<{ markets: Market[], activeMarkets: Market[], connectionStatus: BlockchainConnectionStatus }> => {
+const fetchUserMarkets = async (): Promise<{ activeMarkets: Market[], connectionStatus: BlockchainConnectionStatus }> => {
   try {
     const blockchainStatus = await MarketService.getConnectionStatus()
-    
-    const [allMarkets, openMarkets] = await Promise.all([
-      userAddress ? MarketService.getUserMarkets(userAddress) : Promise.resolve([]),
-      MarketService.getActiveMarkets()
-    ])
-    
+    const openMarkets = await MarketService.getActiveMarkets()
+
     return {
-      markets: allMarkets,
       activeMarkets: openMarkets,
       connectionStatus: blockchainStatus
     }
   } catch (error) {
     console.error('Error loading user markets:', error)
     return {
-      markets: [],
       activeMarkets: [],
       connectionStatus: 'error'
     }
@@ -44,7 +46,7 @@ export function useUserMarkets(): UseUserMarketsReturn {
 
   const { data: marketsData, error, isLoading } = useSWR(
     isConnected && address ? ['user-markets', address] : null,
-    () => fetchUserMarkets(address),
+    () => fetchUserMarkets(),
     {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
@@ -65,7 +67,6 @@ export function useUserMarkets(): UseUserMarketsReturn {
     (!isConnected ? 'Please connect your wallet to view markets' : null)
 
   return {
-    markets: marketsData?.markets || [],
     activeMarkets: marketsData?.activeMarkets || [],
     isLoading,
     error: errorMessage,

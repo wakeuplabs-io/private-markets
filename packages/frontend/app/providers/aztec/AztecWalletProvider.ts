@@ -32,6 +32,7 @@ import {
 import { deriveSigningKey } from "@aztec/stdlib/keys";
 import { TokenContract } from "@/lib/contracts/Token";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
+import { WormholeContract } from "@/lib/contracts/Wormhole";
 import { createStore } from "@aztec/kv-store/indexeddb";
 import { pxeService } from "@/services/pxeService";
 
@@ -201,6 +202,41 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       console.log('🔵 [REGISTER] No vault address in env, skipping');
     }
 
+    // Register Wormhole contract if address is available
+    const wormholeAddress = process.env.NEXT_PUBLIC_WORMHOLE_CONTRACT_ADDRESS;
+    console.log('🔵 [REGISTER] Wormhole address from env:', wormholeAddress);
+
+    if (wormholeAddress) {
+      try {
+        logger.info('Registering Wormhole contract:', wormholeAddress);
+        const wormholeAztecAddress = AztecAddress.fromString(wormholeAddress);
+        console.log('🔵 [REGISTER] Wormhole AztecAddress parsed:', wormholeAztecAddress.toString());
+
+        // Use aztecNode.getContract() for testnet
+        console.log('🔵 [REGISTER] Fetching Wormhole instance from Aztec node...');
+        const contractInstance = await this.aztecNode.getContract(wormholeAztecAddress);
+        console.log('🔵 [REGISTER] Wormhole instance result:', contractInstance);
+
+        if (contractInstance) {
+          console.log('🔵 [REGISTER] Registering Wormhole with PXE...');
+          await this.pxe.registerContract({
+            instance: contractInstance,
+            artifact: WormholeContract.artifact,
+          });
+          logger.info('✅ Wormhole contract registered successfully');
+          console.log('🔵 [REGISTER] ✅ Wormhole registration complete');
+        } else {
+          logger.warn('⚠️  Wormhole contract instance not found on node');
+          console.log('🔵 [REGISTER] ⚠️  Wormhole contractInstance is null/undefined');
+        }
+      } catch (error) {
+        console.error('🔴 [REGISTER] Wormhole registration error:', error);
+        logger.warn('Failed to register Wormhole contract (may already be registered or not deployed):', error);
+      }
+    } else {
+      console.log('🔵 [REGISTER] No wormhole address in env, skipping');
+    }
+
     console.log('🔵 [REGISTER] Contract registration complete');
   }
 
@@ -266,7 +302,7 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
 
       // Get current block number and set expiration well into the future
       const nodeInfo = await this.pxe.getNodeInfo();
-      const currentBlockNumber = nodeInfo.blockNumber;
+      const currentBlockNumber = nodeInfo.getBlockNumber;
       const expirationBlockNumber = currentBlockNumber + 100; // 100 blocks in the future
 
       const deployOpts = {
@@ -307,35 +343,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       return new AztecAccount(wallet);
     } catch (error) {
       throw new Error(`Failed to create account: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  async connectTestAccount(index: number): Promise<IWalletAccount> {
-    await this.initialize();
-
-    try {
-      // const testAccounts = await getInitialTestAccounts();
-      const testAccounts = []
-      // if (index < 0 || index >= testAccounts.length) {
-      //   throw new Error(`Test account index ${index} is out of range. Available: 0-${testAccounts.length - 1}`);
-      // }
-
-      const account = testAccounts[index];
-      const schnorrAccount = await getSchnorrAccount(
-        this.pxe,
-        account.secret,
-        account.signingKey,
-        account.salt
-      );
-
-      await schnorrAccount.register();
-      const wallet = await schnorrAccount.getWallet();
-
-
-      this.connectedAccount = wallet;
-      return new AztecAccount(wallet);
-    } catch (error) {
-      throw new Error(`Failed to connect test account: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

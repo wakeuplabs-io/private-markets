@@ -73,11 +73,16 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
     const createMarket = useCallback(
         async (formData: CreateMarketFormData) => {
             try {
-                const defaultTotalPool = 100 * 10**6; // 1000 USDC default
+                if (!address) {
+                    throw new Error('Please connect your wallet first');
+                }
+
+                const defaultTotalPool = 100 * 10**6; // 100 USDC default (6 decimals)
                 const hash = await MarketService.createMarket(
                     formData.question,
                     defaultTotalPool,
-                    formData.closingTime
+                    formData.closingTime,
+                    address
                 );
                 console.log("Market creation transaction:", hash);
 
@@ -90,7 +95,7 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
                 throw new Error(errorMessage);
             }
         },
-        [mutate]
+        [address, mutate]
     );
 
     const resolveMarket = useCallback(

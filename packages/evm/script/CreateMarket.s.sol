@@ -19,7 +19,7 @@ contract CreateMarket is Script {
     address constant TREASURY = 0x8BB9C7431a4d3618449B725CB75D51aE37704678;
     address constant USDC = 0xBc67AB4F6DBc711D643e612Aa27d733D0402FFc1;
     
-    string constant QUESTION = "Will there be alfajorcitos in DevConnect 2025?";
+    string constant QUESTION = "Will there be swag at NoirCon 3?";
     uint256 constant TOTAL_POOL = 100;
     uint256 constant DAYS_UNTIL_EXPIRY = 30;
 
