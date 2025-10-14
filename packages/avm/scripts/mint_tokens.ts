@@ -13,6 +13,7 @@ async function main(): Promise<void> {
   const executor = await aztecSetup.getOrCreateWallet("executor");
   const deployerAddress = deployer.getAddress();
   const executorAddress = executor.getAddress();
+
   console.log("✅ Executor address:", executorAddress.toString());
 
   const tokenAddress = aztecSetup.loadContractAddress("token");

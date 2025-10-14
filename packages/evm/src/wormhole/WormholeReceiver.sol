@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: Apache 2
 pragma solidity ^0.8.20;
 
-import {IWormholeRelayer} from "wormhole-foundation/relayer/ethereum/contracts/interfaces/relayer/IWormholeRelayer.sol";
-import {IWormholeReceiver} from "wormhole-foundation/relayer/ethereum/contracts/interfaces/relayer/IWormholeReceiver.sol";
+import {IWormhole} from "wormhole-foundation/ethereum/contracts/interfaces/IWormhole.sol";
 import {PredictionMarketGetters} from "../core/PredictionMarketGetters.sol";
 import {IPredictionMarket} from "../interfaces/IPredictionMarket.sol";
 
 /**
  * @title WormholeReceiver
- * @dev Receives and processes VAAs from Aztec for prediction market bets
- * This contract runs on Arbitrum Sepolia and receives cross-chain messages from Aztec
+ * @dev Receives and manually processes VAAs from Aztec for prediction market bets
+ * This contract runs on Arbitrum Sepolia and verifies cross-chain messages from Aztec
+ *
+ * IMPORTANT: Uses manual VAA verification pattern (not automatic Wormhole Relayer)
+ * because Aztec is not an EVM chain and automatic relayer only supports EVM chains.
  */
-contract WormholeReceiver is PredictionMarketGetters, IWormholeReceiver {
+contract WormholeReceiver is PredictionMarketGetters {
 
     // Custom Errors
     error ZeroPredictionMarketAddress();
@@ -77,22 +79,19 @@ contract WormholeReceiver is PredictionMarketGetters, IWormholeReceiver {
     // Reference to the prediction market core contract
     IPredictionMarket public immutable PREDICTION_MARKET;
 
-    // Reference to the Wormhole Relayer contract
-    IWormholeRelayer public immutable WORMHOLE_RELAYER;
-
     // Address that can register senders (owner)
     address public registrationOwner;
 
     // Mapping to store registered senders for each chain
     mapping(uint16 => bytes32) public registeredSenders;
 
-    // Track processed messages to prevent replay attacks
-    mapping(bytes32 => bool) public processedMessages;
+    // Track processed VAA hashes to prevent replay attacks
+    // Maps keccak256(vm.emitterAddress, vm.emitterChainId, vm.sequence) => bool
+    mapping(bytes32 => bool) public processedVAAs;
 
     /**
      * @dev Constructor initializes parent PredictionMarketGetters and sets core contract
-     * @param wormholeAddr Address of the Wormhole contract
-     * @param wormholeRelayerAddr Address of the Wormhole Relayer contract
+     * @param wormholeCoreAddr Address of the Wormhole Core contract (for VAA verification)
      * @param chainId_ Wormhole Chain ID for this receiver (10003 = Arbitrum Sepolia)
      * @param evmChainId_ Native EVM Chain ID (421614 = Arbitrum Sepolia)
      * @param finality_ Number of confirmations required for finality
@@ -100,70 +99,55 @@ contract WormholeReceiver is PredictionMarketGetters, IWormholeReceiver {
      * @param predictionMarketAddr Address of the PredictionMarketCore contract
      */
     constructor(
-        address payable wormholeAddr,
-        address wormholeRelayerAddr,
+        address payable wormholeCoreAddr,
         uint16 chainId_,
         uint256 evmChainId_,
         uint8 finality_,
         address treasuryContractAddr,
         address predictionMarketAddr
-    ) PredictionMarketGetters(wormholeAddr, chainId_, evmChainId_, finality_, treasuryContractAddr) {
+    ) PredictionMarketGetters(chainId_, evmChainId_, finality_, treasuryContractAddr) {
         if (predictionMarketAddr == address(0)) revert ZeroPredictionMarketAddress();
-        if (wormholeRelayerAddr == address(0)) revert ZeroPredictionMarketAddress(); // Reuse error for now
+
+        // Store Wormhole Core reference in state (inherited from PredictionMarketState)
+        _state.wormholeAddr = wormholeCoreAddr;
 
         PREDICTION_MARKET = IPredictionMarket(predictionMarketAddr);
-        WORMHOLE_RELAYER = IWormholeRelayer(wormholeRelayerAddr);
         registrationOwner = msg.sender;
     }
 
     /**
-     * @dev Modifier to ensure only the Wormhole Relayer can call certain functions
+     * @notice Main entry point for VAA verification and processing
+     * @dev User/frontend calls this function with a signed VAA from Wormhole Guardians
+     * @param encodedVm A byte array containing a VAA signed by the guardians
      */
-    modifier onlyRelayer() {
-        require(msg.sender == address(WORMHOLE_RELAYER), "Only the Wormhole relayer can call this function");
-        _;
-    }
+    function verify(bytes memory encodedVm) external {
+        // Parse and verify the VAA through Wormhole Core
+        (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(encodedVm);
 
-    /**
-     * @dev Modifier to check if the sender is registered for the source chain
-     * @param sourceChain The Wormhole chain ID of the source
-     * @param sourceAddress The address of the sender as bytes32
-     */
-    modifier isRegisteredSender(uint16 sourceChain, bytes32 sourceAddress) {
-        require(registeredSenders[sourceChain] == sourceAddress, "Not registered sender");
-        _;
-    }
+        // Ensure the VAA signature is valid
+        require(valid, reason);
 
+        // Ensure the VAA is from a registered authorized emitter
+        require(_verifyAuthorizedEmitter(vm), "Invalid emitter: source not recognized");
 
-    /**
-     * @notice Standard Wormhole message receiver function
-     * @dev This is the recommended pattern from Wormhole documentation
-     * @param payload The message payload
-     * @param sourceAddress The address of the sender (as bytes32)
-     * @param sourceChain The chain ID of the sender
-     * @param deliveryHash The hash of the delivery
-     */
-    function receiveWormholeMessages(
-        bytes memory payload,
-        bytes[] memory /* additionalMessages */,
-        bytes32 sourceAddress,
-        uint16 sourceChain,
-        bytes32 deliveryHash
-    ) public payable override onlyRelayer isRegisteredSender(sourceChain, sourceAddress) {
-        // Prevent replay attacks
-        if (processedMessages[deliveryHash]) {
-            revert MessageAlreadyProcessed(deliveryHash);
+        // Prevent replay attacks - check if this specific VAA has been processed
+        bytes32 vaaHash = keccak256(abi.encodePacked(vm.emitterAddress, vm.emitterChainId, vm.sequence));
+        if (processedVAAs[vaaHash]) {
+            revert MessageAlreadyProcessed(vaaHash);
         }
 
-        // Mark message as processed
-        processedMessages[deliveryHash] = true;
+        // Mark VAA as processed
+        processedVAAs[vaaHash] = true;
+
+        // Get the payload
+        bytes memory payload = vm.payload;
 
         // V3: Route by message type (first byte)
         if (payload.length == 0) revert EmptyPayload();
         uint8 messageType = uint8(payload[0]);
 
         // Emit raw message event for debugging/auditing
-        emit MessageReceived(sourceChain, sourceAddress, deliveryHash, messageType, payload.length);
+        emit MessageReceived(vm.emitterChainId, vm.emitterAddress, vaaHash, messageType, payload.length);
 
         if (messageType == 0x01) {
             // BET message
@@ -174,6 +158,16 @@ contract WormholeReceiver is PredictionMarketGetters, IWormholeReceiver {
         } else {
             revert UnknownMessageType(messageType);
         }
+    }
+
+    /**
+     * @dev Internal helper to verify if the VAA is from an authorized emitter
+     * @param vm The parsed VAA (Verified Action Approval)
+     * @return bool True if the emitter is registered and authorized
+     */
+    function _verifyAuthorizedEmitter(IWormhole.VM memory vm) internal view returns (bool) {
+        bytes32 registeredSender = registeredSenders[vm.emitterChainId];
+        return registeredSender != bytes32(0) && registeredSender == vm.emitterAddress;
     }
 
 
@@ -206,12 +200,9 @@ contract WormholeReceiver is PredictionMarketGetters, IWormholeReceiver {
             amount := mload(add(payload, 98))      // Skip type + marketId + betId + outcome + 32 offset
         }
 
-        // Validate extracted data
-        if (marketId == 0) revert InvalidMarketId();
         if (betId == bytes32(0)) revert InvalidBetId();
         if (amount == 0) revert ZeroAmount();
 
-        // V3: No commitment in message
         PREDICTION_MARKET.processBet(marketId, betId, outcome, amount);
 
         emit BetReceived(marketId, betId, outcome, amount);
@@ -267,8 +258,7 @@ contract WormholeReceiver is PredictionMarketGetters, IWormholeReceiver {
             deadline := mload(add(payload, 181))       // Bytes 149-180
         }
 
-        // Validate extracted data
-        if (marketId == 0) revert InvalidMarketId();
+        // Validate extracted data (marketId validity checked by PREDICTION_MARKET)
         if (nullifier == bytes32(0)) revert InvalidNullifier();
         if (betAmount == 0) revert ZeroAmount();
         if (recipient == address(0)) revert ZeroRecipient();

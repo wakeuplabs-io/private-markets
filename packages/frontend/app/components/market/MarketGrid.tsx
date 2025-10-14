@@ -53,18 +53,9 @@ const MarketGrid: React.FC<MarketGridProps> = ({
         >
             {isLoading ? (
                 <>
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
-                    <MarketCard isLoading={isLoading} market={null} />
+                {Array.from({length: 10}).map((_, index) => (
+                    <MarketCard isLoading={isLoading} market={null} key={index} />
+                ))}
                 </>
             ) : (
                 markets.map((market) => (

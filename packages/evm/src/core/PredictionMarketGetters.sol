@@ -12,12 +12,11 @@ import {ITreasury} from "../interfaces/ITreasury.sol";
  */
 contract PredictionMarketGetters is PredictionMarketState {
     constructor(
-        address wormholeAddr_,
         uint16 chainId_,
         uint256 evmChainId_,
         uint8 finality_,
         address treasuryContractAddr_
-    ) PredictionMarketState(wormholeAddr_, chainId_, evmChainId_, finality_, treasuryContractAddr_) {}
+    ) PredictionMarketState(chainId_, evmChainId_, finality_, treasuryContractAddr_) {}
 
     function wormhole() public view returns (IWormhole) {
         return IWormhole(_state.wormholeAddr);
@@ -41,10 +40,6 @@ contract PredictionMarketGetters is PredictionMarketState {
 
     function treasuryContract() public view returns (ITreasury) {
         return ITreasury(_state.treasuryContractAddr);
-    }
-
-    function getMarket(uint256 marketId) public view returns (Market memory) {
-        return _state.markets[marketId];
     }
 
     function isProcessed(bytes32 betId) public view returns (bool) {
@@ -84,7 +79,7 @@ contract PredictionMarketGetters is PredictionMarketState {
      * @param offset Starting index (0-based)
      * @param limit Maximum number of markets to return (max 100)
      * @return marketIds Array of market IDs
-     * @return markets Array of Market structs
+     * @return marketResults Array of Market structs
      * @return total Total markets owned by this address
      */
     function getMarketsByOwner(address owner, uint256 offset, uint256 limit)
@@ -92,7 +87,7 @@ contract PredictionMarketGetters is PredictionMarketState {
         view
         returns (
             uint256[] memory marketIds,
-            Market[] memory markets,
+            Market[] memory marketResults,
             uint256 total
         )
     {
@@ -112,13 +107,13 @@ contract PredictionMarketGetters is PredictionMarketState {
 
         // Allocate memory arrays
         marketIds = new uint256[](count);
-        markets = new Market[](count);
+        marketResults = new Market[](count);
 
         // Populate arrays
         for (uint256 i = 0; i < count; i++) {
             uint256 marketId = ownerMarketIds[offset + i];
             marketIds[i] = marketId;
-            markets[i] = _state.markets[marketId];
+            marketResults[i] = _state.markets[marketId];
         }
     }
 
@@ -129,7 +124,7 @@ contract PredictionMarketGetters is PredictionMarketState {
      * @param offset Starting index (0-based, relative to filtered results)
      * @param limit Maximum number of markets to return (max 100)
      * @return marketIds Array of market IDs
-     * @return markets Array of Market structs
+     * @return marketResults Array of Market structs
      * @return total Total active markets
      */
     function getActiveMarkets(uint256 offset, uint256 limit)
@@ -137,7 +132,7 @@ contract PredictionMarketGetters is PredictionMarketState {
         view
         returns (
             uint256[] memory marketIds,
-            Market[] memory markets,
+            Market[] memory marketResults,
             uint256 total
         )
     {
@@ -168,7 +163,7 @@ contract PredictionMarketGetters is PredictionMarketState {
 
         // Allocate memory arrays
         marketIds = new uint256[](count);
-        markets = new Market[](count);
+        marketResults = new Market[](count);
 
         // Second pass: populate arrays
         uint256 activeIndex = 0;
@@ -181,7 +176,7 @@ contract PredictionMarketGetters is PredictionMarketState {
             if (!market.resolved && block.timestamp < market.expiresAt) {
                 if (activeIndex >= offset) {
                     marketIds[resultIndex] = marketId;
-                    markets[resultIndex] = market;
+                    marketResults[resultIndex] = market;
                     resultIndex++;
                 }
                 activeIndex++;

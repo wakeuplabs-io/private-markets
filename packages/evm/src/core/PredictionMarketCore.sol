@@ -21,6 +21,7 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
     error MarketExpired(uint256 marketId);
     error ZeroAmount();
     error MarketNotResolved(uint256 marketId);
+    error MarketNotOwner(uint256 marketId);
     error MarketAlreadyResolved(uint256 marketId);
     error MarketNotExpired(uint256 marketId);
     error NullifierAlreadyConsumed(bytes32 nullifier);
@@ -30,34 +31,68 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
     error ChainIdMismatch();
 
     constructor(
-        address payable wormholeAddr,
         uint16 chainId_,
         uint256 evmChainId_,
         uint8 finality_,
         address treasuryContractAddr
-    ) PredictionMarketGetters(wormholeAddr, chainId_, evmChainId_, finality_, treasuryContractAddr) {}
+    ) PredictionMarketGetters( chainId_, evmChainId_, finality_, treasuryContractAddr) {}
+
+    /**
+     * @notice Get market details (implements IPredictionMarket)
+     * @param marketId Market identifier
+     */
+    function getMarket(uint256 marketId)
+        external
+        view
+        override(IPredictionMarket)
+        returns (
+            address owner,
+            string memory question,
+            uint256 totalPool,
+            uint256 yesTotal,
+            uint256 noTotal,
+            bool resolved,
+            bool winningOutcome,
+            uint256 createdAt,
+            uint256 expiresAt
+        )
+    {
+        Market storage market = _state.markets[marketId];
+        return (
+            market.owner,
+            market.question,
+            market.totalPool,
+            market.yesTotal,
+            market.noTotal,
+            market.resolved,
+            market.winningOutcome,
+            market.createdAt,
+            market.expiresAt
+        );
+    }
 
     /**
      * @notice Creates a new prediction market with USDC collateral
      * @dev Follows CEI pattern: Checks → Effects → Interactions
      * @dev Market owner must approve Treasury to spend USDC before calling
-     * @param marketId Unique market identifier (provided by frontend)
+     * @param question The question for this prediction market
      * @param totalPool Total USDC collateral to deposit
      * @param expiresAt Timestamp when market closes for betting
+     * @return marketId The auto-generated market identifier
      */
-    function createMarket(uint256 marketId, uint256 totalPool, uint256 expiresAt)
+    function createMarket(string memory question, uint256 totalPool, uint256 expiresAt)
         external
-        onlyOwner
         nonReentrant
+        returns (uint256 marketId)
     {
-        // 1. CHECKS
-        if (_state.markets[marketId].owner != address(0)) revert MarketAlreadyExists(marketId);
         if (totalPool == 0) revert ZeroTotalPool();
         if (expiresAt <= block.timestamp) revert InvalidExpiresAt();
 
-        // 2. EFFECTS (update state BEFORE external calls)
+        marketId = _state.nextMarketId++;
+
         _state.markets[marketId] = Market({
             owner: msg.sender,
+            question: question,
             totalPool: totalPool,
             yesTotal: 0,
             noTotal: 0,
@@ -67,14 +102,10 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
             expiresAt: expiresAt
         });
 
-        // Track market for queries
         _state.ownerMarkets[msg.sender].push(marketId);
         _state.allMarketIds.push(marketId);
-
-        // 3. INTERACTIONS (external calls AFTER state updates)
         treasuryContract().deposit(marketId, msg.sender, totalPool);
-
-        emit MarketCreated(marketId, msg.sender, totalPool, expiresAt);
+        emit MarketCreated(marketId, msg.sender, question, totalPool, expiresAt);
     }
 
     /**
@@ -114,9 +145,10 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
      * @param marketId Market identifier
      * @param winningOutcome Winning side (true = YES wins, false = NO wins)
      */
-    function resolveMarket(uint256 marketId, bool winningOutcome) external onlyOwner {
+    function resolveMarket(uint256 marketId, bool winningOutcome) external {
         Market storage market = _state.markets[marketId];
         if (market.owner == address(0)) revert MarketNotFound(marketId);
+        if (market.owner != msg.sender) revert MarketNotOwner(marketId);
         if (market.resolved) revert MarketAlreadyResolved(marketId);
         if (block.timestamp < market.expiresAt) revert MarketNotExpired(marketId);
 
@@ -169,34 +201,4 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
         emit ClaimProcessed(marketId, nullifier, recipient, payout);
     }
 
-    /**
-     * @notice Get market details (implements IPredictionMarket)
-     * @param marketId Market identifier
-     */
-    function markets(uint256 marketId)
-        external
-        view
-        returns (
-            address owner,
-            uint256 totalPool,
-            uint256 yesTotal,
-            uint256 noTotal,
-            bool resolved,
-            bool winningOutcome,
-            uint256 createdAt,
-            uint256 expiresAt
-        )
-    {
-        Market storage market = _state.markets[marketId];
-        return (
-            market.owner,
-            market.totalPool,
-            market.yesTotal,
-            market.noTotal,
-            market.resolved,
-            market.winningOutcome,
-            market.createdAt,
-            market.expiresAt
-        );
-    }
 }

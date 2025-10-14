@@ -22,14 +22,15 @@ interface UseAdminMarketsReturn {
     ) => Promise<void>;
 }
 
-const fetchAdminData = async (): Promise<{
+const fetchAdminData = async (adminAddress: string | undefined): Promise<{
     markets: Market[];
     connectionStatus: BlockchainConnectionStatus;
 }> => {
     try {
         const blockchainStatus = await MarketService.getConnectionStatus();
-        console.log("Blockchain status:", blockchainStatus);
-        const adminMarkets = await MarketService.getAdminMarkets();
+        const adminMarkets = adminAddress 
+            ? await MarketService.getAdminMarkets(adminAddress)
+            : [];
         console.log("Admin markets:", adminMarkets);
         return {
             markets: adminMarkets,
@@ -44,32 +45,38 @@ const fetchAdminData = async (): Promise<{
 export function useAdminMarkets(): UseAdminMarketsReturn {
     const [connectionStatus, setConnectionStatus] =
         useState<BlockchainConnectionStatus>("connecting");
-    const { isConnected } = useAccount();
+    const { isConnected, address } = useAccount();
 
     const {
         data: adminData,
         error,
         isLoading,
         mutate,
-    } = useSWR(isConnected ? "admin-markets" : null, fetchAdminData, {
-        revalidateOnFocus: true,
-        revalidateOnReconnect: true,
-        dedupingInterval: 2000,
-        errorRetryCount: 3,
-        onError: (err) => {
-            console.error("Error loading admin data:", err);
-            setConnectionStatus("error");
-        },
-        onSuccess: (data) => {
-            setConnectionStatus(data.connectionStatus);
-        },
-    });
+    } = useSWR(
+        isConnected && address ? ["admin-markets", address] : null,
+        () => fetchAdminData(address),
+        {
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true,
+            dedupingInterval: 2000,
+            errorRetryCount: 3,
+            onError: (err) => {
+                console.error("Error loading admin data:", err);
+                setConnectionStatus("error");
+            },
+            onSuccess: (data) => {
+                setConnectionStatus(data.connectionStatus);
+            },
+        }
+    );
 
     const createMarket = useCallback(
         async (formData: CreateMarketFormData) => {
             try {
+                const defaultTotalPool = 100 * 10**6; // 1000 USDC default
                 const hash = await MarketService.createMarket(
                     formData.question,
+                    defaultTotalPool,
                     formData.closingTime
                 );
                 console.log("Market creation transaction:", hash);

@@ -2,26 +2,19 @@
 pragma solidity ^0.8.20;
 
 import {IntegrationBase} from "./IntegrationBase.sol";
-import "forge-std/console.sol";
 
-/**
- * @title WormholeReceiverTest
- * @notice Integration tests for WormholeReceiver message processing
- * @dev Tests 2 message types: BET (0x01) and CLAIM_AUTH (0x02)
- */
 contract WormholeReceiverTest is IntegrationBase {
-    uint256 constant MARKET_ID = 1;
-    uint256 constant TOTAL_POOL = 1000 * 10**6; // 1000 USDC
+    uint256 MARKET_ID;
+    uint256 constant TOTAL_POOL = 1000 * 10**6;
     uint256 constant EXPIRES_AT_OFFSET = 1 days;
 
     function setUp() public virtual override {
         super.setUp();
 
-        // Create a market for testing
         vm.startPrank(address(wormholeReceiver));
         mockErc20.mint(address(wormholeReceiver), TOTAL_POOL);
         mockErc20.approve(address(treasury), TOTAL_POOL);
-        predictionMarket.createMarket(MARKET_ID, TOTAL_POOL, block.timestamp + EXPIRES_AT_OFFSET);
+        MARKET_ID = predictionMarket.createMarket("Test Market", TOTAL_POOL, block.timestamp + EXPIRES_AT_OFFSET);
         vm.stopPrank();
     }
 
@@ -43,21 +36,11 @@ contract WormholeReceiverTest is IntegrationBase {
             betAmount
         );
 
-        bytes32 deliveryHash = keccak256(abi.encode("delivery1"));
-        bytes[] memory additionalVaas = new bytes[](0);
-
-        // Simulate relayer calling receiveWormholeMessages
-        vm.prank(address(mockWormholeRelayer));
-        wormholeReceiver.receiveWormholeMessages(
-            payload,
-            additionalVaas,
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            deliveryHash
-        );
+        bytes memory encodedVm = createMockVaa(payload);
+        wormholeReceiver.verify(encodedVm);
 
         // Verify bet was processed
-        (, , uint256 yesTotal, , , , , ) = predictionMarket.markets(MARKET_ID);
+        (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(MARKET_ID);
         assertEq(yesTotal, betAmount);
     }
 
@@ -72,14 +55,7 @@ contract WormholeReceiverTest is IntegrationBase {
             uint256(150 * 10**6)
         );
 
-        vm.prank(address(mockWormholeRelayer));
-        wormholeReceiver.receiveWormholeMessages(
-            payload1,
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("delivery1"))
-        );
+        wormholeReceiver.verify(createMockVaa(payload1));
 
         // Process NO bet
         bytes32 bet2Id = keccak256("bet2");
@@ -91,17 +67,10 @@ contract WormholeReceiverTest is IntegrationBase {
             uint256(100 * 10**6)
         );
 
-        vm.prank(address(mockWormholeRelayer));
-        wormholeReceiver.receiveWormholeMessages(
-            payload2,
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("delivery2"))
-        );
+        wormholeReceiver.verify(createMockVaa(payload2));
 
         // Verify totals updated correctly
-        (, , uint256 yesTotal, uint256 noTotal, , , , ) = predictionMarket.markets(MARKET_ID);
+        (, , , uint256 yesTotal, uint256 noTotal, , , , ) = predictionMarket.getMarket(MARKET_ID);
         assertEq(yesTotal, 150 * 10**6);
         assertEq(noTotal, 100 * 10**6);
     }
@@ -116,20 +85,17 @@ contract WormholeReceiverTest is IntegrationBase {
             uint256(100 * 10**6)
         );
 
-        bytes32 unregisteredSender = bytes32(uint256(0x9999));
-
-        vm.prank(address(mockWormholeRelayer));
-        vm.expectRevert(); // Should revert with "Sender not registered"
-        wormholeReceiver.receiveWormholeMessages(
-            payload,
-            new bytes[](0),
-            unregisteredSender, // NOT registered
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("delivery1"))
-        );
+        bytes32 unregisteredEmitter = bytes32(uint256(0x9999));
+        vm.prank(address(owner));
+        wormholeReceiver.setRegisteredSender(AZTEC_CHAIN_ID, unregisteredEmitter);
+        
+        bytes memory encodedVm = createMockVaa(payload);
+        
+        vm.expectRevert("Invalid emitter: source not recognized");
+        wormholeReceiver.verify(encodedVm);
     }
 
-    function test_receiveBetMessage_revertsIfDuplicateDeliveryHash() public {
+    function test_receiveBetMessage_revertsIfDuplicateVAA() public {
         bytes32 betId = keccak256("bet1");
         bytes memory payload = abi.encodePacked(
             uint8(0x01),
@@ -139,28 +105,14 @@ contract WormholeReceiverTest is IntegrationBase {
             uint256(100 * 10**6)
         );
 
-        bytes32 deliveryHash = keccak256(abi.encode("delivery1"));
+        bytes memory encodedVm = createMockVaa(payload);
 
         // First call - should succeed
-        vm.prank(address(mockWormholeRelayer));
-        wormholeReceiver.receiveWormholeMessages(
-            payload,
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            deliveryHash
-        );
+        wormholeReceiver.verify(encodedVm);
 
-        // Second call with same deliveryHash - should revert
-        vm.prank(address(mockWormholeRelayer));
-        vm.expectRevert(); // Should revert with "Message already processed"
-        wormholeReceiver.receiveWormholeMessages(
-            payload,
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            deliveryHash // DUPLICATE
-        );
+        // Second call with same VAA - should revert
+        vm.expectRevert();
+        wormholeReceiver.verify(encodedVm); // DUPLICATE
     }
 
     // ============================================
@@ -178,14 +130,7 @@ contract WormholeReceiverTest is IntegrationBase {
             uint256(150 * 10**6)
         );
 
-        vm.prank(address(mockWormholeRelayer));
-        wormholeReceiver.receiveWormholeMessages(
-            betPayload,
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("delivery_bet"))
-        );
+        wormholeReceiver.verify(createMockVaa(betPayload));
 
         // Warp and resolve
         vm.warp(block.timestamp + EXPIRES_AT_OFFSET + 1);
@@ -212,14 +157,7 @@ contract WormholeReceiverTest is IntegrationBase {
 
         uint256 balanceBefore = mockErc20.balanceOf(recipient);
 
-        vm.prank(address(mockWormholeRelayer));
-        wormholeReceiver.receiveWormholeMessages(
-            claimPayload,
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("delivery_claim"))
-        );
+        wormholeReceiver.verify(createMockVaa(claimPayload));
 
         // Verify payout transferred
         uint256 balanceAfter = mockErc20.balanceOf(recipient);
@@ -227,28 +165,16 @@ contract WormholeReceiverTest is IntegrationBase {
     }
 
     function test_receiveClaimMessage_transfersUSDC() public {
-        // Setup: Process 2 bets, resolve
-        vm.startPrank(address(mockWormholeRelayer));
-
+        // Setup: Process 2 bets
         // Bet 1: 150 YES
-        wormholeReceiver.receiveWormholeMessages(
-            abi.encodePacked(uint8(0x01), MARKET_ID, keccak256("bet1"), true, uint256(150 * 10**6)),
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("d1"))
+        wormholeReceiver.verify(
+            createMockVaa(abi.encodePacked(uint8(0x01), MARKET_ID, keccak256("bet1"), true, uint256(150 * 10**6)))
         );
 
         // Bet 2: 100 NO
-        wormholeReceiver.receiveWormholeMessages(
-            abi.encodePacked(uint8(0x01), MARKET_ID, keccak256("bet2"), false, uint256(100 * 10**6)),
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("d2"))
+        wormholeReceiver.verify(
+            createMockVaa(abi.encodePacked(uint8(0x01), MARKET_ID, keccak256("bet2"), false, uint256(100 * 10**6)))
         );
-
-        vm.stopPrank();
 
         // Resolve: YES wins
         vm.warp(block.timestamp + EXPIRES_AT_OFFSET + 1);
@@ -268,32 +194,10 @@ contract WormholeReceiverTest is IntegrationBase {
         );
 
         uint256 balanceBefore = mockErc20.balanceOf(user2);
-        console.log("User2 balance BEFORE:", balanceBefore);
 
-        // Debug: check Treasury balance
-        uint256 treasuryBalance = mockErc20.balanceOf(address(treasury));
-        console.log("Treasury balance:", treasuryBalance);
-        console.log("Expected payout:", TOTAL_POOL);
-
-        // Check market state
-        (, , uint256 yesTotal, uint256 noTotal, bool resolved, bool winningOutcome, , ) = predictionMarket.markets(MARKET_ID);
-        console.log("Market yesTotal:", yesTotal);
-        console.log("Market noTotal:", noTotal);
-        console.log("Market resolved:", resolved);
-        console.log("Market winningOutcome:", winningOutcome);
-
-        vm.prank(address(mockWormholeRelayer));
-        wormholeReceiver.receiveWormholeMessages(
-            claimPayload,
-            new bytes[](0),
-            AZTEC_PREDICTION_CONTRACT,
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("d_claim"))
-        );
+        wormholeReceiver.verify(createMockVaa(claimPayload));
 
         uint256 balanceAfter = mockErc20.balanceOf(user2);
-        console.log("User2 balance AFTER:", balanceAfter);
-        console.log("Payout received:", balanceAfter - balanceBefore);
         assertEq(balanceAfter - balanceBefore, TOTAL_POOL); // Winner takes all
     }
 
@@ -308,17 +212,12 @@ contract WormholeReceiverTest is IntegrationBase {
             block.timestamp + 1 hours
         );
 
-        bytes32 unregisteredSender = bytes32(uint256(0x8888));
+        bytes32 unregisteredEmitter = bytes32(uint256(0x8888));
+        vm.prank(address(owner));
+        wormholeReceiver.setRegisteredSender(AZTEC_CHAIN_ID, unregisteredEmitter);
 
-        vm.prank(address(mockWormholeRelayer));
-        vm.expectRevert(); // Should revert with "Sender not registered"
-        wormholeReceiver.receiveWormholeMessages(
-            claimPayload,
-            new bytes[](0),
-            unregisteredSender, // NOT registered
-            AZTEC_CHAIN_ID,
-            keccak256(abi.encode("delivery_claim"))
-        );
+        vm.expectRevert("Invalid emitter: source not recognized");
+        wormholeReceiver.verify(createMockVaa(claimPayload));
     }
 
     // ============================================

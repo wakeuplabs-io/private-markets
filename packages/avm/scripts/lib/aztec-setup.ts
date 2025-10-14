@@ -238,7 +238,12 @@ export class AztecSetup {
       deriveSigningKey(privateKeyFr),
       saltFr.toBigInt()
     );
-
+    const accountData = {
+      address: schnorrAccount.getAddress().toString(),
+      signingKey: deriveSigningKey(privateKeyFr).toBuffer().toString('hex'),
+      secretKey: privateKeyFr.toString(),
+      salt: saltFr.toString(),
+    };
     const accountAddress = schnorrAccount.getAddress();
 
     // Para testnet con PXE local, necesitamos registrar la instancia del contrato de cuenta
@@ -281,7 +286,6 @@ export class AztecSetup {
       deriveSigningKey(privateKeyFr),
       saltFr.toBigInt()
     );
-
     const sponsoredFPC = await this.getSponsoredFPCInstance();
     const sponsoredPaymentMethod = new SponsoredFeePaymentMethod(sponsoredFPC.address);
 
@@ -468,6 +472,68 @@ export class AztecSetup {
     } catch (error: any) {
       console.warn(`⚠️  Failed to register contract (may already be registered):`, error.message);
     }
+  }
+
+  /**
+   * Create or load a wallet from exact provided credentials
+   * @param credentials Object with address, signingKey, secretKey (privateKey), and salt
+   * @returns Wallet instance
+   */
+  async loadWalletFromCredentials(credentials: {
+    address: string;
+    signingKey: string;
+    secretKey: string;
+    salt: string;
+  }): Promise<Wallet> {
+    if (!this.pxe) throw new Error("PXE not initialized");
+
+    console.log(`Loading wallet from provided credentials...`);
+    console.log(`  Address: ${credentials.address}`);
+
+    const privateKeyFr = Fr.fromHexString(credentials.secretKey);
+    const signingKeyScalar = GrumpkinScalar.fromString(credentials.signingKey);
+    const saltFr = Fr.fromHexString(credentials.salt);
+
+    const schnorrAccount = await getSchnorrAccount(
+      this.pxe,
+      privateKeyFr,
+      signingKeyScalar,
+      saltFr.toBigInt()
+    );
+
+    const accountAddress = schnorrAccount.getAddress();
+
+    // Verify the address matches
+    if (accountAddress.toString() !== credentials.address) {
+      throw new Error(
+        `Address mismatch! Expected ${credentials.address} but got ${accountAddress.toString()}`
+      );
+    }
+
+    // Para testnet con PXE local, registrar la instancia del contrato de cuenta
+    if (this.network === "testnet" && this.nodeClient) {
+      console.log(`  Fetching account contract instance from node...`);
+      try {
+        const accountInstance = await this.nodeClient.getContract(accountAddress);
+        if (accountInstance) {
+          console.log(`  Registering account contract with PXE...`);
+          await this.pxe.registerContract({
+            instance: accountInstance,
+            artifact: SchnorrAccountContractArtifact
+          });
+          console.log(`  Account contract registered`);
+        } else {
+          console.warn(`  Account contract instance not found on node`);
+        }
+      } catch (error) {
+        console.warn(`  Could not fetch/register account instance:`, error);
+      }
+    }
+
+    const wallet = await schnorrAccount.getWallet();
+
+    console.log(`✅ Wallet loaded successfully: ${wallet.getAddress().toString()}`);
+    return wallet;
   }
 }
 

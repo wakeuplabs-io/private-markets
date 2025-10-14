@@ -30,7 +30,6 @@ contract FullFlowV3Test is Test {
         usdc = new MockERC20("Mock USDC", "USDC", 6, 0);
         treasury = new Treasury(address(usdc));
         predictionMarket = new PredictionMarketCore(
-            payable(address(0x1)),
             WORMHOLE_CHAIN_ID,
             EVM_CHAIN_ID,
             FINALITY,
@@ -63,7 +62,6 @@ contract FullFlowV3Test is Test {
      *  8. Total distributed: 750 + 250 = 1000 USDC ✅
      */
     function test_fullMarketLifecycle_fromCreationToClaim() public {
-        uint256 marketId = 1;
         uint256 totalPool = 1000 * 10**6; // 1000 USDC
         uint256 expiresAt = block.timestamp + 7 days;
 
@@ -72,12 +70,13 @@ contract FullFlowV3Test is Test {
         // ============================================
         vm.startPrank(marketOwner);
         usdc.approve(address(treasury), totalPool);
-        predictionMarket.createMarket(marketId, totalPool, expiresAt);
+        uint256 marketId = predictionMarket.createMarket("Will ETH reach $5000?", totalPool, expiresAt);
         vm.stopPrank();
 
         // Verify market created
-        (address owner, uint256 pool, , , bool resolved, , , ) = predictionMarket.markets(marketId);
+        (address owner, string memory question, uint256 pool, , , bool resolved, , , ) = predictionMarket.getMarket(marketId);
         assertEq(owner, marketOwner);
+        assertEq(question, "Will ETH reach $5000?");
         assertEq(pool, totalPool);
         assertFalse(resolved);
 
@@ -104,7 +103,7 @@ contract FullFlowV3Test is Test {
         vm.stopPrank();
 
         // Verify totals
-        (, , uint256 yesTotal, uint256 noTotal, , , , ) = predictionMarket.markets(marketId);
+        (, , , uint256 yesTotal, uint256 noTotal, , , , ) = predictionMarket.getMarket(marketId);
         assertEq(yesTotal, 200 * 10**6); // 150 + 50
         assertEq(noTotal, 100 * 10**6);
 
@@ -117,7 +116,7 @@ contract FullFlowV3Test is Test {
         predictionMarket.resolveMarket(marketId, true); // YES wins
 
         // Verify resolution
-        (, , , , bool isResolved, bool winningOutcome, , ) = predictionMarket.markets(marketId);
+        (, , , , , bool isResolved, bool winningOutcome, , ) = predictionMarket.getMarket(marketId);
         assertTrue(isResolved);
         assertTrue(winningOutcome); // YES won
 

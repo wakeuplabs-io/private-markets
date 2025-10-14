@@ -14,14 +14,12 @@ interface UseUserMarketsReturn {
   connectionStatus: BlockchainConnectionStatus
 }
 
-const fetchUserMarkets = async (): Promise<{ markets: Market[], activeMarkets: Market[], connectionStatus: BlockchainConnectionStatus }> => {
+const fetchUserMarkets = async (userAddress: string | undefined): Promise<{ markets: Market[], activeMarkets: Market[], connectionStatus: BlockchainConnectionStatus }> => {
   try {
-    // Get blockchain connection status
     const blockchainStatus = await MarketService.getConnectionStatus()
     
-    // Load markets regardless of blockchain status (fallback to mock if offline)
     const [allMarkets, openMarkets] = await Promise.all([
-      MarketService.getUserMarkets(),
+      userAddress ? MarketService.getUserMarkets(userAddress) : Promise.resolve([]),
       MarketService.getActiveMarkets()
     ])
     
@@ -32,7 +30,6 @@ const fetchUserMarkets = async (): Promise<{ markets: Market[], activeMarkets: M
     }
   } catch (error) {
     console.error('Error loading user markets:', error)
-    //throw error
     return {
       markets: [],
       activeMarkets: [],
@@ -43,11 +40,11 @@ const fetchUserMarkets = async (): Promise<{ markets: Market[], activeMarkets: M
 
 export function useUserMarkets(): UseUserMarketsReturn {
   const [connectionStatus, setConnectionStatus] = useState<BlockchainConnectionStatus>('connecting')
-  const { isConnected } = useAccount()
+  const { isConnected, address } = useAccount()
 
   const { data: marketsData, error, isLoading } = useSWR(
-    isConnected ? 'user-markets' : null, // Only fetch when connected
-    fetchUserMarkets,
+    isConnected && address ? ['user-markets', address] : null,
+    () => fetchUserMarkets(address),
     {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,

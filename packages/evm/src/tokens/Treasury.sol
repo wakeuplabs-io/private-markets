@@ -9,7 +9,7 @@ import {ITreasury} from "../interfaces/ITreasury.sol";
 
 /**
  * @title Treasury
- * @notice V3 Treasury for USDC custody in prediction markets
+ * @notice Treasury for USDC custody in prediction markets
  * @dev Uses external USDC token (no internal minting)
  * @dev Implements per-market tracking to prevent over-distribution
  * @dev Follows Checks-Effects-Interactions pattern for security
@@ -52,16 +52,11 @@ contract Treasury is Ownable, ITreasury, ReentrancyGuard {
         onlyOwner
         nonReentrant
     {
-        // 1. CHECKS
         if (amount == 0) revert ZeroAmount();
         if (from == address(0)) revert ZeroAddress();
 
-        // 2. EFFECTS
         marketDeposits[marketId] += amount;
-
-        // 3. INTERACTIONS
         COLLATERAL_TOKEN.safeTransferFrom(from, address(this), amount);
-
         emit Deposited(marketId, from, amount);
     }
 
@@ -79,11 +74,9 @@ contract Treasury is Ownable, ITreasury, ReentrancyGuard {
         onlyOwner
         nonReentrant
     {
-        // 1. CHECKS
         if (amount == 0) revert ZeroAmount();
         if (recipient == address(0)) revert ZeroAddress();
 
-        // Check market-specific balance
         uint256 deposited = marketDeposits[marketId];
         uint256 paidOut = marketPaidOut[marketId];
         uint256 availableForMarket = deposited - paidOut;
@@ -92,18 +85,13 @@ contract Treasury is Ownable, ITreasury, ReentrancyGuard {
             revert InsufficientMarketBalance(marketId, amount, availableForMarket);
         }
 
-        // Check contract has actual USDC balance
         uint256 contractBalance = COLLATERAL_TOKEN.balanceOf(address(this));
         if (contractBalance < amount) {
             revert InsufficientContractBalance(amount, contractBalance);
         }
 
-        // 2. EFFECTS
         marketPaidOut[marketId] += amount;
-
-        // 3. INTERACTIONS
         COLLATERAL_TOKEN.safeTransfer(recipient, amount);
-
         emit PayoutTransferred(marketId, recipient, amount);
     }
 

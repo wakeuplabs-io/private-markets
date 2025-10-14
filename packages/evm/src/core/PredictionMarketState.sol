@@ -20,6 +20,7 @@ contract PredictionMarketState is Ownable {
 
     struct Market {
         address owner;
+        string question;
         uint256 totalPool;
         uint256 yesTotal;
         uint256 noTotal;
@@ -34,43 +35,32 @@ contract PredictionMarketState is Ownable {
         Provider provider;
         uint256 evmChainId;
         address treasuryContractAddr;
-
-        // Market data
         mapping(uint256 => Market) markets;
-
-        // Market indexing (for queries)
-        mapping(address => uint256[]) ownerMarkets;  // owner → marketIds
-        uint256[] allMarketIds;  // All created market IDs
-
-        // Anti-replay for bets
+        mapping(address => uint256[]) ownerMarkets;
+        uint256[] allMarketIds;
         mapping(bytes32 => bool) processedBets;
-
-        // Anti-replay for claims (nullifier-based)
         mapping(uint256 => mapping(bytes32 => bool)) consumedNullifiers;
+        uint256 nextMarketId;
     }
 
     State internal _state;
 
     /**
      * @notice Initialize prediction market state
-     * @param wormholeAddr_ Wormhole contract address
      * @param chainId_ Wormhole Chain ID (10003 = Arbitrum Sepolia)
      * @param evmChainId_ Native EVM Chain ID (421614 = Arbitrum Sepolia)
      * @param finality_ Number of confirmations for finality
      * @param treasuryContractAddr_ Treasury contract address
      */
     constructor(
-        address wormholeAddr_,
         uint16 chainId_,
         uint256 evmChainId_,
         uint8 finality_,
         address treasuryContractAddr_
     ) Ownable(msg.sender) {
-        if (wormholeAddr_ == address(0)) revert ZeroWormholeAddress();
         if (treasuryContractAddr_ == address(0)) revert ZeroTreasuryAddress();
         if (finality_ == 0) revert InvalidFinality();
 
-        _state.wormholeAddr = wormholeAddr_;
         _state.provider.chainId = chainId_;
         _state.provider.finality = finality_;
         _state.evmChainId = evmChainId_;
