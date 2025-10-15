@@ -8,14 +8,20 @@ pub contract BetVault {
         macros::{storage::storage, events::event, functions::{private, public, internal, view, initializer, utility}},
         state_vars::{map::Map, public_mutable::PublicMutable, public_immutable::PublicImmutable, private_set::PrivateSet},
         protocol_types::{address::AztecAddress, abis::function_selector::FunctionSelector},
-        note::note_viewer_options::NoteViewerOptions,
+        note::{retrieved_note::RetrievedNote, note_viewer_options::NoteViewerOptions, note_getter_options::NoteGetterOptions},
         messages::logs::note,
         event::event_interface::{emit_event_in_private, MessageDelivery},
+        protocol_types::{
+          hash::poseidon2_hash,
+          traits::ToField
+        },
     };
     use dep::token::Token;
     use crate::types::bet_note::BetNote;
     use dep::wormhole::Wormhole;
 
+
+    // Events
     #[event]
     struct BetPlaced {
         market_id: Field,
@@ -25,15 +31,26 @@ pub contract BetVault {
         commitment: Field,
     }
 
+    #[event]
+    struct ClaimAuthorized {
+        market_id: Field,
+        nullifier: Field,
+        bet_amount: u128,
+        recipient: Field,
+    }
+
+    // Storage
     #[storage]
     struct Storage<Context> {
         processed_bets: Map<Field, PublicMutable<bool, Context>, Context>,
+        used_nullifiers: Map<Field, PublicMutable<bool, Context>, Context>,
         token_address: PublicImmutable<AztecAddress, Context>,
         wormhole_address: PublicImmutable<AztecAddress, Context>,
         admin: PublicImmutable<AztecAddress, Context>,
         user_bets: Map<AztecAddress, PrivateSet<BetNote, Context>, Context>,
     }
 
+    // Constructor
     #[public]
     #[initializer]
     fn constructor(token_address: AztecAddress, wormhole_address: AztecAddress, admin: AztecAddress) {
@@ -45,18 +62,17 @@ pub contract BetVault {
         storage.admin.initialize(admin);
     }
 
-    #[public]
-    #[internal]
-    fn _mark_bet_processed(bet_id: Field) {
-        let already = storage.processed_bets.at(bet_id).read();
-        assert(!already, "bet_id already processed");
-        storage.processed_bets.at(bet_id).write(true);
-    }
-
+    // View functions
     #[public]
     #[view]
     fn is_processed(bet_id: Field) -> bool {
         storage.processed_bets.at(bet_id).read()
+    }
+
+    #[public]
+    #[view]
+    fn is_nullifier_used(nullifier: Field) -> bool {
+        storage.used_nullifiers.at(nullifier).read()
     }
 
     #[public]
@@ -72,6 +88,7 @@ pub contract BetVault {
     }
 
 
+    // Private functions
     #[private]
     fn bet(
         market_id: Field,
@@ -119,62 +136,208 @@ pub contract BetVault {
         );
 
         let chunks = create_bet_payload(market_id, bet_id, outcome, amount);
+        // let _ = Wormhole::at(storage.wormhole_address.read())
+        //     .publish_message_in_private(
+        //         1,
+        //         chunks,
+        //         0,
+        //         2,
+        //         context.msg_sender(),
+        //         authwit_nonce
+        //     ).call(&mut context);
+    }
+
+    #[private]
+    fn authorizeClaim(
+        market_id: Field,
+        commitment: Field,
+        secret: Field,
+        recipient: AztecAddress,
+        deadline: Field,
+        authwit_nonce: Field,
+    ) {
+        let from = context.msg_sender();
+
+        let calculated_commitment = dep::std::hash::pedersen_hash([market_id, secret]);
+        assert(commitment == calculated_commitment, "Invalid secret for commitment");
+
+        let options: NoteGetterOptions<BetNote, 7, Field, Field> = NoteGetterOptions::new();
+        let notes = storage.user_bets.at(from).get_notes(options);
+        let (found, bet_amount) = find_bet_note(notes, commitment, market_id);
+        assert(found, "No bet found for this commitment");
+
+        let recipient_field = recipient.to_field();
+        let nullifier = compute_nullifier(market_id, commitment, recipient_field);
+
+        context.call_public_function(
+            context.this_address(),
+            comptime {
+                FunctionSelector::from_signature("_mark_nullifier_used(Field)")
+            },
+            [nullifier],
+        );
+
+        emit_event_in_private(
+            ClaimAuthorized {
+                market_id,
+                nullifier,
+                bet_amount,
+                recipient: recipient_field,
+            },
+            &mut context,
+            from,
+            MessageDelivery.CONSTRAINED_ONCHAIN,
+        );
+
+        let chunks = create_claim_payload(
+            market_id,
+            nullifier,
+            bet_amount,
+            recipient,
+        );
+
         let _ = Wormhole::at(storage.wormhole_address.read())
             .publish_message_in_private(
-                1,
-                chunks,
-                0,
-                2,
-                context.msg_sender(),
+                1,                // consistency level
+                chunks,        // payload: [Field; 5]
+                0,          // nonce
+                2,          // emitter_chain
+                from,
                 authwit_nonce
             ).call(&mut context);
     }
 
-    // Structure: [messageType(1) | marketId(32) | betId(32) | outcome(1) | amount(32)]
-    #[contract_library_method]
-    fn create_bet_payload(market_id: Field, bet_id: Field, outcome: u8, amount: u128) -> [[u8; 31]; 8] {
-        // Create 98-byte payload
-        let mut payload = [0u8; 98];
-        payload[0] = 0x01;  // Message type: BET
+    // Public functions
+    #[public]
+    #[internal]
+    fn _mark_bet_processed(bet_id: Field) {
+        let already = storage.processed_bets.at(bet_id).read();
+        assert(!already, "bet_id already processed");
+        storage.processed_bets.at(bet_id).write(true);
+    }
 
-        // Encode marketId (32 bytes)
-        let market_id_bytes = market_id.to_be_bytes::<32>();
+    #[public]
+    #[internal]
+    fn _mark_nullifier_used(nullifier: Field) {
+        let already_used = storage.used_nullifiers.at(nullifier).read();
+        assert(!already_used, "nullifier already used");
+        storage.used_nullifiers.at(nullifier).write(true);
+    }
+
+    #[contract_library_method]
+    fn create_bet_payload(
+        market_id: Field,
+        bet_id: Field,
+        outcome: u8,
+        amount: u128,
+    ) -> [[u8; 31]; 8] {
+        let mut payload = [0u8; 98];
+        payload[0] = 0x01;
+
+        let market_id_bytes = market_id.to_le_bytes::<32>();
         for i in 0..32 {
             payload[1 + i] = market_id_bytes[i];
         }
 
-        // Encode betId (32 bytes)
-        let bet_id_bytes = bet_id.to_be_bytes::<32>();
+        let bet_id_bytes = bet_id.to_le_bytes::<32>();
         for i in 0..32 {
             payload[33 + i] = bet_id_bytes[i];
         }
 
-        // Encode outcome (1 byte)
         payload[65] = outcome;
 
-        // Encode amount (32 bytes)
-        let amount_field: Field = amount as Field;
-        let amount_bytes = amount_field.to_be_bytes::<32>();
+        let amount_field = amount.to_field();
+        let amount_bytes = amount_field.to_le_bytes::<32>();
         for i in 0..32 {
             payload[66 + i] = amount_bytes[i];
         }
 
-        // Convert to Wormhole chunks format (8 chunks of 31 bytes)
         let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
-        let mut byte_idx = 0;
-        for chunk_idx in 0..8 {
-            for i in 0..31 {
-                if byte_idx < 98 {
-                    chunks[chunk_idx][i] = payload[byte_idx];
-                    byte_idx += 1;
+        let mut idx = 0;
+        for c in 0..8 {
+            for j in 0..31 {
+                if idx < 98 {
+                    chunks[c][j] = payload[idx];
+                    idx += 1;
                 }
-                // Rest stays as 0 (padding)
             }
         }
 
         chunks
     }
 
+    // Contract library methods
+    #[contract_library_method]
+    fn create_claim_payload(
+        market_id: Field,
+        nullifier: Field,
+        bet_amount: u128,
+        recipient: AztecAddress,
+    ) -> [[u8; 31]; 8] {
+        let mut payload = [0u8; 98];
+        payload[0] = 0x02; // Message type: CLAIM
+
+        let market_id_bytes = market_id.to_le_bytes::<32>();
+        for i in 0..32 {
+            payload[1 + i] = market_id_bytes[i];
+        }
+
+        let nullifier_bytes = nullifier.to_le_bytes::<32>();
+        for i in 0..32 {
+            payload[33 + i] = nullifier_bytes[i];
+        }
+
+        let bet_amount_field = bet_amount.to_field();
+        let bet_amount_bytes = bet_amount_field.to_le_bytes::<32>();
+        for i in 0..32 {
+            payload[65 + i] = bet_amount_bytes[i];
+        }
+
+        let recipient_bytes = recipient.to_field().to_le_bytes::<32>();
+        for i in 0..32 {
+            payload[97 + i - 31] = recipient_bytes[i - 31];
+        }
+        let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
+        let mut idx = 0;
+        for c in 0..8 {
+            for j in 0..31 {
+                if idx < 98 {
+                    chunks[c][j] = payload[idx];
+                    idx += 1;
+                }
+            }
+        }
+
+        chunks
+    }
+
+
+    #[contract_library_method]
+    fn find_bet_note(
+        notes: BoundedVec<RetrievedNote<BetNote>, 16>,
+        commitment: Field,
+        market_id: Field,
+    ) -> (bool, u128) {
+        let mut found = false;
+        let mut bet_amount = 0u128;
+        for i in 0..16 {
+            let note = notes.get(i);
+            let matches =
+                (note.note.commitment == commitment) & (note.note.market_id == market_id);
+            found = found | matches;
+            bet_amount = if matches { note.note.amount } else { bet_amount };
+        }
+
+        (found, bet_amount)
+    }
+
+    #[contract_library_method]
+    fn compute_nullifier(market_id: Field, commitment: Field, recipient: Field) -> Field {
+        let inputs: [Field; 3] = [market_id, commitment, recipient];
+        poseidon2_hash(inputs)
+    }
+
+    // Utility functions
     #[utility]
     unconstrained fn getMyBets(
         owner: AztecAddress,
@@ -187,4 +350,3 @@ pub contract BetVault {
         storage.user_bets.at(owner).view_notes(options)
     }
 }
-

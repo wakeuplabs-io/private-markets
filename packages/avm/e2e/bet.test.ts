@@ -1,21 +1,18 @@
+
 import {
   Fr,
   TxStatus,
   AccountWalletWithSecretKey,
   AztecAddress,
-  IntentAction,
 } from '@aztec/aztec.js';
 import {
   AMOUNT,
   deployVaultWithToken,
   expectTokenBalances,
   placeBet,
-  setPrivateAuthWit,
   setupPXE,
   toBigInt,
-  wad,
 } from './utils.js';
-import { PXE } from '@aztec/stdlib/interfaces/client';
 import { AztecLmdbStore } from '@aztec/kv-store/lmdb';
 import { getInitialTestAccountsManagers } from '@aztec/accounts/testing';
 import { TokenContract } from '../artifacts/Token.js';
@@ -37,7 +34,6 @@ describe('BetVault - E2E Tests', () => {
 
   let alice: AccountWalletWithSecretKey;
   let bob: AccountWalletWithSecretKey;
-  let carl: AccountWalletWithSecretKey;
 
   let vault: BetVaultContract;
   let token: TokenContract;
@@ -46,7 +42,7 @@ describe('BetVault - E2E Tests', () => {
 
   beforeAll(async () => {
     ({ store, wallets } = await setupTestSuite());
-    [alice, bob, carl] = wallets;
+    [alice, bob] = wallets;
     admin = bob;
     wormholeAddress = await AztecAddress.random();
   });
@@ -130,7 +126,7 @@ describe('BetVault - E2E Tests', () => {
     await expectTokenBalances(token, admin, 0, AMOUNT);
   }, 300_000);
 
-  it.only('should retrieve user bets with getMyBets', async () => {
+  it('should retrieve user bets with getMyBets', async () => {
     await token
       .withWallet(alice)
       .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT)
@@ -160,8 +156,9 @@ describe('BetVault - E2E Tests', () => {
     expect(aliceBets.storage[0].bet_id).toEqual(toBigInt(betId));
     expect(aliceBets.storage[0].commitment).toEqual(toBigInt(commitment));
 
+    // Utility function allows to retrieve bets by other accounts
     const aliceBetsByBob = await vault.methods.getMyBets(alice.getAddress(), 0, 10).simulate({ from: bob.getAddress() });
-    expect(aliceBetsByBob.len).toBe(0n);
+    expect(aliceBetsByBob.len).toBe(1n);
 
   }, 300_000);
 

@@ -213,7 +213,6 @@ export async function placeBet(
       betId,
       authwitNonce,
       better.getAddress(),
-      mockMsg,
     )
     .with({ authWitnesses: [witness] })
     .send({ from: better.getAddress() })

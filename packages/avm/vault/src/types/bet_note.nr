@@ -1,19 +1,19 @@
 use dep::aztec::{
     macros::notes::note,
     oracle::random::random,
-    protocol_types::{address::AztecAddress, traits::Packable},
+    protocol_types::{address::AztecAddress, traits::{Serialize, Deserialize, Packable}},
 };
 
-#[derive(Eq, Packable)]
+#[derive(Eq, Serialize, Deserialize, Packable)]
 #[note]
 pub struct BetNote {
-    owner: AztecAddress,
-    market_id: Field,
-    outcome: u8,
-    amount: u128,
-    bet_id: Field,
-    commitment: Field,
-    randomness: Field,
+    pub owner: AztecAddress,
+    pub market_id: Field,
+    pub outcome: u8,
+    pub amount: u128,
+    pub bet_id: Field,
+    pub commitment: Field,
+    pub randomness: Field,
 }
 
 impl BetNote {
