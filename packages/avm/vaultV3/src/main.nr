@@ -8,17 +8,20 @@ pub contract BetVaultV3 {
         macros::{storage::storage, events::event, functions::{private, public, internal, view, initializer, utility}},
         state_vars::{map::Map, public_mutable::PublicMutable, public_immutable::PublicImmutable, private_set::PrivateSet},
         protocol_types::{address::AztecAddress, abis::function_selector::FunctionSelector},
-        note::note_viewer_options::NoteViewerOptions,
+        note::{retrieved_note::RetrievedNote, note_viewer_options::NoteViewerOptions, note_getter_options::NoteGetterOptions},
         messages::logs::note,
-        event::event_interface::{emit_event_in_private, MessageDeliveryEnum},
+        event::event_interface::{emit_event_in_private},
         protocol_types::{
           hash::poseidon2_hash,
-          traits::ToField},
+          traits::ToField
+        },
     };
     use dep::token::Token;
     use crate::types::bet_note::BetNote;
     use dep::wormhole::Wormhole;
 
+
+    // Events
     #[event]
     struct BetPlaced {
         market_id: Field,
@@ -36,6 +39,7 @@ pub contract BetVaultV3 {
         recipient: Field,
     }
 
+    // Storage
     #[storage]
     struct Storage<Context> {
         processed_bets: Map<Field, PublicMutable<bool, Context>, Context>,
@@ -46,6 +50,7 @@ pub contract BetVaultV3 {
         user_bets: Map<AztecAddress, PrivateSet<BetNote, Context>, Context>,
     }
 
+    // Constructor
     #[public]
     #[initializer]
     fn constructor(token_address: AztecAddress, wormhole_address: AztecAddress, admin: AztecAddress) {
@@ -57,22 +62,7 @@ pub contract BetVaultV3 {
         storage.admin.initialize(admin);
     }
 
-    #[public]
-    #[internal]
-    fn _mark_bet_processed(bet_id: Field) {
-        let already = storage.processed_bets.at(bet_id).read();
-        assert(!already, "bet_id already processed");
-        storage.processed_bets.at(bet_id).write(true);
-    }
-
-    #[public]
-    #[internal]
-    fn _mark_nullifier_used(nullifier: Field) {
-        let already_used = storage.used_nullifiers.at(nullifier).read();
-        assert(!already_used, "nullifier already used");
-        storage.used_nullifiers.at(nullifier).write(true);
-    }
-
+    // View functions
     #[public]
     #[view]
     fn is_processed(bet_id: Field) -> bool {
@@ -98,6 +88,7 @@ pub contract BetVaultV3 {
     }
 
 
+    // Private functions
     #[private]
     fn bet(
         market_id: Field,
@@ -141,7 +132,7 @@ pub contract BetVaultV3 {
             },
             &mut context,
             from,
-            MessageDeliveryEnum::CONSTRAINED_ONCHAIN,
+            1,
         );
 
         let chunks = create_bet_payload(market_id, bet_id, outcome, amount);
@@ -167,33 +158,17 @@ pub contract BetVaultV3 {
     ) {
         let from = context.msg_sender();
 
-        // 1. Verify commitment matches secret (Pedersen hash)
         let calculated_commitment = dep::std::hash::pedersen_hash([market_id, secret]);
         assert(commitment == calculated_commitment, "Invalid secret for commitment");
 
-        // 3. CRITICAL: Find BetNote with matching commitment and market_id
-        // let mut options = NoteViewerOptions::<BetNote, 7>::new();
-        let notes = storage.user_bets.at(from).view_notes(options);
-
-        let mut found = false;
-        let mut bet_amount = 0u128;
-
-        for i in 0..notes.len() {
-            let note = notes.get(i);
-            if (note.commitment == commitment) && (note.market_id == market_id) {
-                found = true;
-                bet_amount = note.amount;
-                // Note: We don't remove the note here - nullifier protection is sufficient
-                break;
-            }
-        }
+        let options: NoteGetterOptions<BetNote, 7, Field, Field> = NoteGetterOptions::new();
+        let notes = storage.user_bets.at(from).get_notes(options);
+        let (found, bet_amount) = find_bet_note(notes, commitment, market_id);
         assert(found, "No bet found for this commitment");
 
-        // 4. Compute nullifier (keccak256 for Arbitrum compatibility)
         let recipient_field = recipient.to_field();
         let nullifier = compute_nullifier(market_id, commitment, recipient_field);
 
-        // 5. Mark nullifier as used (anti-replay protection in Aztec)
         context.call_public_function(
             context.this_address(),
             comptime {
@@ -202,7 +177,6 @@ pub contract BetVaultV3 {
             [nullifier],
         );
 
-        // 6. Emit private event
         emit_event_in_private(
             ClaimAuthorized {
                 market_id,
@@ -212,145 +186,128 @@ pub contract BetVaultV3 {
             },
             &mut context,
             from,
-            MessageDelivery::CONSTRAINED_ONCHAIN,
+            1,
         );
 
-        // 7. Create and publish Wormhole message (149 bytes)
         let chunks = create_claim_payload(
             market_id,
             nullifier,
             bet_amount,
             recipient,
-            deadline
+            deadline,
         );
 
         let _ = Wormhole::at(storage.wormhole_address.read())
             .publish_message_in_private(
-                1,
-                chunks,
-                0,
-                2,
+                1,                // consistency level
+                chunks,        // payload: [Field; 5]
+                0,          // nonce
+                2,          // emitter_chain
                 from,
                 authwit_nonce
             ).call(&mut context);
     }
 
-    // Structure: [messageType(1) | marketId(32) | betId(32) | outcome(1) | amount(32)]
-    // Total: 98 bytes
-    #[contract_library_method]
-    fn create_bet_payload(market_id: Field, bet_id: Field, outcome: u8, amount: u128) -> [[u8; 31]; 8] {
-        // Create 98-byte payload
-        let mut payload = [0u8; 98];
-        payload[0] = 0x01;  // Message type: BET
-
-        // Encode marketId (32 bytes)
-        let market_id_bytes = market_id.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[1 + i] = market_id_bytes[i];
-        }
-
-        // Encode betId (32 bytes)
-        let bet_id_bytes = bet_id.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[33 + i] = bet_id_bytes[i];
-        }
-
-        // Encode outcome (1 byte)
-        payload[65] = outcome;
-
-        // Encode amount (32 bytes)
-        let amount_field: Field = amount as Field;
-        let amount_bytes = amount_field.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[66 + i] = amount_bytes[i];
-        }
-
-        // Convert to Wormhole chunks format (8 chunks of 31 bytes)
-        let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
-        let mut byte_idx = 0;
-        for chunk_idx in 0..8 {
-            for i in 0..31 {
-                if byte_idx < 98 {
-                    chunks[chunk_idx][i] = payload[byte_idx];
-                    byte_idx += 1;
-                }
-                // Rest stays as 0 (padding)
-            }
-        }
-
-        chunks
+    // Public functions
+    #[public]
+    #[internal]
+    fn _mark_bet_processed(bet_id: Field) {
+        let already = storage.processed_bets.at(bet_id).read();
+        assert(!already, "bet_id already processed");
+        storage.processed_bets.at(bet_id).write(true);
     }
 
-    // Compute nullifier: keccak256(marketId || commitment || recipient)
-    // Total preimage: 96 bytes
-    #[contract_library_method]
-    fn compute_nullifier(market_id: Field, commitment: Field, recipient: Field) -> Field {
-        let inputs: [Field; 3] = [market_id, commitment, recipient];
-        poseidon2_hash(inputs)
+    #[public]
+    #[internal]
+    fn _mark_nullifier_used(nullifier: Field) {
+        let already_used = storage.used_nullifiers.at(nullifier).read();
+        assert(!already_used, "nullifier already used");
+        storage.used_nullifiers.at(nullifier).write(true);
     }
 
-    // Structure: [messageType(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | deadline(32)]
-    // Total 149 bytes 6 chunks of 31 bytes (186 bytes with padding)
+    #[contract_library_method]
+    fn create_bet_payload(
+        market_id: Field,
+        bet_id: Field,
+        outcome: u8,
+        amount: u128,
+    ) -> [[u8; 31]; 8] {
+        let market_id_bytes: [u8; 31] = market_id.to_le_bytes::<31>();
+        let bet_id_bytes: [u8; 31] = bet_id.to_le_bytes::<31>();
+        let amount_field: Field = amount.to_field();
+        let amount_bytes: [u8; 31] = amount_field.to_le_bytes::<31>();
+        let outcome_bytes: [u8; 31] = [outcome, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        let payload: [[u8; 31]; 8] = [
+            market_id_bytes,
+            bet_id_bytes,
+            amount_bytes,
+            outcome_bytes,
+            [0u8; 31],
+            [0u8; 31],
+            [0u8; 31],
+            [0u8; 31],
+        ];
+
+        payload
+    }
+
+    // Contract library methods
     #[contract_library_method]
     fn create_claim_payload(
         market_id: Field,
         nullifier: Field,
         bet_amount: u128,
         recipient: AztecAddress,
-        deadline: Field
-    ) -> [[u8; 31]; 6] {
-        let mut payload = [0u8; 149];
-        payload[0] = 0x02;  // Message type: CLAIM_AUTH
+        deadline: Field,
+    ) -> [[u8; 31]; 8] {
+        let market_id_bytes: [u8; 31] = market_id.to_le_bytes::<31>();
+        let nullifier_bytes: [u8; 31] = nullifier.to_le_bytes::<31>();
+        let bet_amount_field: Field = bet_amount.to_field();
+        let bet_amount_bytes: [u8; 31] = bet_amount_field.to_le_bytes::<31>();
+        let recipient_bytes: [u8; 31] = recipient.to_field().to_le_bytes::<31>();
+        let deadline_bytes: [u8; 31] = deadline.to_le_bytes::<31>();
 
-        // Encode marketId (32 bytes)
-        let market_id_bytes = market_id.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[1 + i] = market_id_bytes[i];
-        }
+        let payload: [[u8; 31]; 8] = [
+            market_id_bytes,
+            nullifier_bytes,
+            bet_amount_bytes,
+            recipient_bytes,
+            deadline_bytes,
+            [0u8; 31],
+            [0u8; 31],
+            [0u8; 31],
+        ];
 
-        // Encode nullifier (32 bytes)
-        let nullifier_bytes = nullifier.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[33 + i] = nullifier_bytes[i];
-        }
-
-        // Encode betAmount (32 bytes)
-        let amount_field: Field = bet_amount as Field;
-        let amount_bytes = amount_field.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[65 + i] = amount_bytes[i];
-        }
-
-        // Encode recipient (20 bytes from AztecAddress)
-        let recipient_field = recipient.to_field();
-        let recipient_bytes = recipient_field.to_be_bytes::<32>();
-        // Take last 20 bytes (Ethereum address format)
-        for i in 0..20 {
-            payload[97 + i] = recipient_bytes[12 + i];
-        }
-
-        // Encode deadline (32 bytes)
-        let deadline_bytes = deadline.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[117 + i] = deadline_bytes[i];
-        }
-
-        // Convert to Wormhole chunks format (6 chunks of 31 bytes)
-        let mut chunks: [[u8; 31]; 6] = [[0; 31]; 6];
-        let mut byte_idx = 0;
-        for chunk_idx in 0..6 {
-            for i in 0..31 {
-                if byte_idx < 149 {
-                    chunks[chunk_idx][i] = payload[byte_idx];
-                    byte_idx += 1;
-                }
-                // Rest stays as 0 (padding)
-            }
-        }
-
-        chunks
+        payload
     }
 
+    #[contract_library_method]
+    fn find_bet_note(
+        notes: BoundedVec<RetrievedNote<BetNote>, 16>,
+        commitment: Field,
+        market_id: Field,
+    ) -> (bool, u128) {
+        let mut found = false;
+        let mut bet_amount = 0u128;
+        for i in 0..16 {
+            let note = notes.get(i);
+            let matches =
+                (note.note.commitment == commitment) & (note.note.market_id == market_id);
+            found = found | matches;
+            bet_amount = if matches { note.note.amount } else { bet_amount };
+        }
+
+        (found, bet_amount)
+    }
+
+    #[contract_library_method]
+    fn compute_nullifier(market_id: Field, commitment: Field, recipient: Field) -> Field {
+        let inputs: [Field; 3] = [market_id, commitment, recipient];
+        poseidon2_hash(inputs)
+    }
+
+    // Utility functions
     #[utility]
     unconstrained fn getMyBets(
         owner: AztecAddress,
