@@ -6,8 +6,8 @@ pub contract ClaimAuthorizer {
         macros::{storage::storage, events::event, functions::{private, public, internal, view, initializer}},
         state_vars::{map::Map, public_mutable::PublicMutable, public_immutable::PublicImmutable},
         protocol_types::{address::AztecAddress, abis::function_selector::FunctionSelector},
-        event::event_interface::{emit_event_in_private, MessageDelivery},
-        hash::keccak256,
+        event::event_interface::{emit_event_in_private, MessageDeliveryEnum},
+        hash::poseidon2_hash,
     };
     use dep::wormhole::Wormhole;
 
@@ -62,7 +62,6 @@ pub contract ClaimAuthorizer {
         secret: Field,
         bet_amount: u128,
         recipient: AztecAddress,
-        nonce: Field,
         deadline: Field,
         authwit_nonce: Field,
     ) {
@@ -96,16 +95,15 @@ pub contract ClaimAuthorizer {
             },
             &mut context,
             context.msg_sender(),
-            MessageDelivery.CONSTRAINED_ONCHAIN,
+            MessageDeliveryEnum.CONSTRAINED_ONCHAIN,
         );
 
-        // 6. Create and publish Wormhole message (181 bytes)
+        // 6. Create and publish Wormhole message (149 bytes)
         let chunks = create_claim_payload(
             market_id,
             nullifier,
             bet_amount,
             recipient,
-            nonce,
             deadline
         );
 
@@ -154,18 +152,17 @@ pub contract ClaimAuthorizer {
         result
     }
 
-    // Structure: [messageType(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | nonce(32) | deadline(32)]
-    // Total: 181 bytes
+    // Structure: [messageType(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | deadline(32)]
+    // Total: 149 bytes
     #[contract_library_method]
     fn create_claim_payload(
         market_id: Field,
         nullifier: Field,
         bet_amount: u128,
         recipient: AztecAddress,
-        nonce: Field,
         deadline: Field
-    ) -> [[u8; 31]; 8] {
-        let mut payload = [0u8; 181];
+    ) -> [[u8; 31]; 6] {
+        let mut payload = [0u8; 149];
         payload[0] = 0x02;  // Message type: CLAIM_AUTH
 
         // Encode marketId (32 bytes)
@@ -195,24 +192,18 @@ pub contract ClaimAuthorizer {
             payload[97 + i] = recipient_bytes[12 + i];
         }
 
-        // Encode nonce (32 bytes)
-        let nonce_bytes = nonce.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[117 + i] = nonce_bytes[i];
-        }
-
         // Encode deadline (32 bytes)
         let deadline_bytes = deadline.to_be_bytes::<32>();
         for i in 0..32 {
-            payload[149 + i] = deadline_bytes[i];
+            payload[117 + i] = deadline_bytes[i];
         }
 
-        // Convert to Wormhole chunks format (8 chunks of 31 bytes)
-        let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
+        // Convert to Wormhole chunks format (6 chunks of 31 bytes)
+        let mut chunks: [[u8; 31]; 6] = [[0; 31]; 6];
         let mut byte_idx = 0;
-        for chunk_idx in 0..8 {
+        for chunk_idx in 0..6 {
             for i in 0..31 {
-                if byte_idx < 181 {
+                if byte_idx < 149 {
                     chunks[chunk_idx][i] = payload[byte_idx];
                     byte_idx += 1;
                 }

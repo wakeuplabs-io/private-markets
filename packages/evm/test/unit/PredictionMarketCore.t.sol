@@ -287,7 +287,6 @@ contract PredictionMarketCoreTest is Test {
             nullifier,
             betAmount,
             user1,
-            0,
             deadline
         );
 
@@ -312,7 +311,6 @@ contract PredictionMarketCoreTest is Test {
             nullifier,
             100 * 10**6,
             user2,
-            0,
             block.timestamp + 1 hours
         );
 
@@ -334,7 +332,6 @@ contract PredictionMarketCoreTest is Test {
             nullifier,
             150 * 10**6,
             user1,
-            0,
             deadline
         );
 
@@ -350,7 +347,6 @@ contract PredictionMarketCoreTest is Test {
             nullifier,
             150 * 10**6,
             user2,
-            0,
             deadline
         );
         vm.stopPrank();
@@ -374,7 +370,6 @@ contract PredictionMarketCoreTest is Test {
             nullifier,
             150 * 10**6,
             user1,
-            0,
             block.timestamp + 1 hours
         );
     }
@@ -395,7 +390,6 @@ contract PredictionMarketCoreTest is Test {
             nullifier,
             150 * 10**6,
             user1,
-            0,
             deadline
         );
     }

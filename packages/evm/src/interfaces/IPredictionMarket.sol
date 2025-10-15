@@ -20,7 +20,6 @@ interface IPredictionMarket {
         bytes32 nullifier,
         uint256 betAmount,
         address recipient,
-        uint256 nonce,
         uint256 deadline
     ) external;
     function getMarket(uint256 marketId) external view returns (

@@ -174,7 +174,6 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
         bytes32 nullifier,
         uint256 betAmount,
         address recipient,
-        uint256 /* nonce */,
         uint256 deadline
     ) external onlyOwner nonReentrant {
         if (isFork()) revert ChainIdMismatch();

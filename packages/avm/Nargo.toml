@@ -1,5 +1,6 @@
 [workspace]
 members = [
-"vault",
-"token_contract",
+# "vault",
+# "token_contract",
+"vaultV3",
 ]

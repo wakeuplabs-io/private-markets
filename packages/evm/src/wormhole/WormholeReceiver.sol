@@ -121,32 +121,23 @@ contract WormholeReceiver is PredictionMarketGetters {
      * @param encodedVm A byte array containing a VAA signed by the guardians
      */
     function verify(bytes memory encodedVm) external {
-        // Parse and verify the VAA through Wormhole Core
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole().parseAndVerifyVM(encodedVm);
 
-        // Ensure the VAA signature is valid
         require(valid, reason);
-
-        // Ensure the VAA is from a registered authorized emitter
         require(_verifyAuthorizedEmitter(vm), "Invalid emitter: source not recognized");
 
-        // Prevent replay attacks - check if this specific VAA has been processed
         bytes32 vaaHash = keccak256(abi.encodePacked(vm.emitterAddress, vm.emitterChainId, vm.sequence));
         if (processedVAAs[vaaHash]) {
             revert MessageAlreadyProcessed(vaaHash);
         }
 
-        // Mark VAA as processed
         processedVAAs[vaaHash] = true;
 
-        // Get the payload
         bytes memory payload = vm.payload;
 
-        // V3: Route by message type (first byte)
         if (payload.length == 0) revert EmptyPayload();
         uint8 messageType = uint8(payload[0]);
 
-        // Emit raw message event for debugging/auditing
         emit MessageReceived(vm.emitterChainId, vm.emitterAddress, vaaHash, messageType, payload.length);
 
         if (messageType == 0x01) {
@@ -210,26 +201,25 @@ contract WormholeReceiver is PredictionMarketGetters {
 
     /**
      * @dev Processes claim authorization payload from Aztec (V3)
-     * Payload structure (181 bytes): [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | nonce(32) | deadline(32)]
+     * Payload structure (149 bytes): [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | deadline(32)]
      */
     function _processClaimAuthPayload(bytes memory payload) internal {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // V3 CLAIM_AUTHORIZATION message: exactly 181 bytes
-        if (payload.length != 181) revert PayloadTooShort(payload.length, 181);
+        // V3 CLAIM_AUTHORIZATION message: exactly 149 bytes
+        if (payload.length != 149) revert PayloadTooShort(payload.length, 149);
         if (uint8(payload[0]) != 0x02) revert UnknownMessageType(uint8(payload[0]));
 
         uint256 marketId;
         bytes32 nullifier;
         uint256 betAmount;
         address recipient;
-        uint256 nonce;
         uint256 deadline;
 
         assembly {
-            // payload structure: [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | nonce(32) | deadline(32)]
-            // Total: 181 bytes (abi.encodePacked does NOT pad the 20-byte address)
+            // payload structure: [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | deadline(32)]
+            // Total: 149 bytes (abi.encodePacked does NOT pad the 20-byte address)
             // mload reads 32 bytes starting at given position
             // payload pointer points to length, so add 32 to get to data
             //
@@ -240,8 +230,7 @@ contract WormholeReceiver is PredictionMarketGetters {
             // [65-96]:  nullifier (bytes 33-64)
             // [97-128]: betAmount (bytes 65-96)
             // [129-148]: recipient (bytes 97-116) - ONLY 20 bytes!
-            // [149-180]: nonce (bytes 117-148)
-            // [181-212]: deadline (bytes 149-180)
+            // [149-180]: deadline (bytes 117-148)
 
             marketId := mload(add(payload, 33))        // Bytes 1-32
             nullifier := mload(add(payload, 65))       // Bytes 33-64
@@ -254,8 +243,7 @@ contract WormholeReceiver is PredictionMarketGetters {
             let recipientBytes := mload(add(payload, 129))
             recipient := shr(96, recipientBytes)
 
-            nonce := mload(add(payload, 149))          // Bytes 117-148
-            deadline := mload(add(payload, 181))       // Bytes 149-180
+            deadline := mload(add(payload, 149))       // Bytes 117-148
         }
 
         // Validate extracted data (marketId validity checked by PREDICTION_MARKET)
@@ -264,7 +252,7 @@ contract WormholeReceiver is PredictionMarketGetters {
         if (recipient == address(0)) revert ZeroRecipient();
 
         // Call PredictionMarketCore to process the claim authorization
-        PREDICTION_MARKET.processClaimAuthorization(marketId, nullifier, betAmount, recipient, nonce, deadline);
+        PREDICTION_MARKET.processClaimAuthorization(marketId, nullifier, betAmount, recipient, deadline);
 
         emit ClaimAuthorizationReceived(marketId, nullifier, recipient, betAmount);
     }

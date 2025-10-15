@@ -132,7 +132,6 @@ contract FullFlowV3Test is Test {
                 keccak256("nullifier1"),
                 150 * 10**6,
                 user1,
-                0,
                 block.timestamp + 1 hours
             );
 
@@ -154,7 +153,6 @@ contract FullFlowV3Test is Test {
                 keccak256("nullifier3"),
                 50 * 10**6,
                 user3,
-                0,
                 block.timestamp + 1 hours
             );
 
