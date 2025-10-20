@@ -9,11 +9,12 @@ frontend:
       commands:
         - echo "Build completed in preBuild phase"
   artifacts:
-    baseDirectory: packages/frontend/.next
+    baseDirectory: packages/frontend/out
     files:
       - '**/*'
   cache:
     paths:
       - packages/frontend/.next/cache/**/*
+      - packages/frontend/out/**/*
       - .npm/**/*
       - node_modules/**/*
