@@ -95,6 +95,7 @@ export function useUserActivity(): UseUserActivityReturn {
       refreshInterval: 10000, // Auto-refresh every 10 seconds
       revalidateOnFocus: true, // Revalidate when window gains focus
       revalidateOnReconnect: true, // Revalidate when network reconnects
+      dedupingInterval: 5000, // Prevent duplicate requests within 5 seconds
       onError: (err) => {
         console.error('Error loading user activity:', err)
         setConnectionStatus('error')

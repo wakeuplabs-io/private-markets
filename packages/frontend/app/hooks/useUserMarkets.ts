@@ -50,7 +50,7 @@ export function useUserMarkets(): UseUserMarketsReturn {
     {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
-      dedupingInterval: 2000,
+      dedupingInterval: 5000, // Increased from 2000ms to 5000ms
       errorRetryCount: 3,
       onError: (err) => {
         console.error('Error loading user markets:', err)

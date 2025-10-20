@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { Lock, Zap, Target, Link2, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useWallet } from '@/context'
 
@@ -10,35 +11,6 @@ export default function Home() {
   return (
     <>
       <div className="relative w-full overflow-x-hidden">
-        {/* Loading overlay while initializing */}
-        {isInitializingProvider && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-card border border-border rounded-lg p-8 max-w-md mx-4 text-center">
-              <div className="mb-4">
-                <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-              </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">Initializing Aztec PXE</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Setting up your private execution environment. This may take 10-30 seconds.
-              </p>
-              <div className="space-y-2 text-xs text-muted-foreground text-left">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                  <span>Creating PXE service in browser</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse delay-75"></div>
-                  <span>Registering contracts</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse delay-150"></div>
-                  <span>Connecting to Aztec network</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="py-24">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6 leading-tight">
@@ -56,7 +28,7 @@ export default function Home() {
             <div className="grid md:grid-cols-3 gap-6 sm:gap-8 mb-12 max-w-4xl mx-auto px-4">
               <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-6">
                 <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-2xl">🔒</span>
+                  <Lock className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Zero-Knowledge Privacy</h3>
                 <p className="text-sm text-muted-foreground">
@@ -66,7 +38,7 @@ export default function Home() {
 
               <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-6">
                 <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-2xl">⚡</span>
+                  <Zap className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Cross-Chain Trading</h3>
                 <p className="text-sm text-muted-foreground">
@@ -76,7 +48,7 @@ export default function Home() {
 
               <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-6">
                 <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-2xl">🎯</span>
+                  <Target className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Prediction Markets</h3>
                 <p className="text-sm text-muted-foreground">
@@ -114,15 +86,21 @@ export default function Home() {
                 <div className="text-sm text-muted-foreground">Private</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-primary mb-1">⚡</div>
+                <div className="flex justify-center mb-1">
+                  <Zap className="w-8 h-8 text-primary" />
+                </div>
                 <div className="text-sm text-muted-foreground">Fast Trades</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-primary mb-1">🔗</div>
+                <div className="flex justify-center mb-1">
+                  <Link2 className="w-8 h-8 text-primary" />
+                </div>
                 <div className="text-sm text-muted-foreground">Cross-Chain</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-primary mb-1">🛡️</div>
+                <div className="flex justify-center mb-1">
+                  <Shield className="w-8 h-8 text-primary" />
+                </div>
                 <div className="text-sm text-muted-foreground">Secure</div>
               </div>
             </div>

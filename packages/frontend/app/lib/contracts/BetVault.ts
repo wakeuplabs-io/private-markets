@@ -156,8 +156,8 @@ user_bets: {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** authorizeClaim(market_id: field, commitment: field, secret: field, recipient: struct, deadline: field, authwit_nonce: field) */
-    authorizeClaim: ((market_id: FieldLike, commitment: FieldLike, secret: FieldLike, recipient: AztecAddressLike, deadline: FieldLike, authwit_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** authorizeClaim(market_id: field, commitment: field, secret: field, recipient: struct, bet_amount: integer, authwit_nonce: field) */
+    authorizeClaim: ((market_id: FieldLike, commitment: FieldLike, secret: FieldLike, recipient: AztecAddressLike, bet_amount: (bigint | number), authwit_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** bet(market_id: field, outcome: integer, amount: integer, commitment: field, bet_id: field, authwit_nonce: field, from: struct) */
     bet: ((market_id: FieldLike, outcome: (bigint | number), amount: (bigint | number), commitment: FieldLike, bet_id: FieldLike, authwit_nonce: FieldLike, from: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -165,13 +165,16 @@ user_bets: {
     /** constructor(token_address: struct, wormhole_address: struct, admin: struct) */
     constructor: ((token_address: AztecAddressLike, wormhole_address: AztecAddressLike, admin: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** find_bet_for_claim(owner: struct, commitment: field, market_id: field) */
+    find_bet_for_claim: ((owner: AztecAddressLike, commitment: FieldLike, market_id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** get_admin() */
     get_admin: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_token_address() */
     get_token_address: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** getMget_user_bets(owner: struct, offset: integer, limit: integer) */
+    /** get_user_bets(owner: struct, offset: integer, limit: integer) */
     get_user_bets: ((owner: AztecAddressLike, offset: (bigint | number), limit: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** is_nullifier_used(nullifier: field) */

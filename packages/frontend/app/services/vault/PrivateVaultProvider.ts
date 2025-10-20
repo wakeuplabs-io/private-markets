@@ -5,6 +5,7 @@ import { ensureWalletConnected } from "@/lib/wallet";
 import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
 import { pxeService } from "@/services/pxeService";
+import { pxeQueueService } from "@/services/pxeQueueService";
 import type { IVaultProvider, BetParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
@@ -160,34 +161,36 @@ export class PrivateVaultProvider implements IVaultProvider {
    * @returns true if bet has been processed, false otherwise
    */
   async isProcessed(betId: string): Promise<boolean> {
-    try {
-      const account = await ensureWalletConnected();
-      const pxe = pxeService.getPXE();
+    return pxeQueueService.enqueue(async () => {
+      try {
+        const account = await ensureWalletConnected();
+        const pxe = pxeService.getPXE();
 
-      // Create CopyCat wallet for simulation
-      const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
-      const aztecAddress = AztecAddress.fromString(this.contractAddress);
-      const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
+        // Create CopyCat wallet for simulation
+        const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+        const aztecAddress = AztecAddress.fromString(this.contractAddress);
+        const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
 
-      const result = await contract.methods
-        .is_processed(Fr.fromString(betId))
-        .simulate({
-          from: account.getAddress(),
-          skipFeeEnforcement: true
-        });
+        const result = await contract.methods
+          .is_processed(Fr.fromString(betId))
+          .simulate({
+            from: account.getAddress(),
+            skipFeeEnforcement: true
+          });
 
-      return Boolean(result);
-    } catch (error) {
-      console.error('[VAULT:PRIVATE] Failed to check bet status:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        return Boolean(result);
+      } catch (error) {
+        console.error('[VAULT:PRIVATE] Failed to check bet status:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 
-      if (errorMsg.includes('has not been registered in the wallet\'s PXE')) {
-        console.warn('[VAULT:PRIVATE] Contract not registered in PXE, returning fallback value');
+        if (errorMsg.includes('has not been registered in the wallet\'s PXE')) {
+          console.warn('[VAULT:PRIVATE] Contract not registered in PXE, returning fallback value');
+          return FALLBACK_VALUES.BET_PROCESSED;
+        }
+
         return FALLBACK_VALUES.BET_PROCESSED;
       }
-
-      return FALLBACK_VALUES.BET_PROCESSED;
-    }
+    });
   }
 
   /**
@@ -197,7 +200,44 @@ export class PrivateVaultProvider implements IVaultProvider {
    * @returns Token contract address
    */
   async getTokenAddress(): Promise<string> {
-    try {
+    return pxeQueueService.enqueue(async () => {
+      try {
+        const account = await ensureWalletConnected();
+        const pxe = pxeService.getPXE();
+
+        // Create CopyCat wallet for simulation
+        const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+        const aztecAddress = AztecAddress.fromString(this.contractAddress);
+        const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
+
+        const result = await contract.methods
+          .get_token_address()
+          .simulate({
+            from: account.getAddress(),
+            skipFeeEnforcement: true
+          });
+
+        return result.toString();
+      } catch (error) {
+        console.error('[VAULT:PRIVATE] Failed to get token address:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+
+        if (errorMsg.includes('has not been registered in the wallet\'s PXE')) {
+          console.warn('[VAULT:PRIVATE] Contract not registered in PXE, returning fallback value');
+          return FALLBACK_VALUES.TOKEN_ADDRESS;
+        }
+
+        return FALLBACK_VALUES.TOKEN_ADDRESS;
+      }
+    });
+  }
+
+  /**
+   * Get user bets
+   * Uses CopyCatAccountWallet for proper simulation context
+   */
+  async getUserBets(): Promise<Bet[]> {
+    return pxeQueueService.enqueue(async () => {
       const account = await ensureWalletConnected();
       const pxe = pxeService.getPXE();
 
@@ -206,64 +246,31 @@ export class PrivateVaultProvider implements IVaultProvider {
       const aztecAddress = AztecAddress.fromString(this.contractAddress);
       const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
 
-      const result = await contract.methods
-        .get_token_address()
+      const from = account.getAddress();
+      const result: { storage: BlockchainBet[], len: bigint } = await contract.methods
+        .get_user_bets(from, 0, 10)
         .simulate({
-          from: account.getAddress(),
+          from,
           skipFeeEnforcement: true
         });
 
-      return result.toString();
-    } catch (error) {
-      console.error('[VAULT:PRIVATE] Failed to get token address:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      const validBetsCount = Number(result.len);
+      const blockchainBets = result.storage.slice(0, validBetsCount);
 
-      if (errorMsg.includes('has not been registered in the wallet\'s PXE')) {
-        console.warn('[VAULT:PRIVATE] Contract not registered in PXE, returning fallback value');
-        return FALLBACK_VALUES.TOKEN_ADDRESS;
-      }
+      // Transform blockchain format to application Bet format
+      const bets: Bet[] = blockchainBets.map(blockchainBet => ({
+        id: blockchainBet.bet_id.toString(),
+        marketId: blockchainBet.market_id.toString(),
+        option: blockchainBet.outcome === BigInt(1) ? 'yes' : 'no',
+        amount: Number(blockchainBet.amount) / 1e18, // Convert from e18 to normal units
+        status: 'confirmed' as const,
+        placedAt: new Date(), // TODO: Get actual timestamp from blockchain
+        // Optional fields that might come from blockchain
+        userAddress: blockchainBet.owner.toString(),
+      }));
 
-      return FALLBACK_VALUES.TOKEN_ADDRESS;
-    }
-  }
-
-  /**
-   * Get user bets
-   * Uses CopyCatAccountWallet for proper simulation context
-   */
-  async getUserBets(): Promise<Bet[]> {
-    const account = await ensureWalletConnected();
-    const pxe = pxeService.getPXE();
-
-    // Create CopyCat wallet for simulation
-    const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
-    const aztecAddress = AztecAddress.fromString(this.contractAddress);
-    const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
-
-    const from = account.getAddress();
-    const result: { storage: BlockchainBet[], len: bigint } = await contract.methods
-      .get_user_bets(from, 0, 10)
-      .simulate({
-        from,
-        skipFeeEnforcement: true
-      });
-
-    const validBetsCount = Number(result.len);
-    const blockchainBets = result.storage.slice(0, validBetsCount);
-
-    // Transform blockchain format to application Bet format
-    const bets: Bet[] = blockchainBets.map(blockchainBet => ({
-      id: blockchainBet.bet_id.toString(),
-      marketId: blockchainBet.market_id.toString(),
-      option: blockchainBet.outcome === BigInt(1) ? 'yes' : 'no',
-      amount: Number(blockchainBet.amount) / 1e18, // Convert from e18 to normal units
-      status: 'confirmed' as const,
-      placedAt: new Date(), // TODO: Get actual timestamp from blockchain
-      // Optional fields that might come from blockchain
-      userAddress: blockchainBet.owner.toString(),
-    }));
-
-    return bets;
+      return bets;
+    });
   }
 
   /**
