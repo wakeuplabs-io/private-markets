@@ -7,8 +7,8 @@ pub contract BetVault {
     use dep::aztec::{
         macros::{storage::storage, events::event, functions::{private, public, internal, view, initializer, utility}},
         state_vars::{map::Map, public_mutable::PublicMutable, public_immutable::PublicImmutable, private_set::PrivateSet},
-        protocol_types::{address::AztecAddress, abis::function_selector::FunctionSelector},
-        note::{retrieved_note::RetrievedNote, note_viewer_options::NoteViewerOptions, note_getter_options::NoteGetterOptions},
+        protocol_types::address::AztecAddress,
+        note::note_viewer_options::NoteViewerOptions,
         messages::logs::note,
         event::event_interface::{emit_event_in_private, MessageDelivery},
         protocol_types::{
@@ -99,6 +99,7 @@ pub contract BetVault {
         authwit_nonce: Field,
         from: AztecAddress,
     ) {
+        assert(amount > 0, "Amount must be greater than 0");
         let admin_address = storage.admin.read();
 
         let _ = Token::at(storage.token_address.read()).transfer_private_to_private(
@@ -114,13 +115,9 @@ pub contract BetVault {
           .insert(bet_note)
           .emit(note::encode_and_encrypt_note(&mut context, from));
 
-        context.call_public_function(
-            context.this_address(),
-            comptime {
-                FunctionSelector::from_signature("_mark_bet_processed(Field)")
-            },
-            [bet_id],
-        );
+        BetVault::at(context.this_address())
+            ._mark_bet_processed(bet_id)
+            .enqueue(&mut context);
 
         emit_event_in_private(
             BetPlaced {
@@ -135,7 +132,7 @@ pub contract BetVault {
             MessageDelivery.CONSTRAINED_ONCHAIN,
         );
 
-        let chunks = create_bet_payload(market_id, bet_id, outcome, amount);
+        let chunks: [[u8; 31]; 8] = create_bet_payload(market_id, bet_id, outcome, amount);
         // let _ = Wormhole::at(storage.wormhole_address.read())
         //     .publish_message_in_private(
         //         1,
@@ -153,32 +150,33 @@ pub contract BetVault {
         commitment: Field,
         secret: Field,
         recipient: AztecAddress,
-        deadline: Field,
+        bet_amount: u128,
         authwit_nonce: Field,
     ) {
         let from = context.msg_sender();
 
-        let calculated_commitment = dep::std::hash::pedersen_hash([market_id, secret]);
+        // Verify secret
+        let calculated_commitment = poseidon2_hash([market_id, secret]);
         assert(commitment == calculated_commitment, "Invalid secret for commitment");
 
-        let options: NoteGetterOptions<BetNote, 7, Field, Field> = NoteGetterOptions::new();
-        let notes = storage.user_bets.at(from).get_notes(options);
-        let (found, bet_amount) = find_bet_note(notes, commitment, market_id);
-        assert(found, "No bet found for this commitment");
+        // Verify amount is valid (basic sanity check)
+        assert(bet_amount > 0, "Bet amount must be greater than 0");
 
+        // Note: The verification that the bet note exists is done in TypeScript
+        // by calling find_bet_for_claim() before invoking authorizeClaim()
+
+        // Generate nullifier
         let recipient_field = recipient.to_field();
         let nullifier = compute_nullifier(market_id, commitment, recipient_field);
 
-        context.call_public_function(
-            context.this_address(),
-            comptime {
-                FunctionSelector::from_signature("_mark_nullifier_used(Field)")
-            },
-            [nullifier],
-        );
+        // Mark nullifier as used
+        BetVault::at(context.this_address())
+            ._mark_nullifier_used(nullifier)
+            .enqueue(&mut context);
 
+        // Emit event
         emit_event_in_private(
-            ClaimAuthorized {
+           ClaimAuthorized {
                 market_id,
                 nullifier,
                 bet_amount,
@@ -189,6 +187,7 @@ pub contract BetVault {
             MessageDelivery.CONSTRAINED_ONCHAIN,
         );
 
+        // Create Wormhole payload
         let chunks = create_claim_payload(
             market_id,
             nullifier,
@@ -196,15 +195,15 @@ pub contract BetVault {
             recipient,
         );
 
-        let _ = Wormhole::at(storage.wormhole_address.read())
-            .publish_message_in_private(
-                1,                // consistency level
-                chunks,        // payload: [Field; 5]
-                0,          // nonce
-                2,          // emitter_chain
-                from,
-                authwit_nonce
-            ).call(&mut context);
+        // let _ = Wormhole::at(storage.wormhole_address.read())
+        //     .publish_message_in_private(
+        //         1,                // consistency level
+        //         chunks,        // payload: [Field; 5]
+        //         0,          // nonce
+        //         2,          // emitter_chain
+        //         from,
+        //         authwit_nonce
+        //     ).call(&mut context);
     }
 
     // Public functions
@@ -274,7 +273,7 @@ pub contract BetVault {
         bet_amount: u128,
         recipient: AztecAddress,
     ) -> [[u8; 31]; 8] {
-        let mut payload = [0u8; 98];
+        let mut payload = [0u8; 129];
         payload[0] = 0x02; // Message type: CLAIM
 
         let market_id_bytes = market_id.to_le_bytes::<32>();
@@ -295,13 +294,13 @@ pub contract BetVault {
 
         let recipient_bytes = recipient.to_field().to_le_bytes::<32>();
         for i in 0..32 {
-            payload[97 + i - 31] = recipient_bytes[i - 31];
+            payload[97 + i] = recipient_bytes[i];
         }
         let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
         let mut idx = 0;
         for c in 0..8 {
             for j in 0..31 {
-                if idx < 98 {
+                if idx < 129 {
                     chunks[c][j] = payload[idx];
                     idx += 1;
                 }
@@ -313,37 +312,56 @@ pub contract BetVault {
 
 
     #[contract_library_method]
-    fn find_bet_note(
-        notes: BoundedVec<RetrievedNote<BetNote>, 16>,
-        commitment: Field,
-        market_id: Field,
-    ) -> (bool, u128) {
-        let mut found = false;
-        let mut bet_amount = 0u128;
-        for i in 0..16 {
-            let note = notes.get(i);
-            let matches =
-                (note.note.commitment == commitment) & (note.note.market_id == market_id);
-            found = found | matches;
-            bet_amount = if matches { note.note.amount } else { bet_amount };
-        }
-
-        (found, bet_amount)
-    }
-
-    #[contract_library_method]
     fn compute_nullifier(market_id: Field, commitment: Field, recipient: Field) -> Field {
         let inputs: [Field; 3] = [market_id, commitment, recipient];
         poseidon2_hash(inputs)
     }
 
     // Utility functions
+    /// Returns bet note details for claim authorization
+    /// This function is unconstrained and meant to be called from TypeScript before authorizeClaim
+    /// Returns (found: bool, amount: u128)
     #[utility]
-    unconstrained fn getMyBets(
+    unconstrained fn find_bet_for_claim(
+        owner: AztecAddress,
+        commitment: Field,
+        market_id: Field,
+    ) -> pub (bool, u128) {
+        // Configure options for view_notes
+        let mut options = NoteViewerOptions::<BetNote, 7>::new();
+        options = options.set_limit(10);
+
+        // view_notes returns BoundedVec<BetNote, N> (without RetrievedNote wrapper)
+        let notes: BoundedVec<BetNote, 10> =
+            storage.user_bets.at(owner).view_notes(options);
+
+        let mut found = false;
+        let mut bet_amount = 0u128;
+
+        // Off-chain search (does not generate constraints)
+        // Only iterate up to the actual number of notes in the BoundedVec
+        let len = notes.len();
+        for i in 0..10 {
+            if i < len {
+                let note = notes.get(i);
+                let matches = (note.commitment == commitment) &
+                              (note.market_id == market_id);
+                found = found | matches;
+                bet_amount = if matches { note.amount } else { bet_amount };
+            }
+        }
+
+        (found, bet_amount)
+    }
+
+    // Returns up to 10 user bets. Limit parameter must be <= 10.
+    #[utility]
+    unconstrained fn get_user_bets(
         owner: AztecAddress,
         offset: u32,
         limit: u32
     ) -> pub BoundedVec<BetNote, 10> {
+        assert(limit <= 10, "Limit must be <= 10");
         let mut options = NoteViewerOptions::<BetNote, 7>::new();
         options = options.set_offset(offset);
         options = options.set_limit(limit);

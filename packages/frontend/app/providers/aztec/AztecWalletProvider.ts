@@ -48,6 +48,8 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
   private aztecNode: any = null; // AztecNode client for fetching contract instances
   private connectedAccount: AccountWallet | null = null;
   private config: AztecWalletConfig;
+  private isInitializing = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(config: AztecWalletConfig = {}) {
     this.config = {
@@ -62,6 +64,14 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     return "aztec";
   }
 
+  /**
+   * Check if PXE is currently being initialized
+   * @returns True if initialization is in progress
+   */
+  getIsInitializing(): boolean {
+    return this.isInitializing;
+  }
+
   private isTestnet(nodeUrl: string): boolean {
     return nodeUrl.includes('aztec-testnet') ||
            (nodeUrl.includes('testnet') &&
@@ -70,57 +80,82 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
   }
 
   async initialize(): Promise<void> {
+    // If already initialized, return immediately
     if (this.pxe) {
+      logger.info('PXE already initialized, skipping');
       return;
     }
 
-    const nodeUrl = this.config.nodeUrl || DEFAULT_NODE_URL;
-    const isTestnet = this.isTestnet(nodeUrl);
-
-    if (isTestnet) {
-      // Testnet: Create local PXE in browser (like aztec-web-starter)
-      logger.info('Creating PXE service in browser for testnet:', nodeUrl);
-
-      this.aztecNode = await createAztecNodeClient(nodeUrl);
-
-      const config = getPXEServiceConfig();
-      config.l1Contracts = await this.aztecNode.getL1ContractAddresses();
-      config.proverEnabled = this.config.proverEnabled;
-      const store = await createStore("pxe_data", {
-        dataDirectory: "pxe",
-        dataStoreMapSizeKB: 1e6,
-      });
-      this.pxe = await createPXEService(this.aztecNode, config, {
-        useLogSuffix: true,
-        store
-      });
-
-      // Register PXE in global service for access by other providers
-      pxeService.registerPXE(this.pxe);
-
-      logger.info('PXE service created in browser');
-    } else {
-      // Sandbox: Connect to existing PXE HTTP server
-      logger.info('Connecting to sandbox PXE:', nodeUrl);
-      this.pxe = createPXEClient(nodeUrl);
-      await waitForPXE(this.pxe);
-
-      // Register PXE in global service for access by other providers
-      pxeService.registerPXE(this.pxe);
+    // If initialization is in progress, return the existing promise
+    if (this.isInitializing && this.initializationPromise) {
+      logger.info('Initialization already in progress, waiting for completion');
+      return this.initializationPromise;
     }
 
-    // Register Sponsored FPC Contract with PXE
-    await this.pxe.registerContract({
-      instance: await this.#getSponsoredFPCContract(),
-      artifact: SponsoredFPCContractArtifact,
-    });
+    // Mark as initializing and create a new promise
+    this.isInitializing = true;
+    logger.info('🚀 Starting PXE initialization...');
 
-    // Register deployed contracts from environment variables
-    await this.registerDeployedContracts();
+    this.initializationPromise = (async () => {
+      try {
+        const nodeUrl = this.config.nodeUrl || DEFAULT_NODE_URL;
+        const isTestnet = this.isTestnet(nodeUrl);
 
-    // Log the Node Info
-    const nodeInfo = await this.pxe.getNodeInfo();
-    logger.info('PXE initialized. Node info:', nodeInfo);
+        if (isTestnet) {
+          // Testnet: Create local PXE in browser (like aztec-web-starter)
+          logger.info('Creating PXE service in browser for testnet:', nodeUrl);
+
+          this.aztecNode = await createAztecNodeClient(nodeUrl);
+
+          const config = getPXEServiceConfig();
+          config.l1Contracts = await this.aztecNode.getL1ContractAddresses();
+          config.proverEnabled = this.config.proverEnabled;
+          const store = await createStore("pxe_data", {
+            dataDirectory: "pxe",
+            dataStoreMapSizeKB: 1e6,
+          });
+          this.pxe = await createPXEService(this.aztecNode, config, {
+            useLogSuffix: true,
+            store
+          });
+
+          // Register PXE in global service for access by other providers
+          pxeService.registerPXE(this.pxe);
+
+          logger.info('PXE service created in browser');
+        } else {
+          // Sandbox: Connect to existing PXE HTTP server
+          logger.info('Connecting to sandbox PXE:', nodeUrl);
+          this.pxe = createPXEClient(nodeUrl);
+          await waitForPXE(this.pxe);
+
+          // Register PXE in global service for access by other providers
+          pxeService.registerPXE(this.pxe);
+        }
+
+        // Register Sponsored FPC Contract with PXE
+        logger.info('Registering Sponsored FPC contract...');
+        await this.pxe.registerContract({
+          instance: await this.#getSponsoredFPCContract(),
+          artifact: SponsoredFPCContractArtifact,
+        });
+
+        // Register deployed contracts from environment variables
+        await this.registerDeployedContracts();
+
+        // Log the Node Info
+        const nodeInfo = await this.pxe.getNodeInfo();
+        logger.info('✅ PXE initialization complete. Node info:', nodeInfo);
+      } catch (error) {
+        logger.error('❌ PXE initialization failed:', error);
+        throw error;
+      } finally {
+        this.isInitializing = false;
+        this.initializationPromise = null;
+      }
+    })();
+
+    return this.initializationPromise;
   }
 
   async registerDeployedContracts(): Promise<void> {
@@ -300,11 +335,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       const deployMethod = await account.getDeployMethod();
       const sponsoredPFCContract = await this.#getSponsoredFPCContract();
 
-      // Get current block number and set expiration well into the future
-      const nodeInfo = await this.pxe.getNodeInfo();
-      const currentBlockNumber = nodeInfo.getBlockNumber;
-      const expirationBlockNumber = currentBlockNumber + 100; // 100 blocks in the future
-
       const deployOpts = {
         from: AztecAddress.ZERO,
         contractAddressSalt: Fr.fromString(account.salt.toString()),
@@ -313,7 +343,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
             new SponsoredFeePaymentMethod(sponsoredPFCContract.address)
           ),
         },
-        expirationBlockNumber,
         universalDeploy: true,
         skipClassPublication: true,
         skipInstancePublication: true,
@@ -390,11 +419,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
 
     const sponsoredPFCContract = await this.#getSponsoredFPCContract();
 
-    // Get current block number and set expiration well into the future
-    const nodeInfo = await this.pxe.getNodeInfo();
-    const currentBlockNumber = nodeInfo.blockNumber;
-    const expirationBlockNumber = currentBlockNumber + 100; // 100 blocks in the future
-
     const provenInteraction = await contractInteraction.prove({
       from: from ?? this.connectedAccount.getAddress(),
       fee: {
@@ -402,7 +426,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
           sponsoredPFCContract.address
         ),
       },
-      expirationBlockNumber,
     });
 
     await provenInteraction.send().wait({ timeout: 120 });

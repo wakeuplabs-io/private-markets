@@ -175,6 +175,31 @@ export class WalletService {
       return 'none';
     }
   }
+
+  /**
+   * Check if a wallet provider is currently initializing
+   * @param connector - The wallet provider identifier
+   * @returns True if provider is initializing
+   */
+  isProviderInitializing(connector: WalletConnector): boolean {
+    try {
+      const provider = walletRegistry.get(connector);
+      if (!provider) {
+        return false;
+      }
+
+      // Check if provider has getIsInitializing method (type assertion)
+      const extendedProvider = provider as { getIsInitializing?: () => boolean };
+      if (extendedProvider.getIsInitializing) {
+        return extendedProvider.getIsInitializing();
+      }
+
+      return false;
+    } catch (error) {
+      console.error(`Failed to check initialization status for ${connector}:`, error);
+      return false;
+    }
+  }
 }
 
 export const walletService = WalletService.getInstance();

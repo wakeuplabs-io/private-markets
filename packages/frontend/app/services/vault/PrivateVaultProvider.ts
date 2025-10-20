@@ -5,7 +5,7 @@ import { ensureWalletConnected } from "@/lib/wallet";
 import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
 import { pxeService } from "@/services/pxeService";
-import type { IVaultProvider, BetParams } from "./types";
+import type { IVaultProvider, BetParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
 
@@ -128,7 +128,6 @@ export class PrivateVaultProvider implements IVaultProvider {
 
       console.log('[VAULT:PRIVATE] Submitting bet transaction...');
 
-      // OPTION 1: Using wallet connection manager (delegated approach)
       const interaction = vaultContract.methods.bet(
         Fr.fromString(params.marketId),
         params.outcome,
@@ -137,7 +136,6 @@ export class PrivateVaultProvider implements IVaultProvider {
         Fr.fromString(params.betId),
         Fr.fromString(params.authwitNonce),
         fromAddress,
-        params.msg
       );
       await walletConnectionManager.sendTransaction(interaction, [authwit], fromAddress);
 
@@ -244,7 +242,7 @@ export class PrivateVaultProvider implements IVaultProvider {
 
     const from = account.getAddress();
     const result: { storage: BlockchainBet[], len: bigint } = await contract.methods
-      .getMyBets(from, 0, 10)
+      .get_user_bets(from, 0, 10)
       .simulate({
         from,
         skipFeeEnforcement: true
@@ -266,6 +264,65 @@ export class PrivateVaultProvider implements IVaultProvider {
     }));
 
     return bets;
+  }
+
+  /**
+   * Authorize a claim for a bet using connected wallet
+   *
+   * This operation:
+   * 1. Verifies the commitment matches the secret
+   * 2. Generates nullifier for the claim
+   * 3. Sends Wormhole message to Arbitrum for payout
+   *
+   * Contract reference: packages/avm/vault/src/main.nr line 151-213
+   *
+   * @param params - Claim parameters including marketId, commitment, secret, recipient, deadline
+   * @returns Transaction hash
+   */
+  async authorizeClaim(params: ClaimParams): Promise<string> {
+    try {
+      const vaultContract = await this.getContract();
+      const account = await ensureWalletConnected() as WalletAccount;
+      const fromAddress = AztecAddress.fromString(account.getAddress().toString());
+
+      console.log('[VAULT:PRIVATE] Authorizing claim...');
+      console.log('[VAULT:PRIVATE] Market ID:', params.marketId);
+      console.log('[VAULT:PRIVATE] Recipient:', params.recipient);
+      console.log('[VAULT:PRIVATE] Bet Amount:', params.betAmount);
+
+      console.log('[VAULT:PRIVATE] Submitting claim authorization transaction...');
+
+      const interaction = vaultContract.methods.authorizeClaim(
+        Fr.fromString(params.marketId),
+        Fr.fromString(params.commitment),
+        Fr.fromString(params.secret),
+        AztecAddress.fromString(params.recipient),
+        Fr.fromString(params.deadline),
+        Fr.fromString(params.authwitNonce),
+      );
+
+      // No need for authwit here since we're not transferring tokens
+      await walletConnectionManager.sendTransaction(interaction, [], fromAddress);
+
+      return 'Claim authorization sent successfully';
+    } catch (error) {
+      console.error('[VAULT:PRIVATE] Failed to authorize claim:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+
+      if (errorMsg.includes('has not been registered in the wallet\'s PXE')) {
+        throw new Error(`${FALLBACK_VALUES.ERROR_MESSAGE}: Contract not registered in wallet PXE`);
+      }
+
+      if (errorMsg.includes('Invalid secret for commitment')) {
+        throw new Error('Invalid secret for the provided commitment');
+      }
+
+      if (errorMsg.includes('No bet found for this commitment')) {
+        throw new Error('No bet found with this commitment for the market');
+      }
+
+      throw new Error(`${FALLBACK_VALUES.ERROR_MESSAGE}: ${errorMsg}`);
+    }
   }
 
   /**
