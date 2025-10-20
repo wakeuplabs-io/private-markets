@@ -18,4 +18,4 @@ applications:
           - packages/frontend/.next/cache/**/*
           - .npm/**/*
           - node_modules/**/*
-      appRoot: .
+      appRoot: "."
