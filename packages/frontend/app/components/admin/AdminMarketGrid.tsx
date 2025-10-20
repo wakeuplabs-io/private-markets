@@ -32,7 +32,7 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
     onCreateMarket,
     onResolveMarket,
 }) => {
-
+    console.log('Markets:', markets)
     const { getStatusIconInfo } = useStatus();
     const ICON_DIMENSIONS = { width: 24, height: 24 };
     const getStatusIcon = (status: string | null | undefined) => {
@@ -230,59 +230,33 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
                     </div>
                 </div>
 
-                {/* Options Column */}
                 <div className="col-span-12 md:col-span-3">
-                    {market.status === "open" && (
-                        <div className="flex gap-2 md:space-x-3 items-end md:justify-start">
-                            <Button disabled className="rounded-button">
-                                Yes
-                            </Button>
-                            <Button disabled className="rounded-button">
-                                No
-                            </Button>
-                        </div>
-                    )}
-
-                    {market.status === "finalized" && (
-                        <div className="flex flex-col sm:flex-row gap-2 md:space-x-3 items-stretch md:items-end">
+                    <div className="flex flex-col sm:flex-row gap-2 md:space-x-3 items-stretch md:items-end">
+                        {market.status === "resolved" ? (
                             <Button
-                                onClick={() =>
-                                    onResolveMarket(market.id, "yes")
-                                }
-                                className="rounded-button w-full sm:w-auto"
+                                disabled
+                                className="rounded-button"
+                                variant={winningOption?.name?.toLowerCase() === "yes" ? "success" : "destructive"}
                             >
-                                Yes
+                                {winningOption?.name?.toLowerCase() === "yes" ? "Yes" : "No"}
                             </Button>
-                            <Button
-                                onClick={() => onResolveMarket(market.id, "no")}
-                                className="rounded-button w-full sm:w-auto"
-                            >
-                                No
-                            </Button>
-                        </div>
-                    )}
-
-                    {market.status === "resolved" && (
-                        <div className="flex gap-2 md:space-x-3 items-end">
-                            {winningOption?.name?.toLowerCase() === "yes" ? (
+                        ) : (
+                            <>
                                 <Button
-                                    disabled
-                                    className="rounded-button"
-                                    variant="success"
+                                    onClick={ () => onResolveMarket(market.id, "yes") }
+                                    className="rounded-button w-full sm:w-auto"
                                 >
                                     Yes
                                 </Button>
-                            ) : (
                                 <Button
-                                    disabled
-                                    className="rounded-button"
-                                    variant="destructive"
+                                    onClick={ () => onResolveMarket(market.id, "no") }
+                                    className="rounded-button w-full sm:w-auto"
                                 >
                                     No
                                 </Button>
-                            )}
-                        </div>
-                    )}
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {/* State Column */}

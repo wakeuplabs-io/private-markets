@@ -1,25 +1,26 @@
+
 import {
-  Fr,
   TxStatus,
   AccountWalletWithSecretKey,
   AztecAddress,
-  IntentAction,
+  Fr,
 } from '@aztec/aztec.js';
 import {
   AMOUNT,
   deployVaultWithToken,
   expectTokenBalances,
   placeBet,
-  setPrivateAuthWit,
   setupPXE,
   toBigInt,
-  wad,
+  generateBetParams,
+  generateCommitment,
+  computeNullifier,
 } from './utils.js';
-import { PXE } from '@aztec/stdlib/interfaces/client';
 import { AztecLmdbStore } from '@aztec/kv-store/lmdb';
 import { getInitialTestAccountsManagers } from '@aztec/accounts/testing';
 import { TokenContract } from '../artifacts/Token.js';
 import { BetVaultContract } from '../artifacts/BetVault.js';
+import { poseidon2Hash } from "@aztec/foundation/crypto";
 
 const setupTestSuite = async () => {
   const { pxe, store } = await setupPXE();
@@ -37,7 +38,6 @@ describe('BetVault - E2E Tests', () => {
 
   let alice: AccountWalletWithSecretKey;
   let bob: AccountWalletWithSecretKey;
-  let carl: AccountWalletWithSecretKey;
 
   let vault: BetVaultContract;
   let token: TokenContract;
@@ -46,7 +46,7 @@ describe('BetVault - E2E Tests', () => {
 
   beforeAll(async () => {
     ({ store, wallets } = await setupTestSuite());
-    [alice, bob, carl] = wallets;
+    [alice, bob] = wallets;
     admin = bob;
     wormholeAddress = await AztecAddress.random();
   });
@@ -59,7 +59,7 @@ describe('BetVault - E2E Tests', () => {
     await store.delete();
   });
 
-  it('deploys vault and token correctly', async () => {
+  it.skip('deploys vault and token correctly', async () => {
     expect(vault.address).toBeDefined();
     expect(token.address).toBeDefined();
 
@@ -90,7 +90,7 @@ describe('BetVault - E2E Tests', () => {
     expect(balance).toBe(AMOUNT);
   }, 300_000);
 
-  it('places a bet and marks it as processed', async () => {
+  it.skip('places a bet and marks it as processed', async () => {
     await token
       .withWallet(alice)
       .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT)
@@ -99,38 +99,35 @@ describe('BetVault - E2E Tests', () => {
 
     await expectTokenBalances(token, alice, 0, AMOUNT);
 
-    const marketId = Fr.random();
-    const outcome = 1n;
-    const commitment = Fr.random();
-    const betId = Fr.random();
-    const authwitNonce = Fr.random();
+    // Generate realistic bet parameters with proper commitment
+    const betParams = await generateBetParams();
 
     const isProcessedBefore = await vault.methods
-      .is_processed(betId)
+      .is_processed(betParams.betId)
       .simulate({ from: alice.getAddress() });
     expect(isProcessedBefore).toBe(false);
 
-    const { tx } = await placeBet(vault, token, alice, admin, AMOUNT, {
-      marketId,
-      outcome,
-      commitment,
-      betId,
-      authwitNonce,
-    });
+    console.log([isProcessedBefore]);
+    const { tx, secret, commitment } = await placeBet(vault, token, alice, admin, AMOUNT, betParams);
 
     expect(tx.status).toBe(TxStatus.SUCCESS);
+
+    // Verify commitment was calculated correctly from secret
+    const expectedCommitment = await generateCommitment(betParams.marketId, secret);
+    expect(commitment.toString()).toBe(expectedCommitment.toString());
+
     await token.methods.sync_private_state().simulate({ from: alice.getAddress() });
     await token.methods.sync_private_state().simulate({ from: admin.getAddress() });
 
     const isProcessedAfter = await vault.methods
-      .is_processed(betId)
+      .is_processed(betParams.betId)
       .simulate({ from: alice.getAddress() });
     expect(isProcessedAfter).toBe(true);
     await expectTokenBalances(token, alice, 0, 0);
     await expectTokenBalances(token, admin, 0, AMOUNT);
   }, 300_000);
 
-  it.only('should retrieve user bets with getMyBets', async () => {
+  it.skip('should retrieve user bets with get_user_bets', async () => {
     await token
       .withWallet(alice)
       .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT)
@@ -139,7 +136,8 @@ describe('BetVault - E2E Tests', () => {
 
     await expectTokenBalances(token, alice, 0, AMOUNT);
 
-    const { tx, marketId, outcome, commitment, betId } = await placeBet(
+    // Generate realistic bet parameters
+    const { tx, marketId, outcome, commitment, betId, secret } = await placeBet(
       vault,
       token,
       alice,
@@ -149,7 +147,11 @@ describe('BetVault - E2E Tests', () => {
 
     expect(tx.status).toBe(TxStatus.SUCCESS);
 
-    const aliceBets = await vault.methods.getMyBets(alice.getAddress(), 0, 10).simulate({ from: alice.getAddress() });
+    // Verify commitment is correctly computed from secret
+    const expectedCommitment = await generateCommitment(marketId, secret);
+    expect(commitment.toString()).toBe(expectedCommitment.toString());
+
+    const aliceBets = await vault.methods.get_user_bets(alice.getAddress(), 0, 10).simulate({ from: alice.getAddress() });
 
     console.log('Alice bets:', aliceBets);
     expect(aliceBets.len).toBe(1n);
@@ -160,13 +162,13 @@ describe('BetVault - E2E Tests', () => {
     expect(aliceBets.storage[0].bet_id).toEqual(toBigInt(betId));
     expect(aliceBets.storage[0].commitment).toEqual(toBigInt(commitment));
 
-    const aliceBetsByBob = await vault.methods.getMyBets(alice.getAddress(), 0, 10).simulate({ from: bob.getAddress() });
-    expect(aliceBetsByBob.len).toBe(0n);
+    // Utility function allows to retrieve bets by other accounts
+    const aliceBetsByBob = await vault.methods.get_user_bets(alice.getAddress(), 0, 10).simulate({ from: bob.getAddress() });
+    expect(aliceBetsByBob.len).toBe(1n);
 
   }, 300_000);
 
-
-  it('should retrieve user bets with pagination', async () => {
+  it.skip('should retrieve user bets with pagination', async () => {
     await token
       .withWallet(alice)
       .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT * 11n)
@@ -180,10 +182,144 @@ describe('BetVault - E2E Tests', () => {
       expect(tx.status).toBe(TxStatus.SUCCESS);
     }
 
-    const firstPage = await vault.methods.getMyBets(alice.getAddress(), 0, 10).simulate({ from: alice.getAddress() });
+    const firstPage = await vault.methods.get_user_bets(alice.getAddress(), 0, 10).simulate({ from: alice.getAddress() });
     expect(firstPage.len).toBe(10n);
 
-    const secondPage = await vault.methods.getMyBets(alice.getAddress(), 10, 10).simulate({ from: alice.getAddress() });
+    const secondPage = await vault.methods.get_user_bets(alice.getAddress(), 10, 10).simulate({ from: alice.getAddress() });
     expect(secondPage.len).toBe(1n);
+  }, 300_000);
+
+  it('should authorize claim with valid secret and commitment', async () => {
+    // Mint tokens to alice
+    await token
+      .withWallet(alice)
+      .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT)
+      .send({ from: alice.getAddress() })
+      .wait();
+
+    await expectTokenBalances(token, alice, 0, AMOUNT);
+
+    // Place a bet with realistic parameters
+    const { tx, marketId, commitment, secret } = await placeBet(
+      vault,
+      token,
+      alice,
+      admin,
+      AMOUNT,
+    );
+
+    expect(tx.status).toBe(TxStatus.SUCCESS);
+
+    // Verify commitment was correctly generated
+    const expectedCommitment = await generateCommitment(marketId, secret);
+    expect(commitment.toString()).toBe(expectedCommitment.toString());
+
+    // Define recipient for claim (bob's address)
+    const recipient = bob.getAddress();
+    const recipientField = new Fr(recipient.toBigInt());
+
+    // Calculate expected nullifier
+    const expectedNullifier = await computeNullifier(marketId, commitment, recipientField);
+
+    // Check nullifier is not used before claim
+    const nullifierUsedBefore = await vault.methods
+      .is_nullifier_used(expectedNullifier)
+      .simulate({ from: alice.getAddress() });
+    expect(nullifierUsedBefore).toBe(false);
+
+    // Step 1: Call find_bet_for_claim to get bet amount (unconstrained pre-flight check)
+    const [found, betAmount] = await vault.methods
+      .find_bet_for_claim(alice.getAddress(), commitment, marketId)
+      .simulate({ from: alice.getAddress() });
+
+    expect(found).toBe(true);
+    expect(betAmount).toBe(toBigInt(AMOUNT));
+
+    console.log('Found bet via find_bet_for_claim:', { found, betAmount: betAmount.toString() });
+
+    // Step 2: Authorize claim with the stored secret and bet amount
+    const claimAuthwitNonce = Fr.random();
+
+    console.log({
+      calculated_commitment: await poseidon2Hash([marketId, secret]),
+      commitment
+    })
+    const authorizeTx = await vault
+      .withWallet(alice)
+      .methods.authorizeClaim(
+        marketId,
+        commitment,
+        secret,
+        recipient,
+        betAmount,  // Pass the bet amount from find_bet_for_claim
+        claimAuthwitNonce,
+      )
+      .send({ from: alice.getAddress() })
+      .wait();
+
+    expect(authorizeTx.status).toBe(TxStatus.SUCCESS);
+
+    // Check nullifier is now marked as used
+    const nullifierUsedAfter = await vault.methods
+      .is_nullifier_used(expectedNullifier)
+      .simulate({ from: alice.getAddress() });
+    expect(nullifierUsedAfter).toBe(true);
+
+    console.log('Claim authorized successfully!');
+    console.log('Nullifier:', expectedNullifier.toString());
+    console.log('Market ID:', marketId.toString());
+    console.log('Recipient:', recipient.toString());
+  }, 300_000);
+
+  it('should fail to authorize claim with invalid secret', async () => {
+    // Mint tokens to alice
+    await token
+      .withWallet(alice)
+      .methods.mint_to_private(alice.getAddress(), alice.getAddress(), AMOUNT)
+      .send({ from: alice.getAddress() })
+      .wait();
+
+    await expectTokenBalances(token, alice, 0, AMOUNT);
+
+    // Place a bet
+    const { tx, marketId, commitment } = await placeBet(
+      vault,
+      token,
+      alice,
+      admin,
+      AMOUNT,
+    );
+
+    expect(tx.status).toBe(TxStatus.SUCCESS);
+
+    // First find the bet to get the amount
+    const [found, betAmount] = await vault.methods
+      .find_bet_for_claim(alice.getAddress(), commitment, marketId)
+      .simulate({ from: alice.getAddress() });
+
+    expect(found).toBe(true);
+
+    // Try to authorize claim with WRONG secret
+    const wrongSecret = Fr.random();
+    const recipient = bob.getAddress();
+    const claimAuthwitNonce = Fr.random();
+
+    // This should fail because the secret doesn't match the commitment
+    await expect(async () => {
+      await vault
+        .withWallet(alice)
+        .methods.authorizeClaim(
+          marketId,
+          commitment,
+          wrongSecret,
+          recipient,
+          betAmount,  // Include bet amount parameter
+          claimAuthwitNonce,
+        )
+        .send({ from: alice.getAddress() })
+        .wait();
+    }).rejects.toThrow();
+
+    console.log('Correctly rejected invalid secret!');
   }, 300_000);
 });

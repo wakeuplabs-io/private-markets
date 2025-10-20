@@ -8,8 +8,8 @@ export interface BetParams {
   betId: string;
   authwitNonce: string;
   from: string;
-  msg: number[][];
   tokenAddress: string;
+  secret: string; // Secret used to generate the commitment
 }
 
 export interface SimpleBetParams {
@@ -19,14 +19,30 @@ export interface SimpleBetParams {
   userAddress: string;
 }
 
+export interface ClaimParams {
+  marketId: string;
+  commitment: string;
+  secret: string;
+  recipient: string; // Aztec address for recipient
+  deadline: string;
+  authwitNonce: string;
+  betAmount: number;
+}
+
+export interface SimpleClaimParams {
+  marketId: string;
+  betId: string; // To retrieve from localStorage
+  recipient: string; // Aztec address for payout
+}
+
 /**
  * Vault provider interface
  * - PrivateVaultProvider: Full access (READ + WRITE)
- * - PublicVaultProvider: Read-only (throws on write ops)
  */
 export interface IVaultProvider {
   getContract(): Promise<unknown>;
   placeBet?(params: BetParams): Promise<string>;
+  authorizeClaim?(params: ClaimParams): Promise<string>;
   isProcessed(betId: string): Promise<boolean>;
   getTokenAddress(): Promise<string>;
   getUserBets?(): Promise<Bet[]>;
@@ -35,6 +51,7 @@ export interface IVaultProvider {
 
 export interface IVaultService {
   placeBet(params: SimpleBetParams): Promise<string>;
+  authorizeClaim(params: SimpleClaimParams): Promise<string>;
   isBetProcessed(betId: string): Promise<boolean>;
   getTokenAddress(): Promise<string>;
   getContractAddress(): string;

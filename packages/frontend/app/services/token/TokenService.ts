@@ -2,8 +2,8 @@ import { AztecAddress } from "@aztec/aztec.js";
 import { fieldToString } from "@/lib/aztecUtils";
 import { walletService } from "../walletService";
 import { PrivateTokenProvider } from "./PrivateTokenProvider";
-import { PublicTokenProvider } from "./PublicTokenProvider";
 import type { ITokenService, ITokenProvider, TokenInfo } from "./types";
+import { FALLBACK_VALUES } from "./types";
 
 /**
  * Token Service (Facade + Strategy Pattern)
@@ -12,38 +12,34 @@ import type { ITokenService, ITokenProvider, TokenInfo } from "./types";
  * based on wallet connection status:
  *
  * - When wallet is connected → Uses PrivateTokenProvider (user's wallet)
- * - When wallet is disconnected → Uses PublicTokenProvider (PXE test accounts)
+ * - When wallet is disconnected → Returns FALLBACK_VALUES without errors
  *
  * This service acts as a facade that:
- * 1. Selects the appropriate provider strategy
- * 2. Delegates operations to the selected provider
- * 3. Transforms raw provider responses into application-level types
- * 4. Provides a stable API regardless of underlying provider
+ * 1. Checks wallet connection status
+ * 2. Delegates operations to PrivateTokenProvider if connected
+ * 3. Returns fallback values if disconnected (graceful degradation)
+ * 4. Provides a stable API regardless of connection state
  *
  * Benefits of this architecture:
- * - Single Responsibility: Each provider handles one context
- * - Open/Closed: Easy to add new providers without modifying service
- * - Dependency Inversion: Service depends on ITokenProvider abstraction
- * - Strategy Pattern: Runtime provider selection based on state
+ * - Single Responsibility: Provider handles wallet interactions only
+ * - Graceful Degradation: Returns sensible defaults when disconnected
+ * - User Experience: No errors shown for disconnected state
  */
 export class TokenService implements ITokenService {
   private static instance: TokenService;
 
   private readonly privateProvider: ITokenProvider;
-  private readonly publicProvider: ITokenProvider;
   private initializeAddress: string | null = null;
 
   /**
    * Private constructor for singleton pattern
-   * Initializes both providers (dependency injection)
+   * Initializes provider (dependency injection)
    */
   private constructor(
-    privateProvider?: ITokenProvider,
-    publicProvider?: ITokenProvider
+    privateProvider?: ITokenProvider
   ) {
     // Allow dependency injection for testing
     this.privateProvider = privateProvider || new PrivateTokenProvider();
-    this.publicProvider = publicProvider || new PublicTokenProvider();
   }
 
   /**
@@ -65,31 +61,27 @@ export class TokenService implements ITokenService {
   }
 
   /**
-   * Get active provider based on wallet connection status
-   * Strategy selection happens here
-   *
-   * @returns PrivateTokenProvider if wallet is connected, PublicTokenProvider otherwise
-   */
-  private getProvider(): ITokenProvider {
-    const isConnected = walletService.isConnected();
-    return isConnected ? this.privateProvider : this.publicProvider;
-  }
-
-  /**
    * Get complete token information
-   * Fetches name, symbol, and decimals in parallel
+   * Returns fallback values if wallet is not connected
    *
    * @param address - Token contract address
    * @returns TokenInfo object with all token metadata
    */
   async getTokenInfo(address: string): Promise<TokenInfo> {
+    if (!walletService.isConnected()) {
+      return {
+        name: fieldToString(FALLBACK_VALUES.TOKEN_NAME),
+        symbol: fieldToString(FALLBACK_VALUES.TOKEN_SYMBOL),
+        decimals: FALLBACK_VALUES.TOKEN_DECIMALS,
+        address: AztecAddress.fromString(address),
+      };
+    }
+
     try {
       // Fetch metadata in parallel for performance
-      const [name, symbol, decimals] = await Promise.all([
-        this.getTokenName(address),
-        this.getTokenSymbol(address),
-        this.getTokenDecimals(address),
-      ]);
+      const name = await this.getTokenName(address);
+      const symbol = await this.getTokenSymbol(address);
+      const decimals = await this.getTokenDecimals(address);
 
       const tokenInfo: TokenInfo = {
         name,
@@ -109,15 +101,18 @@ export class TokenService implements ITokenService {
 
   /**
    * Get token name
-   * Delegates to active provider and transforms response to string
+   * Returns fallback if not connected
    *
    * @param address - Token contract address
    * @returns Token name as string
    */
   async getTokenName(address: string): Promise<string> {
+    if (!walletService.isConnected()) {
+      return fieldToString(FALLBACK_VALUES.TOKEN_NAME);
+    }
+
     try {
-      const provider = this.getProvider();
-      const name = await provider.getTokenName(address);
+      const name = await this.privateProvider.getTokenName(address);
       return fieldToString(name);
     } catch (error) {
       console.error('[TOKEN] Failed to fetch token name:', error);
@@ -127,15 +122,18 @@ export class TokenService implements ITokenService {
 
   /**
    * Get token symbol
-   * Delegates to active provider and transforms response to string
+   * Returns fallback if not connected
    *
    * @param address - Token contract address
    * @returns Token symbol as string
    */
   async getTokenSymbol(address: string): Promise<string> {
+    if (!walletService.isConnected()) {
+      return fieldToString(FALLBACK_VALUES.TOKEN_SYMBOL);
+    }
+
     try {
-      const provider = this.getProvider();
-      const symbol = await provider.getTokenSymbol(address);
+      const symbol = await this.privateProvider.getTokenSymbol(address);
       return fieldToString(symbol);
     } catch (error) {
       console.error('[TOKEN] Failed to fetch token symbol:', error);
@@ -145,15 +143,18 @@ export class TokenService implements ITokenService {
 
   /**
    * Get token decimals
-   * Delegates to active provider
+   * Returns fallback if not connected
    *
    * @param address - Token contract address
    * @returns Token decimals as number
    */
   async getTokenDecimals(address: string): Promise<number> {
+    if (!walletService.isConnected()) {
+      return FALLBACK_VALUES.TOKEN_DECIMALS;
+    }
+
     try {
-      const provider = this.getProvider();
-      return await provider.getTokenDecimals(address);
+      return await this.privateProvider.getTokenDecimals(address);
     } catch (error) {
       console.error('[TOKEN] Failed to fetch token decimals:', error);
       throw new Error('Failed to fetch token decimals');
@@ -162,20 +163,19 @@ export class TokenService implements ITokenService {
 
   /**
    * Get private balance for an owner
-   * Delegates to active provider
-   *
-   * Note: Behavior differs by provider:
-   * - PrivateTokenProvider: Uses connected wallet's permissions
-   * - PublicTokenProvider: Uses test account permissions
+   * Returns fallback (0) if not connected
    *
    * @param address - Token contract address
    * @param owner - Owner address to query balance for
    * @returns Private balance as bigint
    */
   async getPrivateBalance(address: string, owner: AztecAddress): Promise<bigint> {
+    if (!walletService.isConnected()) {
+      return FALLBACK_VALUES.BALANCE;
+    }
+
     try {
-      const provider = this.getProvider();
-      return await provider.getPrivateBalance(address, owner);
+      return await this.privateProvider.getPrivateBalance(address, owner);
     } catch (error) {
       console.error('[TOKEN] Failed to fetch private token balance:', error);
       throw new Error('Failed to fetch private token balance');
@@ -184,11 +184,7 @@ export class TokenService implements ITokenService {
 
   /**
    * Mint tokens to private balance
-   * Delegates to active provider
-   *
-   * Note: Requires wallet to be connected in production
-   * - PrivateTokenProvider: Submits transaction through user's wallet
-   * - PublicTokenProvider: Submits transaction through test wallet
+   * Requires wallet to be connected
    *
    * @param address - Token contract address
    * @param recipient - Recipient address
@@ -196,17 +192,16 @@ export class TokenService implements ITokenService {
    * @returns Transaction hash or success message
    */
   async mintToPrivate(address: string, recipient: AztecAddress, amount: bigint): Promise<string> {
-    try {
-      if (!walletService.isConnected()) {
-        throw new Error('Wallet must be connected to perform mint operations');
-      }
+    if (!walletService.isConnected()) {
+      throw new Error('Wallet must be connected to perform mint operations');
+    }
 
-      const provider = this.getProvider();
-      if (!provider.mintToPrivate) {
+    try {
+      if (!this.privateProvider.mintToPrivate) {
         throw new Error('Mint operation not supported by current provider');
       }
 
-      return await provider.mintToPrivate(address, recipient, amount);
+      return await this.privateProvider.mintToPrivate(address, recipient, amount);
     } catch (error) {
       console.error('[TOKEN] Failed to mint tokens to private:', error);
       throw new Error(
@@ -216,29 +211,19 @@ export class TokenService implements ITokenService {
   }
 
   /**
-   * Clear all provider caches
+   * Clear provider cache
    * Useful when switching wallets or resetting state
    */
   clearCache(): void {
     this.privateProvider.clearCache();
-    this.publicProvider.clearCache();
   }
 
   /**
-   * Get current active provider type
-   *
-   * @returns 'private' if wallet is connected, 'public' otherwise
-   */
-  getCurrentProviderType(): 'private' | 'public' {
-    return walletService.isConnected() ? 'private' : 'public';
-  }
-
-  /**
-   * Check if private provider is available (wallet connected)
+   * Check if wallet is connected
    *
    * @returns true if wallet is connected
    */
-  isPrivateProviderAvailable(): boolean {
+  isConnected(): boolean {
     return walletService.isConnected();
   }
 }

@@ -9,6 +9,7 @@ import {
   Fr,
   createLogger,
   createPXEClient,
+  createAztecNodeClient,
   waitForPXE,
   AztecAddress,
   getContractInstanceFromInstantiationParams,
@@ -19,6 +20,8 @@ import {
   AccountWallet,
   GrumpkinScalar,
 } from '@aztec/aztec.js';
+import { createPXEService } from '@aztec/pxe/client/lazy';
+import { getPXEServiceConfig } from '@aztec/pxe/config';
 import { SponsoredFPCContractArtifact } from '@aztec/noir-contracts.js/SponsoredFPC';
 import { SPONSORED_FPC_SALT } from '@aztec/constants';
 import { getSchnorrAccount } from '@aztec/accounts/schnorr/lazy';
@@ -26,8 +29,12 @@ import {
   type ContractArtifact,
   getDefaultInitializer,
 } from '@aztec/stdlib/abi';
-import { getInitialTestAccounts } from '@aztec/accounts/testing';
 import { deriveSigningKey } from "@aztec/stdlib/keys";
+import { TokenContract } from "@/lib/contracts/Token";
+import { BetVaultContract } from "@/lib/contracts/BetVault";
+import { WormholeContract } from "@/lib/contracts/Wormhole";
+import { createStore } from "@aztec/kv-store/indexeddb";
+import { pxeService } from "@/services/pxeService";
 
 const LOCAL_STORAGE_KEY = "aztec-account";
 const DEFAULT_NODE_URL = "http://localhost:8080";
@@ -37,8 +44,12 @@ const logger = createLogger('wallet');
 
 export class AztecWalletProvider implements IExtendedWalletProvider {
   private pxe!: PXE;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private aztecNode: any = null; // AztecNode client for fetching contract instances
   private connectedAccount: AccountWallet | null = null;
   private config: AztecWalletConfig;
+  private isInitializing = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(config: AztecWalletConfig = {}) {
     this.config = {
@@ -46,31 +57,222 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       proverEnabled: config.proverEnabled ?? true,
       accountType: config.accountType || "schnorr",
     };
+    console.log('config', this.config);
   }
 
   getProviderName(): string {
     return "aztec";
   }
 
+  /**
+   * Check if PXE is currently being initialized
+   * @returns True if initialization is in progress
+   */
+  getIsInitializing(): boolean {
+    return this.isInitializing;
+  }
+
+  private isTestnet(nodeUrl: string): boolean {
+    return nodeUrl.includes('aztec-testnet') ||
+           (nodeUrl.includes('testnet') &&
+           !nodeUrl.includes('localhost') &&
+           !nodeUrl.includes('127.0.0.1'));
+  }
+
   async initialize(): Promise<void> {
+    // If already initialized, return immediately
     if (this.pxe) {
+      logger.info('PXE already initialized, skipping');
       return;
     }
 
-    // Create PXE Client (browser-compatible)
-    const nodeUrl = this.config.nodeUrl || DEFAULT_NODE_URL;
-    this.pxe = createPXEClient(nodeUrl);
-    await waitForPXE(this.pxe);
+    // If initialization is in progress, return the existing promise
+    if (this.isInitializing && this.initializationPromise) {
+      logger.info('Initialization already in progress, waiting for completion');
+      return this.initializationPromise;
+    }
 
-    // Register Sponsored FPC Contract with PXE
-    await this.pxe.registerContract({
-      instance: await this.#getSponsoredFPCContract(),
-      artifact: SponsoredFPCContractArtifact,
-    });
+    // Mark as initializing and create a new promise
+    this.isInitializing = true;
+    logger.info('🚀 Starting PXE initialization...');
 
-    // Log the Node Info
-    const nodeInfo = await this.pxe.getNodeInfo();
-    logger.info('PXE Connected to node', nodeInfo);
+    this.initializationPromise = (async () => {
+      try {
+        const nodeUrl = this.config.nodeUrl || DEFAULT_NODE_URL;
+        const isTestnet = this.isTestnet(nodeUrl);
+
+        if (isTestnet) {
+          // Testnet: Create local PXE in browser (like aztec-web-starter)
+          logger.info('Creating PXE service in browser for testnet:', nodeUrl);
+
+          this.aztecNode = await createAztecNodeClient(nodeUrl);
+
+          const config = getPXEServiceConfig();
+          config.l1Contracts = await this.aztecNode.getL1ContractAddresses();
+          config.proverEnabled = this.config.proverEnabled;
+          const store = await createStore("pxe_data", {
+            dataDirectory: "pxe",
+            dataStoreMapSizeKB: 1e6,
+          });
+          this.pxe = await createPXEService(this.aztecNode, config, {
+            useLogSuffix: true,
+            store
+          });
+
+          // Register PXE in global service for access by other providers
+          pxeService.registerPXE(this.pxe);
+
+          logger.info('PXE service created in browser');
+        } else {
+          // Sandbox: Connect to existing PXE HTTP server
+          logger.info('Connecting to sandbox PXE:', nodeUrl);
+          this.pxe = createPXEClient(nodeUrl);
+          await waitForPXE(this.pxe);
+
+          // Register PXE in global service for access by other providers
+          pxeService.registerPXE(this.pxe);
+        }
+
+        // Register Sponsored FPC Contract with PXE
+        logger.info('Registering Sponsored FPC contract...');
+        await this.pxe.registerContract({
+          instance: await this.#getSponsoredFPCContract(),
+          artifact: SponsoredFPCContractArtifact,
+        });
+
+        // Register deployed contracts from environment variables
+        await this.registerDeployedContracts();
+
+        // Log the Node Info
+        const nodeInfo = await this.pxe.getNodeInfo();
+        logger.info('✅ PXE initialization complete. Node info:', nodeInfo);
+      } catch (error) {
+        logger.error('❌ PXE initialization failed:', error);
+        throw error;
+      } finally {
+        this.isInitializing = false;
+        this.initializationPromise = null;
+      }
+    })();
+
+    return this.initializationPromise;
+  }
+
+  async registerDeployedContracts(): Promise<void> {
+    console.log('🔵 [REGISTER] Starting contract registration...');
+
+    // Skip if in sandbox mode (no aztecNode client)
+    if (!this.aztecNode) {
+      console.log('🔵 [REGISTER] Sandbox mode detected, skipping contract registration');
+      return;
+    }
+
+    // Register Token contract if address is available
+    const tokenAddress = process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ADDRESS;
+    console.log('🔵 [REGISTER] Token address from env:', tokenAddress);
+
+    if (tokenAddress) {
+      try {
+        logger.info('Registering Token contract:', tokenAddress);
+        const tokenAztecAddress = AztecAddress.fromString(tokenAddress);
+        console.log('🔵 [REGISTER] Token AztecAddress parsed:', tokenAztecAddress.toString());
+
+        // 🔑 THE KEY: Use aztecNode.getContract() instead of pxe.getContractInstance()
+        console.log('🔵 [REGISTER] Fetching contract instance from Aztec node...');
+        const contractInstance = await this.aztecNode.getContract(tokenAztecAddress);
+        console.log('🔵 [REGISTER] Contract instance result:', contractInstance);
+
+        if (contractInstance) {
+          console.log('🔵 [REGISTER] Registering with PXE...');
+          await this.pxe.registerContract({
+            instance: contractInstance,
+            artifact: TokenContract.artifact,
+          });
+          logger.info('✅ Token contract registered successfully');
+          console.log('🔵 [REGISTER] ✅ Token registration complete');
+        } else {
+          logger.warn('⚠️  Token contract instance not found on node');
+          console.log('🔵 [REGISTER] ⚠️  contractInstance is null/undefined');
+        }
+      } catch (error) {
+        console.error('🔴 [REGISTER] Token registration error:', error);
+        logger.warn('Failed to register Token contract (may already be registered or not deployed):', error);
+      }
+    } else {
+      console.log('🔵 [REGISTER] No token address in env, skipping');
+    }
+
+    // Register BetVault contract if address is available
+    const vaultAddress = process.env.NEXT_PUBLIC_VAULT_CONTRACT_ADDRESS;
+    console.log('🔵 [REGISTER] Vault address from env:', vaultAddress);
+
+    if (vaultAddress) {
+      try {
+        logger.info('Registering BetVault contract:', vaultAddress);
+        const vaultAztecAddress = AztecAddress.fromString(vaultAddress);
+        console.log('🔵 [REGISTER] Vault AztecAddress parsed:', vaultAztecAddress.toString());
+
+        // Use aztecNode.getContract() for testnet
+        console.log('🔵 [REGISTER] Fetching Vault instance from Aztec node...');
+        const contractInstance = await this.aztecNode.getContract(vaultAztecAddress);
+        console.log('🔵 [REGISTER] Vault instance result:', contractInstance);
+
+        if (contractInstance) {
+          console.log('🔵 [REGISTER] Registering Vault with PXE...');
+          await this.pxe.registerContract({
+            instance: contractInstance,
+            artifact: BetVaultContract.artifact,
+          });
+          logger.info('✅ BetVault contract registered successfully');
+          console.log('🔵 [REGISTER] ✅ Vault registration complete');
+        } else {
+          logger.warn('⚠️  BetVault contract instance not found on node');
+          console.log('🔵 [REGISTER] ⚠️  Vault contractInstance is null/undefined');
+        }
+      } catch (error) {
+        console.error('🔴 [REGISTER] Vault registration error:', error);
+        logger.warn('Failed to register BetVault contract (may already be registered or not deployed):', error);
+      }
+    } else {
+      console.log('🔵 [REGISTER] No vault address in env, skipping');
+    }
+
+    // Register Wormhole contract if address is available
+    const wormholeAddress = process.env.NEXT_PUBLIC_WORMHOLE_CONTRACT_ADDRESS;
+    console.log('🔵 [REGISTER] Wormhole address from env:', wormholeAddress);
+
+    if (wormholeAddress) {
+      try {
+        logger.info('Registering Wormhole contract:', wormholeAddress);
+        const wormholeAztecAddress = AztecAddress.fromString(wormholeAddress);
+        console.log('🔵 [REGISTER] Wormhole AztecAddress parsed:', wormholeAztecAddress.toString());
+
+        // Use aztecNode.getContract() for testnet
+        console.log('🔵 [REGISTER] Fetching Wormhole instance from Aztec node...');
+        const contractInstance = await this.aztecNode.getContract(wormholeAztecAddress);
+        console.log('🔵 [REGISTER] Wormhole instance result:', contractInstance);
+
+        if (contractInstance) {
+          console.log('🔵 [REGISTER] Registering Wormhole with PXE...');
+          await this.pxe.registerContract({
+            instance: contractInstance,
+            artifact: WormholeContract.artifact,
+          });
+          logger.info('✅ Wormhole contract registered successfully');
+          console.log('🔵 [REGISTER] ✅ Wormhole registration complete');
+        } else {
+          logger.warn('⚠️  Wormhole contract instance not found on node');
+          console.log('🔵 [REGISTER] ⚠️  Wormhole contractInstance is null/undefined');
+        }
+      } catch (error) {
+        console.error('🔴 [REGISTER] Wormhole registration error:', error);
+        logger.warn('Failed to register Wormhole contract (may already be registered or not deployed):', error);
+      }
+    } else {
+      console.log('🔵 [REGISTER] No wormhole address in env, skipping');
+    }
+
+    console.log('🔵 [REGISTER] Contract registration complete');
   }
 
   async #getSponsoredFPCContract() {
@@ -132,6 +334,7 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
 
       const deployMethod = await account.getDeployMethod();
       const sponsoredPFCContract = await this.#getSponsoredFPCContract();
+
       const deployOpts = {
         from: AztecAddress.ZERO,
         contractAddressSalt: Fr.fromString(account.salt.toString()),
@@ -172,42 +375,16 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     }
   }
 
-  async connectTestAccount(index: number): Promise<IWalletAccount> {
-    await this.initialize();
-
-    try {
-      const testAccounts = await getInitialTestAccounts();
-
-      if (index < 0 || index >= testAccounts.length) {
-        throw new Error(`Test account index ${index} is out of range. Available: 0-${testAccounts.length - 1}`);
-      }
-
-      const account = testAccounts[index];
-      const schnorrAccount = await getSchnorrAccount(
-        this.pxe,
-        account.secret,
-        account.signingKey,
-        account.salt
-      );
-
-      await schnorrAccount.register();
-      const wallet = await schnorrAccount.getWallet();
-
-
-      this.connectedAccount = wallet;
-      return new AztecAccount(wallet);
-    } catch (error) {
-      throw new Error(`Failed to connect test account: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
   disconnect(): void {
     this.connectedAccount = null;
+    // Don't clear PXE on disconnect, it can be reused
   }
 
   clearAccount(): void {
     this.connectedAccount = null;
     localStorage.removeItem(LOCAL_STORAGE_KEY);
+    // Clear PXE when clearing account completely
+    pxeService.clearPXE();
   }
 
   getAccount(): IWalletAccount | null {
@@ -241,6 +418,7 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     }
 
     const sponsoredPFCContract = await this.#getSponsoredFPCContract();
+
     const provenInteraction = await contractInteraction.prove({
       from: from ?? this.connectedAccount.getAddress(),
       fee: {

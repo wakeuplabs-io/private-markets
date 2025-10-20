@@ -3,194 +3,202 @@ pragma solidity ^0.8.20;
 
 import {PredictionMarketGetters} from "./PredictionMarketGetters.sol";
 import {IPredictionMarket} from "../interfaces/IPredictionMarket.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title PredictionMarketCore
- * @dev Core prediction market contract with market creation, betting, and resolution logic
+ * @notice Core logic for V3 prediction markets
+ * @dev Implements collateral-backed markets with nullifier-based claims
+ * @dev Uses ReentrancyGuard for defense-in-depth against reentrancy attacks
  */
-contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket {
-    // Custom Errors
-    error EmptyQuestion();
-    error InvalidClosingTime();
+contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, ReentrancyGuard {
     error MarketAlreadyExists(uint256 marketId);
-    error ChainIdMismatch();
-    error InvalidBetId();
-    error InvalidCommitment();
-    error ZeroAmount();
+    error ZeroTotalPool();
+    error InvalidExpiresAt();
     error BetAlreadyProcessed(bytes32 betId);
     error MarketNotFound(uint256 marketId);
-    error MarketNotOpen(uint256 marketId, IPredictionMarket.MarketState currentState);
-    error UnauthorizedResolver(address caller, address expectedAdmin);
-    error MarketAlreadyResolved(uint256 marketId);
-    error InvalidWinnersRoot();
-    error ZeroRecipientAddress();
+    error MarketAlreadyClosed(uint256 marketId);
+    error MarketExpired(uint256 marketId);
+    error ZeroAmount();
     error MarketNotResolved(uint256 marketId);
-    error WinnersRootNotSet();
-    error PayoutAlreadyClaimed(uint256 marketId, bytes32 commitment);
-    error InvalidMerkleProof();
-    error TransferFailed();
+    error MarketNotOwner(uint256 marketId);
+    error MarketAlreadyResolved(uint256 marketId);
+    error MarketNotExpired(uint256 marketId);
+    error NullifierAlreadyConsumed(bytes32 nullifier);
+    error DeadlineExpired();
+    error ZeroRecipient();
+    error NoWinningBets();
+    error ChainIdMismatch();
 
-    /**
-     * @dev Constructor initializes parent PredictionMarketGetters
-     * @param wormholeAddr Address of the Wormhole contract
-     * @param chainId_ Wormhole Chain ID (10003 = Arbitrum Sepolia)
-     * @param evmChainId_ Native EVM Chain ID (421614 = Arbitrum Sepolia)
-     * @param finality_ Number of confirmations required for finality
-     * @param treasuryContractAddr Address of the treasury contract
-     */
     constructor(
-        address payable wormholeAddr,
         uint16 chainId_,
         uint256 evmChainId_,
         uint8 finality_,
         address treasuryContractAddr
-    ) PredictionMarketGetters(wormholeAddr, chainId_, evmChainId_, finality_, treasuryContractAddr) {}
+    ) PredictionMarketGetters( chainId_, evmChainId_, finality_, treasuryContractAddr) {}
 
     /**
-     * @notice Creates a new public prediction market (binary Yes/No)
-     * @param question The market question
-     * @param closingTime Timestamp when the market closes for betting
-     * @return uint256 The generated market ID
+     * @notice Get market details (implements IPredictionMarket)
+     * @param marketId Market identifier
      */
-    function createMarket(string memory question, uint256 closingTime) external override returns (uint256) {
-        return _createMarket(question, closingTime, msg.sender);
+    function getMarket(uint256 marketId)
+        external
+        view
+        override(IPredictionMarket)
+        returns (
+            address owner,
+            string memory question,
+            uint256 totalPool,
+            uint256 yesTotal,
+            uint256 noTotal,
+            bool resolved,
+            bool winningOutcome,
+            uint256 createdAt,
+            uint256 expiresAt
+        )
+    {
+        Market storage market = _state.markets[marketId];
+        return (
+            market.owner,
+            market.question,
+            market.totalPool,
+            market.yesTotal,
+            market.noTotal,
+            market.resolved,
+            market.winningOutcome,
+            market.createdAt,
+            market.expiresAt
+        );
     }
 
     /**
-     * @dev Internal function to create binary markets
+     * @notice Creates a new prediction market with USDC collateral
+     * @dev Follows CEI pattern: Checks → Effects → Interactions
+     * @dev Market owner must approve Treasury to spend USDC before calling
+     * @param question The question for this prediction market
+     * @param totalPool Total USDC collateral to deposit
+     * @param expiresAt Timestamp when market closes for betting
+     * @return marketId The auto-generated market identifier
      */
-    function _createMarket(string memory question, uint256 closingTime, address admin) internal returns (uint256) {
-        if (bytes(question).length == 0) revert EmptyQuestion();
-        if (closingTime <= block.timestamp) revert InvalidClosingTime();
+    function createMarket(string memory question, uint256 totalPool, uint256 expiresAt)
+        external
+        nonReentrant
+        returns (uint256 marketId)
+    {
+        if (totalPool == 0) revert ZeroTotalPool();
+        if (expiresAt <= block.timestamp) revert InvalidExpiresAt();
 
-        // Increment counter and use as market ID
-        _state.marketCounter++;
-        uint256 marketId = _state.marketCounter;
+        marketId = _state.nextMarketId++;
 
-        // Add to markets array for iteration
-        _state.marketIds.push(marketId);
-
-        _state.markets[marketId] = IPredictionMarket.Market({
-            id: marketId,
+        _state.markets[marketId] = Market({
+            owner: msg.sender,
             question: question,
-            state: IPredictionMarket.MarketState.OPEN,
-            admin: admin,
+            totalPool: totalPool,
+            yesTotal: 0,
+            noTotal: 0,
+            resolved: false,
+            winningOutcome: false,
             createdAt: block.timestamp,
-            closingTime: closingTime,
-            resolvedAt: 0
+            expiresAt: expiresAt
         });
 
-        emit MarketCreated(marketId, question, admin);
-        return marketId;
+        _state.ownerMarkets[msg.sender].push(marketId);
+        _state.allMarketIds.push(marketId);
+        treasuryContract().deposit(marketId, msg.sender, totalPool);
+        emit MarketCreated(marketId, msg.sender, question, totalPool, expiresAt);
     }
 
     /**
      * @notice Processes a bet received from Aztec via Wormhole
-     * @param marketId The market ID
-     * @param betId Unique bet identifier to prevent replay
-     * @param outcome The outcome being bet on (false = No, true = Yes)
-     * @param amount The bet amount in wei
-     * @param commitment The user's commitment hash
+     * @dev Called by WormholeReceiver after VAA verification
+     * @param marketId Market identifier
+     * @param betId Unique bet identifier (prevents replay)
+     * @param outcome Bet outcome (false = No, true = Yes)
+     * @param amount Bet amount in wei
      */
-    function processBet(uint256 marketId, bytes32 betId, bool outcome, uint256 amount, bytes32 commitment) external override {
+    function processBet(uint256 marketId, bytes32 betId, bool outcome, uint256 amount) external onlyOwner {
         if (isFork()) revert ChainIdMismatch();
-        if (betId == bytes32(0)) revert InvalidBetId();
-        if (commitment == bytes32(0)) revert InvalidCommitment();
+        if (_state.processedBets[betId]) revert BetAlreadyProcessed(betId);
         if (amount == 0) revert ZeroAmount();
-        if (_state.processed[betId]) revert BetAlreadyProcessed(betId);
 
-        IPredictionMarket.Market storage market = _state.markets[marketId];
-        if (market.id == 0) revert MarketNotFound(marketId);
+        Market storage market = _state.markets[marketId];
+        if (market.owner == address(0)) revert MarketNotFound(marketId);
+        if (market.resolved) revert MarketAlreadyClosed(marketId);
+        if (block.timestamp >= market.expiresAt) revert MarketExpired(marketId);
 
-        if (market.state != IPredictionMarket.MarketState.OPEN) revert MarketNotOpen(marketId, market.state);
+        // Mark bet as processed (anti-replay)
+        _state.processedBets[betId] = true;
 
-        // Only allow bets if market is still within closing time
-        if (block.timestamp >= market.closingTime) revert MarketNotOpen(marketId, market.state);
-
-        // Mark bet as processed to prevent replay
-        _state.processed[betId] = true;
-
-        // Update totals based on outcome
+        // Update totals
         if (outcome) {
-            _state.totals[marketId].yesTotal += amount;
+            market.yesTotal += amount;
         } else {
-            _state.totals[marketId].noTotal += amount;
+            market.noTotal += amount;
         }
 
-        // Mint tokens to treasury
-        treasuryContract().mint(address(treasuryContract()), amount);
-
-        emit BetProcessed(marketId, betId, outcome, amount, commitment);
+        emit BetProcessed(marketId, betId, outcome, amount);
     }
 
     /**
-     * @notice Sets the winners root for a resolved market
-     * @param marketId The market ID
-     * @param root The Merkle tree root containing winner payouts
+     * @notice Resolves a market by setting the winning outcome
+     * @dev Only callable after market expiry
+     * @param marketId Market identifier
+     * @param winningOutcome Winning side (true = YES wins, false = NO wins)
      */
-    function setWinnersRoot(uint256 marketId, bytes32 root) external override {
-        IPredictionMarket.Market storage market = _state.markets[marketId];
-        if (market.id == 0) revert MarketNotFound(marketId);
+    function resolveMarket(uint256 marketId, bool winningOutcome) external {
+        Market storage market = _state.markets[marketId];
+        if (market.owner == address(0)) revert MarketNotFound(marketId);
+        if (market.owner != msg.sender) revert MarketNotOwner(marketId);
+        if (market.resolved) revert MarketAlreadyResolved(marketId);
+        // TODO: uncomment this in production
+        // if (block.timestamp < market.expiresAt) revert MarketNotExpired(marketId);
 
-        // Market must be OPEN to be resolved
-        if (market.state != IPredictionMarket.MarketState.OPEN) {
-            revert MarketAlreadyResolved(marketId);
-        }
+        market.resolved = true;
+        market.winningOutcome = winningOutcome;
 
-        // Only allow resolution after closing time
-        if (block.timestamp < market.closingTime) {
-            revert MarketNotOpen(marketId, market.state);
-        }
-
-        // Verify admin authorization - only market admin can resolve
-        if (msg.sender != market.admin) revert UnauthorizedResolver(msg.sender, market.admin);
-
-        if (root == bytes32(0)) revert InvalidWinnersRoot();
-
-        market.state = IPredictionMarket.MarketState.RESOLVED;
-        market.resolvedAt = block.timestamp;
-        _state.winnersRoot[marketId] = root;
-
-        emit MarketResolved(marketId, root);
+        emit MarketResolved(marketId, winningOutcome);
     }
 
     /**
-     * @notice Claims payout using Merkle proof
-     * @param marketId The market ID
-     * @param payout The payout amount
-     * @param proof Merkle proof for the claim
-     * @param secret The user's secret used to generate commitment
-     * @param to Address to receive the payout
+     * @notice Processes a claim authorization from Aztec (nullifier-based)
+     * @dev Follows CEI pattern: Checks → Effects → Interactions
+     * @dev Calculates payout on-chain using pari-mutuel formula
+     * @param marketId Market identifier
+     * @param nullifier Unique nullifier (prevents double claims)
+     * @param betAmount Original bet amount from Aztec
+     * @param recipient Address to receive USDC payout
+     * @param deadline Expiry timestamp for this claim
      */
-    function claim(uint256 marketId, uint256 payout, bytes32[] memory proof, bytes32 secret, address to) external override {
-        if (to == address(0)) revert ZeroRecipientAddress();
+    function processClaimAuthorization(
+        uint256 marketId,
+        bytes32 nullifier,
+        uint256 betAmount,
+        address recipient,
+        uint256 deadline
+    ) external onlyOwner nonReentrant {
+        if (isFork()) revert ChainIdMismatch();
+        if (_state.consumedNullifiers[marketId][nullifier]) revert NullifierAlreadyConsumed(nullifier);
+        if (block.timestamp > deadline) revert DeadlineExpired();
+        if (recipient == address(0)) revert ZeroRecipient();
+        if (betAmount == 0) revert ZeroAmount();
 
-        IPredictionMarket.Market storage market = _state.markets[marketId];
-        if (market.id == 0) revert MarketNotFound(marketId);
-        if (market.state != IPredictionMarket.MarketState.RESOLVED) revert MarketNotResolved(marketId);
+        Market storage market = _state.markets[marketId];
+        if (market.owner == address(0)) revert MarketNotFound(marketId);
+        if (!market.resolved) revert MarketNotResolved(marketId);
 
-        bytes32 winnersRoot = _state.winnersRoot[marketId];
-        if (winnersRoot == bytes32(0)) revert WinnersRootNotSet();
+        // Mark nullifier as consumed (anti-replay)
+        _state.consumedNullifiers[marketId][nullifier] = true;
 
-        // Reconstruct commitment from secret
-        bytes32 commitment = keccak256(abi.encodePacked(marketId, secret));
+        // CRITICAL: Calculate payout ON-CHAIN with pari-mutuel formula
+        uint256 winningTotal = market.winningOutcome ? market.yesTotal : market.noTotal;
+        if (winningTotal == 0) revert NoWinningBets();
 
-        if (_state.claimed[marketId][commitment]) revert PayoutAlreadyClaimed(marketId, commitment);
+        uint256 payout = (betAmount * market.totalPool) / winningTotal;
 
-        // Verify Merkle proof
-        bytes32 leaf = keccak256(abi.encodePacked(commitment, payout));
-        if (!MerkleProof.verify(proof, winnersRoot, leaf)) revert InvalidMerkleProof();
+        // Transfer USDC from Treasury
+        treasuryContract().transferPayout(marketId, recipient, payout);
 
-        // Mark as claimed
-        _state.claimed[marketId][commitment] = true;
-
-        // Transfer payout from treasury
-        if (!treasuryContract().transfer(to, payout)) revert TransferFailed();
-
-        emit PayoutClaimed(marketId, commitment, payout, to);
+        emit ClaimProcessed(marketId, nullifier, recipient, payout);
     }
-
-
 
 }

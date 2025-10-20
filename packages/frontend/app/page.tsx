@@ -1,9 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import { Lock, Zap, Target, Link2, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { useWallet } from '@/context'
 
 export default function Home() {
+  const { isInitializingProvider } = useWallet()
+
   return (
     <>
       <div className="relative w-full overflow-x-hidden">
@@ -24,7 +28,7 @@ export default function Home() {
             <div className="grid md:grid-cols-3 gap-6 sm:gap-8 mb-12 max-w-4xl mx-auto px-4">
               <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-6">
                 <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-2xl">🔒</span>
+                  <Lock className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Zero-Knowledge Privacy</h3>
                 <p className="text-sm text-muted-foreground">
@@ -34,7 +38,7 @@ export default function Home() {
 
               <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-6">
                 <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-2xl">⚡</span>
+                  <Zap className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Cross-Chain Trading</h3>
                 <p className="text-sm text-muted-foreground">
@@ -44,7 +48,7 @@ export default function Home() {
 
               <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-6">
                 <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                  <span className="text-2xl">🎯</span>
+                  <Target className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Prediction Markets</h3>
                 <p className="text-sm text-muted-foreground">
@@ -59,8 +63,9 @@ export default function Home() {
                   variant="default"
                   size="lg"
                   className="font-semibold px-8 py-4 text-lg"
+                  disabled={isInitializingProvider}
                 >
-                  Explore Markets
+                  {isInitializingProvider ? 'Initializing...' : 'Explore Markets'}
                 </Button>
               </Link>
 
@@ -69,6 +74,7 @@ export default function Home() {
                 size="lg"
                 className="font-semibold px-8 py-4 text-lg"
                 onClick={() => window.open('https://docs.aztec.network', '_blank')}
+                disabled={isInitializingProvider}
               >
                 Learn More
               </Button>
@@ -80,15 +86,21 @@ export default function Home() {
                 <div className="text-sm text-muted-foreground">Private</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-primary mb-1">⚡</div>
+                <div className="flex justify-center mb-1">
+                  <Zap className="w-8 h-8 text-primary" />
+                </div>
                 <div className="text-sm text-muted-foreground">Fast Trades</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-primary mb-1">🔗</div>
+                <div className="flex justify-center mb-1">
+                  <Link2 className="w-8 h-8 text-primary" />
+                </div>
                 <div className="text-sm text-muted-foreground">Cross-Chain</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-primary mb-1">🛡️</div>
+                <div className="flex justify-center mb-1">
+                  <Shield className="w-8 h-8 text-primary" />
+                </div>
                 <div className="text-sm text-muted-foreground">Secure</div>
               </div>
             </div>

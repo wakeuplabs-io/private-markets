@@ -1,4 +1,12 @@
-import { createPXEClient, waitForPXE, type PXE, Wallet } from "@aztec/aztec.js";
+import {
+  createPXEClient,
+  waitForPXE,
+  type PXE,
+  Wallet,
+  createAztecNodeClient,
+} from "@aztec/aztec.js";
+import { createPXEService } from '@aztec/pxe/client/lazy';
+import { getPXEServiceConfig } from '@aztec/pxe/config';
 import { NETWORK_CONFIG } from "@/config/contracts";
 
 // Types for better error handling
@@ -19,6 +27,8 @@ export interface AztecConnectionError {
 class AztecService {
   private static instance: AztecService;
   private pxeClient: PXE | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private aztecNode: any = null; // AztecNode client for fetching contract instances
   private connectionPromise: Promise<PXE> | null = null;
   private connectedWallet: Wallet | null = null;
   private lastError: AztecConnectionError | null = null;
@@ -78,27 +88,58 @@ class AztecService {
   }
 
 
+  private isTestnet(nodeUrl: string): boolean {
+    return nodeUrl.includes('aztec-testnet') ||
+           (nodeUrl.includes('testnet') &&
+           !nodeUrl.includes('localhost') &&
+           !nodeUrl.includes('127.0.0.1'));
+  }
+
   private async createConnection(): Promise<PXE> {
-    const timeoutMs = 10000; // 10 seconds timeout
-    
+    const timeoutMs = 100000; // 100 seconds timeout
+
     try {
-      console.log(`[AztecService] Connecting to PXE at ${NETWORK_CONFIG.PXE_URL}...`);
-      
-      const pxe = createPXEClient(NETWORK_CONFIG.PXE_URL);
-      
-      // Create timeout promise
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`Connection timeout after ${timeoutMs/1000} seconds`));
-        }, timeoutMs);
-      });
-      
-      // Race between connection and timeout
-      await Promise.race([
-        waitForPXE(pxe),
-        timeoutPromise
-      ]);
-      
+      const nodeUrl = NETWORK_CONFIG.PXE_URL;
+      const isTestnet = this.isTestnet(nodeUrl);
+
+      console.log(`[AztecService] Connecting to ${isTestnet ? 'testnet' : 'sandbox'} at ${nodeUrl}...`);
+
+      let pxe: PXE;
+
+      if (isTestnet) {
+        // Testnet: Create local PXE in browser
+        console.log('[AztecService] Creating PXE service in browser for testnet');
+
+        this.aztecNode = await createAztecNodeClient(nodeUrl);
+
+        const config = getPXEServiceConfig();
+        config.l1Contracts = await this.aztecNode.getL1ContractAddresses();
+        config.proverEnabled = true;
+
+        pxe = await createPXEService(this.aztecNode, config, {
+          useLogSuffix: true,
+        });
+
+        console.log('[AztecService] PXE service created in browser');
+      } else {
+        // Sandbox: Connect to existing PXE HTTP server
+        console.log('[AztecService] Connecting to sandbox PXE');
+        pxe = createPXEClient(nodeUrl);
+
+        // Create timeout promise
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error(`Connection timeout after ${timeoutMs/1000} seconds`));
+          }, timeoutMs);
+        });
+
+        // Race between connection and timeout
+        await Promise.race([
+          waitForPXE(pxe),
+          timeoutPromise
+        ]);
+      }
+
       console.log(`[AztecService] Successfully connected to PXE`);
       return pxe;
     } catch (error) {

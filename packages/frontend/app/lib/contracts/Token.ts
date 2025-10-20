@@ -32,7 +32,7 @@ import {
   type U128Like,
   type WrappedFieldLike,
 } from '@aztec/aztec.js';
-import TokenContractArtifactJson from './token_contract-Token.json' with { type: 'json' };
+import TokenContractArtifactJson from './token_contract-Token.json';
 export const TokenContractArtifact = loadContractArtifact(TokenContractArtifactJson as NoirCompiledContract);
 
 

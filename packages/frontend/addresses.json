@@ -1,3 +1,19 @@
 {
-  "emitter": "0x20aaadcecebaa62f6989692ebfc07da6785129f47c969c5af3151f098ea9081f"
+  "emitter": "0x20aaadcecebaa62f6989692ebfc07da6785129f47c969c5af3151f098ea9081f",
+  "anvil": {
+    "chainId": 31337,
+    "treasury": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49",
+    "predictionMarket": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
+    "wormholeReceiver": "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
+    "usdc": "0x998abeb3E57409262aE5b751f60747921B33613E",
+    "wormholeCore": "0xC89Ce4735882C9F0f0FE26686c53074E09B0D550"
+  },
+  "arbitrumSepolia": {
+    "chainId": 421614,
+    "treasury": "0x0afc403a87E53cab11e078103f0d7846264807AD",
+    "predictionMarket": "0x5EA553637B9702942Ac92740b88B47CC512Fa24b",
+    "wormholeReceiver": "0x92a91e23360edabb0050e1243f13be4a663bcbcc",
+    "usdc": "0xE8Ba650F1ECBDF436C443D38b4Ff57E4B5ce697C",
+    "wormholeCore": "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35"
+  }
 }

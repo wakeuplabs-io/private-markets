@@ -23,6 +23,7 @@ interface WalletContextType {
   isConnecting: boolean
   isCheckingAccount: boolean
   isCreatingAccount: boolean
+  isInitializingProvider: boolean
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
@@ -39,19 +40,22 @@ type WalletAction =
   | { type: 'CHECK_ACCOUNT_ERROR'; payload: string }
   | { type: 'DISCONNECT' }
   | { type: 'RESET' }
+  | { type: 'INITIALIZING_PROVIDER'; payload: boolean }
 
 type WalletState = {
   status: 'disconnected' | 'connecting' | 'connected' | 'error'
   accountStatus: AccountStatus
   wallet: WalletInfo | null
   error: string | null
+  isInitializingProvider: boolean
 }
 
 const initialState: WalletState = {
   status: 'disconnected',
   accountStatus: 'checking',
   wallet: null,
-  error: null
+  error: null,
+  isInitializingProvider: false
 }
 
 function walletReducer(state: WalletState, action: WalletAction): WalletState {
@@ -133,6 +137,11 @@ function walletReducer(state: WalletState, action: WalletAction): WalletState {
         wallet: null,
         error: null
       }
+    case 'INITIALIZING_PROVIDER':
+      return {
+        ...state,
+        isInitializingProvider: action.payload
+      }
     default:
       return state
   }
@@ -144,6 +153,22 @@ interface WalletProviderProps {
 
 export function WalletProvider({ children }: WalletProviderProps) {
   const [state, dispatch] = useReducer(walletReducer, initialState)
+
+  // Poll for initialization status
+  useEffect(() => {
+    const checkInitStatus = () => {
+      const isInitializing = walletService.isProviderInitializing('aztec')
+      dispatch({ type: 'INITIALIZING_PROVIDER', payload: isInitializing })
+    }
+
+    // Check immediately
+    checkInitStatus()
+
+    // Poll every 500ms while initializing
+    const interval = setInterval(checkInitStatus, 500)
+
+    return () => clearInterval(interval)
+  }, [])
 
   const checkAccountStatus = async (connector: WalletConnector) => {
     try {
@@ -266,7 +291,8 @@ export function WalletProvider({ children }: WalletProviderProps) {
     isConnected: state.status === 'connected',
     isConnecting: state.status === 'connecting',
     isCheckingAccount: state.accountStatus === 'checking',
-    isCreatingAccount: state.status === 'connecting' && state.accountStatus === 'checking'
+    isCreatingAccount: state.status === 'connecting' && state.accountStatus === 'checking',
+    isInitializingProvider: state.isInitializingProvider
   }
 
   return (

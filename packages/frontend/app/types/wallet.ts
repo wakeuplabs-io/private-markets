@@ -21,7 +21,6 @@ export interface IExtendedWalletProvider extends IWalletProvider {
   sendTransaction(interaction: unknown, authWitnesses?: AuthWitness[], from?: AztecAddress): Promise<void>;
   simulateTransaction(interaction: unknown): Promise<unknown>;
   registerContract(artifact: unknown, deployer: unknown, salt: unknown, args: unknown[]): Promise<void>;
-  connectTestAccount?(index: number): Promise<IWalletAccount>;
 }
 
 export interface WalletProviderConfig {

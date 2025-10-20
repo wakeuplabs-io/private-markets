@@ -1,52 +1,57 @@
 import { createConfig, http, fallback } from 'wagmi'
 import { injected } from 'wagmi/connectors'
-import { localhost } from 'viem/chains'
+import { arbitrumSepolia, localhost } from 'viem/chains'
 
-// Primary local chain configuration
 const localChain = {
   ...localhost,
   id: 31337,
-  name: 'Local Anvil',
+  name: 'Anvil',
   rpcUrls: {
     default: { http: ['http://127.0.0.1:9555'] },
     public: { http: ['http://127.0.0.1:9555'] }
   }
 }
 
-// Alternative RPC endpoints for fallback
-const alternativeRpcs = [
-  'http://127.0.0.1:8545',  // Alternative local node
-  'http://localhost:9555',   // Localhost variant
-  'http://localhost:8545',   // Alternative localhost
+const arbitrumSepoliaRpcs = [
+  'https://sepolia-rollup.arbitrum.io/rpc',
+  'https://arbitrum-sepolia.blockpi.network/v1/rpc/public',
 ]
 
-// Create transport with fallback support
-const createTransportWithFallback = () => {
+const createArbitrumTransport = () => {
+  const transports = arbitrumSepoliaRpcs.map(rpc =>
+    http(rpc, {
+      timeout: 10000,
+      retryCount: 2,
+      retryDelay: 1000
+    })
+  )
+  return fallback(transports)
+}
+
+const createLocalTransport = () => {
   const transports = [
     http('http://127.0.0.1:9555', {
-      timeout: 5000,  // 5 second timeout
+      timeout: 5000,
       retryCount: 1,
       retryDelay: 1000
     }),
-    ...alternativeRpcs.map(rpc =>
-      http(rpc, {
-        timeout: 5000,
-        retryCount: 1,
-        retryDelay: 1000
-      })
-    )
+    http('http://localhost:9555', {
+      timeout: 5000,
+      retryCount: 1,
+      retryDelay: 1000
+    })
   ]
-
   return fallback(transports)
 }
 
 export const config = createConfig({
-  chains: [localChain],
+  chains: [localChain, arbitrumSepolia],
   connectors: [
     injected(),
   ],
   transports: {
-    [localChain.id]: createTransportWithFallback(),
+    [localChain.id]: createLocalTransport(),
+    [arbitrumSepolia.id]: createArbitrumTransport(),
   },
 })
 

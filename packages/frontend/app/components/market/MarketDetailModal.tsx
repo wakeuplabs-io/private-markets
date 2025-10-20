@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { CreateMarketFormData, Market, UserBet } from "@/types";
+import React from "react";
+import { Market, UserBet } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate } from "@/lib/utils";

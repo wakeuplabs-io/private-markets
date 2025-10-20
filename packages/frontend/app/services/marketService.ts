@@ -3,24 +3,49 @@ import { config } from '@/config/wagmi'
 import { PREDICTION_MARKET_ABI } from '@/constants/contracts'
 import { Market, MarketStatus, BlockchainConnectionStatus, Bet } from '@/types'
 import { BlockchainStatusService } from './blockchainStatusService'
-import { MockDataFactory } from '@/lib/mockData'
+import { parseUnits } from 'viem'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
+const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` // Arbitrum Sepolia USDC
+const TREASURY_ADDRESS = process.env.NEXT_PUBLIC_TREASURY_ADDRESS as `0x${string}`
+
+// Minimal ERC20 ABI for approve function
+const ERC20_ABI = [
+  {
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' }
+    ],
+    name: 'allowance',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function'
+  }
+] as const
 
 export interface ContractMarket {
   id: bigint
+  owner: string
   question: string
-  state: number
-  admin: string
+  totalPool: bigint
+  yesTotal: bigint
+  noTotal: bigint
+  resolved: boolean
+  winningOutcome: boolean
   createdAt: bigint
-  closingTime: bigint
-  resolvedAt: bigint
+  expiresAt: bigint
 }
 
-export interface ContractTotals {
-  noTotal: bigint
-  yesTotal: bigint
-}
 
 export interface AdminMarketData {
   totalBets: number
@@ -51,7 +76,6 @@ export class MarketService {
   static async getMarketCount(): Promise<number> {
     if (!CONTRACT_ADDRESS) {
       console.warn('Contract address not configured, using mock data')
-      return MockDataFactory.getMockMarkets().length
     }
 
     try {
@@ -59,36 +83,16 @@ export class MarketService {
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getMarketCount',
+        functionName: 'getAllMarketsCount',
       })
       console.log('Market count result:', Number(result))
       return Number(result)
     } catch (error) {
       console.warn('Failed to get market count from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
-      return MockDataFactory.getMockMarkets().length
+      return 0
     }
   }
 
-  static async getAllMarkets(offset = 0, limit = 100): Promise<ContractMarket[]> {
-    if (!CONTRACT_ADDRESS) {
-      console.warn('Contract address not configured, using mock data')
-      return this.convertMockToContractMarkets(MockDataFactory.getMockMarkets(limit))
-    }
-
-    try {
-      const result = await readContract(config, {
-        address: CONTRACT_ADDRESS,
-        abi: PREDICTION_MARKET_ABI,
-        functionName: 'getAllMarkets',
-        args: [BigInt(offset), BigInt(limit)],
-      })
-
-      return result as ContractMarket[]
-    } catch (error) {
-      console.warn('Failed to get markets from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
-      return this.convertMockToContractMarkets(MockDataFactory.getMockMarkets(limit))
-    }
-  }
 
   static async getMarket(marketId: number): Promise<ContractMarket> {
     if (!CONTRACT_ADDRESS) {
@@ -102,71 +106,122 @@ export class MarketService {
       args: [BigInt(marketId)],
     })
 
-    return result as ContractMarket
-  }
-
-  static async getMarketTotals(marketId: number): Promise<ContractTotals> {
-    if (!CONTRACT_ADDRESS) {
-      throw new Error('Contract address not configured')
-    }
-
-    const result = await readContract(config, {
-      address: CONTRACT_ADDRESS,
-      abi: PREDICTION_MARKET_ABI,
-      functionName: 'getAllTotals',
-      args: [BigInt(marketId)],
-    })
-
-    const [noTotal, yesTotal] = result as [bigint, bigint]
-    return { noTotal, yesTotal }
-  }
-
-  static async getMarketsByState(state: number): Promise<ContractMarket[]> {
-    try {
-      if (!CONTRACT_ADDRESS) {
-        throw new Error('Contract address not configured')
-      }
-  
-      const result = await readContract(config, {
-        address: CONTRACT_ADDRESS,
-        abi: PREDICTION_MARKET_ABI,
-        functionName: 'getMarketsByState',
-        args: [state],
-      })
-  
-      return result as ContractMarket[]  
-    } catch (error) {
-      console.warn('Failed to get markets by state from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
-      return []
-    }
+    const [owner, question, totalPool, yesTotal, noTotal, resolved, winningOutcome, createdAt, expiresAt] = result as [string, string, bigint, bigint, bigint, boolean, boolean, bigint, bigint]
     
+    return {
+      id: BigInt(marketId),
+      owner,
+      question,
+      totalPool,
+      yesTotal,
+      noTotal,
+      resolved,
+      winningOutcome,
+      createdAt,
+      expiresAt
+    }
   }
 
-  static async createMarket(question: string, closingTime: Date): Promise<string> {
+  /**
+   * Check USDC allowance for Treasury
+   */
+  static async checkUSDCAllowance(ownerAddress: string): Promise<bigint> {
+    if (!TREASURY_ADDRESS) {
+      throw new Error('Treasury address not configured')
+    }
+
+    try {
+      const allowance = await readContract(config, {
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'allowance',
+        args: [ownerAddress as `0x${string}`, TREASURY_ADDRESS],
+      })
+      return allowance as bigint
+    } catch (error) {
+      console.error('Failed to check USDC allowance:', error)
+      return 0n
+    }
+  }
+
+  /**
+   * Approve USDC for Treasury (required before creating markets)
+   */
+  static async approveUSDC(amount: bigint): Promise<string> {
+    if (!TREASURY_ADDRESS) {
+      throw new Error('Treasury address not configured')
+    }
+
+    try {
+      console.log(`Approving ${amount} USDC for Treasury...`)
+      const hash = await writeContract(config, {
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [TREASURY_ADDRESS, amount],
+        gas: 100000n, // Standard gas for ERC20 approve
+      })
+
+      await waitForTransactionReceipt(config, {
+        hash,
+        confirmations: 1,
+      })
+
+      console.log('USDC approved:', hash)
+      return hash
+    } catch (error) {
+      console.error('Failed to approve USDC:', error)
+      throw error
+    }
+  }
+
+  static async createMarket(question: string, totalPool: number, closingTime: Date, userAddress: string): Promise<string> {
     // Check if blockchain is available
     const isOnline = await BlockchainStatusService.isEVMOnline()
-
+    console.log('EVM online:', isOnline)
     if (!isOnline) {
-      console.info('EVM offline, simulating market creation')
-      // Simulate the market creation in mock data
-      MockDataFactory.createMockMarket(question, closingTime)
-      // Return a mock transaction hash
-      return `mock-tx-${Date.now()}`
+      console.info('EVM offline')
+      throw new Error('Contract address not configured')
     }
 
     if (!CONTRACT_ADDRESS) {
       throw new Error('Contract address not configured')
     }
 
-    try {
-      // Convert Date to Unix timestamp (seconds)
-      const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
+    if (!userAddress) {
+      throw new Error('User address is required')
+    }
 
+    try {
+      const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
+      const poolAmount = BigInt(totalPool)
+      // USDC has 6 decimals
+      const usdcAmount = parseUnits(totalPool.toString(), 6)
+
+      console.log('Creating market with question:', question, 'poolAmount:', poolAmount, 'closingTimestamp:', closingTimestamp)
+      console.log('USDC amount (with 6 decimals):', usdcAmount)
+
+      // Step 1: Check current allowance
+      const currentAllowance = await this.checkUSDCAllowance(userAddress)
+      console.log('Current USDC allowance:', currentAllowance)
+
+      // Step 2: Approve USDC if needed
+      if (currentAllowance < usdcAmount) {
+        console.log('⚠️  Insufficient allowance. Requesting approval for', usdcAmount.toString(), 'USDC')
+        // Approve the exact poolAmount needed
+        await this.approveUSDC(usdcAmount)
+        console.log('✅ USDC approved')
+      } else {
+        console.log('✅ Sufficient allowance already exists')
+      }
+
+      // Step 3: Create market (poolAmount is the market size, NOT the USDC amount)
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: 'createMarket',
-        args: [question, closingTimestamp],
+        args: [question, poolAmount, closingTimestamp],
+        gas: 500000n, // Reasonable gas limit for market creation
       })
 
       const waitForConfirmation = await waitForTransactionReceipt(config, {
@@ -174,83 +229,65 @@ export class MarketService {
         confirmations: 1,
       })
 
-      console.log("WaitFor confirmation:", waitForConfirmation)
-
+      console.log("Market created:", waitForConfirmation)
       return hash
     } catch (error) {
-      console.warn('Failed to create market on blockchain, using mock creation:', error instanceof Error ? error.message : 'Unknown error')
-      MockDataFactory.createMockMarket(question, closingTime)
-      return `mock-tx-${Date.now()}`
+      console.warn('Failed to create market on blockchain:', error instanceof Error ? error.message : 'Unknown error')
+      throw error
     }
   }
 
-  static async setWinnersRoot(marketId: number, root: string): Promise<string> {
-    if (!CONTRACT_ADDRESS) {
-      throw new Error('Contract address not configured')
-    }
-
-    const hash = await writeContract(config, {
-      address: CONTRACT_ADDRESS,
-      abi: PREDICTION_MARKET_ABI,
-      functionName: 'setWinnersRoot',
-      args: [BigInt(marketId), root as `0x${string}`],
-    })
-
-    return hash
-  }
 
   // === User-focused Methods ===
 
-  static async getUserMarkets(): Promise<Market[]> {
-    // Check if blockchain is available
+  static async getUserMarkets(userAddress: string): Promise<Market[]> {
     const isOnline = await BlockchainStatusService.isEVMOnline()
 
     if (!isOnline) {
       console.info('EVM offline, returning mock user markets')
-      return MockDataFactory.getMockMarkets(10)
+    }
+
+    if (!CONTRACT_ADDRESS) {
+      console.warn('Contract address not configured, using mock data')
     }
 
     try {
-      const contractMarkets = await this.getAllMarkets()
-      const markets: Market[] = []
+      const result = await readContract(config, {
+        address: CONTRACT_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'getMarketsByOwner',
+        args: [userAddress as `0x${string}`, BigInt(0), BigInt(100)],
+      })
 
-      for (const contractMarket of contractMarkets) {
-        try {
-          const totals = await this.getMarketTotals(Number(contractMarket.id))
-          const market = this.contractMarketToMarket(contractMarket, totals)
-          markets.push(market)
-        } catch (err) {
-          console.warn(`Failed to get totals for market ${contractMarket.id}:`, err)
-          const market = this.contractMarketToMarket(contractMarket)
-          markets.push(market)
-        }
-      }
-
-      return markets
+      const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
+      
+      return marketResults.map((contractMarket, index) => 
+        this.contractMarketToMarket({ ...contractMarket, id: marketIds[index] })
+      )
     } catch (error) {
       console.warn('Error fetching user markets from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
-      return MockDataFactory.getMockMarkets(10)
+      return [] as Market[]
     }
   }
 
   static async getActiveMarkets(): Promise<Market[]> {
+    if (!CONTRACT_ADDRESS) {
+      console.warn('Contract address not configured, using mock data')
+    }
+
     try {
-      const contractMarkets = await this.getMarketsByState(0) // OPEN = 0
-      const markets: Market[] = []
+      const result = await readContract(config, {
+        address: CONTRACT_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'getActiveMarkets',
+        args: [BigInt(0), BigInt(100)],
+      })
 
-      for (const contractMarket of contractMarkets) {
-        try {
-          const totals = await this.getMarketTotals(Number(contractMarket.id))
-          const market = this.contractMarketToMarket(contractMarket, totals)
-          markets.push(market)
-        } catch (err) {
-          console.warn(`Failed to get totals for market ${contractMarket.id}:`, err)
-          const market = this.contractMarketToMarket(contractMarket)
-          markets.push(market)
-        }
-      }
-
-      return markets
+      const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
+      
+      return marketResults.map((contractMarket, index) => 
+        this.contractMarketToMarket({ ...contractMarket, id: marketIds[index] })
+      )
     } catch (error) {
       console.error('Error fetching active markets:', error)
       throw error
@@ -259,80 +296,64 @@ export class MarketService {
 
   // === Admin-focused Methods ===
 
-  static async getAdminMarkets(): Promise<Market[]> {
-    // Check if blockchain is available
+  static async getAdminMarkets(adminAddress: string): Promise<Market[]> {
     const isOnline = await BlockchainStatusService.isEVMOnline()
 
     if (!isOnline) {
       console.info('EVM offline, returning mock admin markets')
-      return MockDataFactory.getMockMarkets(15)
+    }
+
+    if (!CONTRACT_ADDRESS) {
+      console.warn('Contract address not configured, using mock data')
     }
 
     try {
-      const contractMarkets = await this.getAllMarkets()
-      const markets: Market[] = []
+      const result = await readContract(config, {
+        address: CONTRACT_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'getMarketsByOwner',
+        args: [adminAddress as `0x${string}`, BigInt(0), BigInt(100)],
+      })
 
-      for (const contractMarket of contractMarkets) {
-        try {
-          const totals = await this.getMarketTotals(Number(contractMarket.id))
-          const market = this.contractMarketToMarket(contractMarket, totals)
-
-          market.admin = contractMarket.admin
-
-          markets.push(market)
-        } catch (err) {
-          console.warn(`Failed to get totals for market ${contractMarket.id}:`, err)
-          const market = this.contractMarketToMarket(contractMarket)
-          market.admin = contractMarket.admin
-          markets.push(market)
-        }
-      }
-
-      return markets
+      const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
+      
+      return marketResults.map((contractMarket, index) => {
+        const market = this.contractMarketToMarket({ ...contractMarket, id: marketIds[index] })
+        market.admin = contractMarket.owner
+        return market
+      })
     } catch (error) {
       console.warn('Error fetching admin markets from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
-      return MockDataFactory.getMockMarkets(15)
+      return [] as Market[]
     }
   }
 
   static async getMarketStats(): Promise<MarketStats> {
     try {
-      const [allMarkets, activeMarkets, resolvedMarkets] = await Promise.all([
-        this.getAllMarkets(),
-        this.getMarketsByState(0),
-        this.getMarketsByState(1)
-      ])
+      const activeMarkets = await this.getActiveMarkets()
+      const totalCount = await this.getMarketCount()
 
       let totalVolume = BigInt(0)
-      let marketsWithVolume = 0
+      const resolvedCount = 0
 
-      for (const market of allMarkets) {
-        try {
-          const totals = await this.getMarketTotals(Number(market.id))
-          const marketVolume = totals.noTotal + totals.yesTotal
-          if (marketVolume > 0) {
-            totalVolume += marketVolume
-            marketsWithVolume++
-          }
-        } catch (err) {
-          console.warn(`Failed to get totals for market ${market.id}:`, err)
-        }
+      for (const market of activeMarkets) {
+        const volume = BigInt(market.options[0]?.odds || 0) + BigInt(market.options[1]?.odds || 0)
+        totalVolume += volume
       }
 
-      const averageVolume = marketsWithVolume > 0
-        ? Number(totalVolume) / marketsWithVolume
+      const averageVolume = activeMarkets.length > 0
+        ? Number(totalVolume) / activeMarkets.length
         : 0
 
-      const now = Date.now() / 1000
-      const finalizedCount = allMarkets.filter(market =>
-        market.state === 0 && Number(market.closingTime) <= now
+      const finalizedCount = activeMarkets.filter(market =>
+        market.status === 'finalized'
       ).length
 
       return {
-        totalMarkets: allMarkets.length,
+        totalMarkets: totalCount,
         activeMarkets: activeMarkets.length,
         finalizedMarkets: finalizedCount,
-        resolvedMarkets: resolvedMarkets.length,
+        resolvedMarkets: resolvedCount,
         totalVolume,
         averageVolume
       }
@@ -343,11 +364,28 @@ export class MarketService {
   }
 
   static async resolveMarket(marketId: number, winningOption: 'yes' | 'no'): Promise<string> {
+    if (!CONTRACT_ADDRESS) {
+      throw new Error('Contract address not configured')
+    }
+
     try {
       console.log(`Resolving market ${marketId} with winning option: ${winningOption}`)
-      const winnersRoot = '0x' + '0'.repeat(64)
+      const winningOutcome = winningOption === 'yes'
 
-      return await this.setWinnersRoot(marketId, winnersRoot)
+      const hash = await writeContract(config, {
+        address: CONTRACT_ADDRESS,
+        abi: PREDICTION_MARKET_ABI,
+        functionName: 'resolveMarket',
+        args: [BigInt(marketId), winningOutcome],
+        gas: 200000n, // Reasonable gas limit for market resolution
+      })
+
+      await waitForTransactionReceipt(config, {
+        hash,
+        confirmations: 1,
+      })
+
+      return hash
     } catch (error) {
       console.error('Error resolving market:', error)
       throw error
@@ -356,10 +394,9 @@ export class MarketService {
 
   // === Helper Methods ===
 
-  static contractMarketToMarket(contractMarket: ContractMarket, totals?: ContractTotals): Market {
-    const totalBets = totals ? totals.noTotal + totals.yesTotal : BigInt(0)
-    const yesTotal = totals?.yesTotal || BigInt(0)
-    const noTotal = totals?.noTotal || BigInt(0)
+  static contractMarketToMarket(contractMarket: ContractMarket): Market {
+    const{ yesTotal, noTotal, resolved, winningOutcome, createdAt, expiresAt } = contractMarket
+    const totalBets = yesTotal + noTotal
 
     const chancePercentage = totalBets > 0
       ? Number((yesTotal * BigInt(100)) / totalBets)
@@ -369,20 +406,21 @@ export class MarketService {
     const noOdds = noTotal > 0 ? Number(totalBets) / Number(noTotal) : 2.0
 
     let status: MarketStatus
-    switch (contractMarket.state) {
-      case 0:
-        // Check if market is past closing time for client-side finalized calculation
-        const now = Date.now() / 1000 // Convert to seconds
-        const closingTime = Number(contractMarket.closingTime)
-        status = closingTime <= now ? 'finalized' : 'open'
-        break
-      case 1:
-        status = 'resolved'
-        break
-      default:
-        status = 'open'
+    if (resolved) {
+      status = 'resolved'
+    } else {
+      const now = Date.now() / 1000
+      const expiresAt = Number(contractMarket.expiresAt)
+      status = expiresAt <= now ? 'finalized' : 'open'
     }
 
+    const winningOption = resolved ? {
+      id: winningOutcome ? 'yes' : 'no',
+      name: winningOutcome ? 'Yes' : 'No',
+      odds: winningOutcome ? yesOdds : noOdds
+    } : undefined
+    console.log({winningOption})
+    console.log({contractMarket})
     return {
       id: contractMarket.id.toString(),
       question: contractMarket.question,
@@ -400,13 +438,10 @@ export class MarketService {
         }
       ],
       chancePercentage,
-      createdAt: new Date(Number(contractMarket.createdAt) * 1000),
-      closingDate: new Date(Number(contractMarket.closingTime) * 1000),
-      admin: contractMarket.admin,
-      // Optional fields
-      ...(contractMarket.resolvedAt > 0 && {
-        resolvedAt: new Date(Number(contractMarket.resolvedAt) * 1000)
-      })
+      createdAt: new Date(Number(createdAt) * 1000),
+      closingDate: new Date(Number(expiresAt) * 1000),
+      admin: contractMarket.owner,
+      winningOption: resolved ? winningOption : undefined
     }
   }
 
@@ -430,35 +465,6 @@ export class MarketService {
 
   // === Helper Methods for Mock Data Conversion ===
 
-  /**
-   * Convert mock Market objects to ContractMarket format for consistency
-   */
-  private static convertMockToContractMarkets(mockMarkets: Market[]): ContractMarket[] {
-    return mockMarkets.map(market => ({
-      id: BigInt(parseInt(market.id.replace('mock-', '')) || 0),
-      question: market.question,
-      state: this.marketStatusToContractState(market.status),
-      admin: market.admin || '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
-      createdAt: BigInt(Math.floor(market.createdAt.getTime() / 1000)),
-      closingTime: BigInt(Math.floor((market.closingDate?.getTime() || Date.now()) / 1000)),
-      resolvedAt: market.resolvedAt ? BigInt(Math.floor(market.resolvedAt.getTime() / 1000)) : BigInt(0)
-    }))
-  }
-
-  /**
-   * Convert MarketStatus to contract state number
-   */
-  private static marketStatusToContractState(status: MarketStatus): number {
-    switch (status) {
-      case 'open':
-      case 'finalized':
-        return 0
-      case 'resolved':
-        return 1
-      default:
-        return 0
-    }
-  }
 
   /**
    * Get blockchain connection status for UI display

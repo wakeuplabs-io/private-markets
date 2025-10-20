@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { AztecAddress } from "@aztec/aztec.js";
 import type { TokenInfoState } from "@/types/token";
 import { tokenService } from "@/services/token";
@@ -8,12 +8,18 @@ import { CONTRACT_ADDRESSES } from "@/config/contracts";
 import { useWallet } from "@/context";
 export function useTokenInfo(contractAddress?: string, includePrivateBalance = false) {
   const [state, setState] = useState<TokenInfoState>({ status: "idle" });
-  const { isConnected, wallet } = useWallet();
+  const { isConnected, wallet, isInitializingProvider } = useWallet();
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const address = contractAddress || CONTRACT_ADDRESSES.TOKEN;
   const ownerAddress = isConnected && wallet?.address;
 
   const fetchTokenInfo = useCallback(async (): Promise<void> => {
+    // Don't fetch if PXE is still initializing
+    if (isInitializingProvider) {
+      return;
+    }
+
     if (!address) {
       setState({ status: "error", error: "No token contract address configured" });
       return;
@@ -41,21 +47,49 @@ export function useTokenInfo(contractAddress?: string, includePrivateBalance = f
         error: error instanceof Error ? error.message : "Failed to fetch token information"
       });
     }
-  }, [address, includePrivateBalance, ownerAddress]);
+  }, [address, includePrivateBalance, ownerAddress, isInitializingProvider]);
 
-  // Fetch initial data
+  // Fetch initial data with debounce
   useEffect(() => {
-    if (address && state.status === "idle") {
-      fetchTokenInfo();
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
-  }, [address, fetchTokenInfo, state.status]);
+
+    if (address && state.status === "idle" && !isInitializingProvider) {
+      // Debounce fetch by 200ms
+      debounceTimerRef.current = setTimeout(() => {
+        fetchTokenInfo();
+      }, 200);
+    }
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [address, fetchTokenInfo, state.status, isInitializingProvider]);
 
   // Refetch when wallet connects and we want private balance
   useEffect(() => {
-    if (address && includePrivateBalance && isConnected && ownerAddress) {
-      fetchTokenInfo();
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
-  }, [address, includePrivateBalance, isConnected, ownerAddress, fetchTokenInfo]);
+
+    if (address && includePrivateBalance && isConnected && ownerAddress && !isInitializingProvider) {
+      // Debounce fetch by 200ms
+      debounceTimerRef.current = setTimeout(() => {
+        fetchTokenInfo();
+      }, 200);
+    }
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [address, includePrivateBalance, isConnected, ownerAddress, fetchTokenInfo, isInitializingProvider]);
 
   const retry = useCallback(() => fetchTokenInfo(), [fetchTokenInfo]);
   const reset = useCallback(() => setState({ status: "idle" }), []);

@@ -32,14 +32,14 @@ export function MarketsPage() {
     const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
     const [isBetModalOpen, setIsBetModalOpen] = useState(false);
 
-    const { markets, activeMarkets, isLoading } = useUserMarkets();
+    const { activeMarkets, isLoading } = useUserMarkets();
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const { placeBet, isLoading: isPlacingBet, clearError } = useVault();
     const { wallet, connectWallet, isConnected } = useWallet();
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleOptionClick = (marketId: string, option: MarketOption) => {
-        const market = markets.find((m) => m.id === marketId);
+        const market = activeMarkets.find((m) => m.id === marketId);
         if (market) {
             setSelectedMarket(market);
             setIsBetModalOpen(true);

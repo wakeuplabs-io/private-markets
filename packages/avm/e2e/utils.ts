@@ -13,6 +13,7 @@ import {
   AuthWitness,
   ContractFunctionInteraction,
 } from '@aztec/aztec.js';
+import { poseidon2Hash } from '@aztec/foundation/crypto';
 import { getPXEServiceConfig } from '@aztec/pxe/config';
 import { createPXEService } from '@aztec/pxe/server';
 import { createStore } from '@aztec/kv-store/lmdb';
@@ -73,6 +74,83 @@ export const expectTokenBalances = async (
 
 export const AMOUNT = 1000n;
 export const wad = (n: number = 1) => AMOUNT * BigInt(n);
+
+// --- Bet Generation Utils (matching frontend implementation) ---
+
+/**
+ * Generate a random secret for bet commitment
+ * @returns Random Fr (Field element)
+ */
+export function generateSecret(): Fr {
+  return Fr.random();
+}
+
+/**
+ * Generate a unique bet ID
+ * @returns Random Fr (must be unique per bet)
+ */
+export function generateBetId(): Fr {
+  return Fr.random();
+}
+
+/**
+ * Generate an authwit nonce for transaction authorization
+ * @returns Random Fr
+ */
+export function generateAuthwitNonce(): Fr {
+  return Fr.random();
+}
+
+/**
+ * Generate commitment: poseidon2_hash([market_id, secret])
+ * Matches contract logic in packages/avm/vault/src/main.nr
+ * @param marketId - Market identifier
+ * @param secret - Random secret
+ * @returns Commitment as Fr
+ */
+export async function generateCommitment(marketId: Fr, secret: Fr): Promise<Fr> {
+  return await poseidon2Hash([marketId, secret]);
+}
+
+/**
+ * Compute nullifier: poseidon2_hash([market_id, commitment, recipient])
+ * Matches contract logic in packages/avm/vault/src/main.nr
+ * @param marketId - Market identifier
+ * @param commitment - Bet commitment
+ * @param recipient - Recipient address as Field
+ * @returns Nullifier as Fr
+ */
+export async function computeNullifier(
+  marketId: Fr,
+  commitment: Fr,
+  recipient: Fr
+): Promise<Fr> {
+  return await poseidon2Hash([marketId, commitment, recipient]);
+}
+
+/**
+ * Generate realistic bet parameters
+ * Creates a proper commitment from marketId and secret
+ * @param marketId - Optional market ID (generated if not provided)
+ * @returns Object with all bet parameters including secret for claiming
+ */
+export async function generateBetParams(marketId?: Fr) {
+  const market = marketId ?? Fr.random();
+  const secret = generateSecret();
+  const commitment = await generateCommitment(market, secret);
+  const betId = generateBetId();
+  const authwitNonce = generateAuthwitNonce();
+  const outcome = 1n; // YES
+
+  return {
+    marketId: market,
+    secret,
+    commitment,
+    betId,
+    authwitNonce,
+    outcome,
+  };
+}
 
 /**
  * Deploys the Token contract with a specified minter.
@@ -169,8 +247,8 @@ export async function setPublicAuthWit(
  * @param better - The wallet placing the bet.
  * @param admin - The admin wallet that will receive the tokens.
  * @param amount - The amount to bet.
- * @param options - Optional parameters (marketId, outcome, commitment, betId, authwitNonce).
- * @returns The transaction receipt and bet details.
+ * @param options - Optional parameters (marketId, outcome, commitment, betId, authwitNonce, secret).
+ * @returns The transaction receipt and bet details including secret.
  */
 export async function placeBet(
   vault: BetVaultContract,
@@ -184,15 +262,49 @@ export async function placeBet(
     commitment?: Fr;
     betId?: Fr;
     authwitNonce?: Fr;
+    secret?: Fr;
   },
 ) {
-  const marketId = options?.marketId ?? Fr.random();
-  const outcome = options?.outcome ?? 1n;
-  const commitment = options?.commitment ?? Fr.random();
-  const betId = options?.betId ?? Fr.random();
-  const authwitNonce = options?.authwitNonce ?? Fr.random();
+  // Generate realistic bet params if not provided
+  let marketId: Fr;
+  let outcome: bigint;
+  let commitment: Fr;
+  let betId: Fr;
+  let authwitNonce: Fr;
+  let secret: Fr;
 
-  const mockMsg: bigint[][] = Array(7).fill(Array(31).fill(0n));
+  if (options?.commitment && options?.secret && options?.marketId) {
+    // If commitment and secret are both provided, use them directly
+    marketId = options.marketId;
+    secret = options.secret;
+    commitment = options.commitment;
+    outcome = options.outcome ?? 1n;
+    betId = options.betId ?? generateBetId();
+    authwitNonce = options.authwitNonce ?? generateAuthwitNonce();
+  } else {
+    // Generate realistic params with proper commitment = poseidon2Hash([marketId, secret])
+    const params = await generateBetParams(options?.marketId);
+    marketId = params.marketId;
+    secret = params.secret;
+    commitment = params.commitment;
+    betId = options?.betId ?? params.betId;
+    authwitNonce = options?.authwitNonce ?? params.authwitNonce;
+    outcome = options?.outcome ?? params.outcome;
+  }
+  // Convert outcome to u8 (must be 0 or 1)
+  const outcomeU8 = Number(outcome);
+  if (outcomeU8 !== 0 && outcomeU8 !== 1) {
+    throw new Error(`Invalid outcome: ${outcomeU8}. Must be 0 or 1`);
+  }
+
+  // Ensure amount is within u128 bounds and positive
+  if (amount <= 0n) {
+    throw new Error(`Amount must be positive, got: ${amount}`);
+  }
+  const MAX_U128 = (1n << 128n) - 1n;
+  if (amount > MAX_U128) {
+    throw new Error(`Amount exceeds u128 max: ${amount}`);
+  }
 
   const transferAction = token.methods.transfer_private_to_private(
     better.getAddress(),
@@ -202,18 +314,25 @@ export async function placeBet(
   );
 
   const witness = await setPrivateAuthWit(vault.address, transferAction, better);
-
+  console.log({
+    marketId,
+    outcome,
+    amount,
+    commitment,
+    betId,
+    authwitNonce,
+    from:better.getAddress(),
+  })
   const betTx = await vault
     .withWallet(better)
     .methods.bet(
       marketId,
-      outcome,
+      outcomeU8,
       amount,
       commitment,
       betId,
       authwitNonce,
       better.getAddress(),
-      mockMsg,
     )
     .with({ authWitnesses: [witness] })
     .send({ from: better.getAddress() })
@@ -226,5 +345,6 @@ export async function placeBet(
     commitment,
     betId,
     authwitNonce,
+    secret,
   };
 }

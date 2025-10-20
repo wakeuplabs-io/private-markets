@@ -126,31 +126,6 @@ export class WalletService {
     }
   }
 
-  async connectTestAccount(connector: WalletConnector, index: number): Promise<WalletInfo> {
-    try {
-      const account = await walletConnectionManager.connectTestAccount(connector, index);
-
-      if (!account) {
-        throw new Error(`Failed to connect test account with ${connector}: No account returned`);
-      }
-
-      const addressObj = account.getAddress();
-      const addressString = addressObj.toString();
-
-      const walletInfo: WalletInfo = {
-        connector,
-        address: addressString,
-        isConnected: true,
-      };
-
-      return walletInfo;
-
-    } catch (error) {
-      console.error(`Failed to connect test account with ${connector}:`, error);
-      throw new Error(`Failed to connect test account with ${connector}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
   async sendTransaction(interaction: unknown): Promise<void> {
     return walletConnectionManager.sendTransaction(interaction);
   }
@@ -198,6 +173,31 @@ export class WalletService {
     } catch (error) {
       console.error(`Failed to get account status for ${connector}:`, error);
       return 'none';
+    }
+  }
+
+  /**
+   * Check if a wallet provider is currently initializing
+   * @param connector - The wallet provider identifier
+   * @returns True if provider is initializing
+   */
+  isProviderInitializing(connector: WalletConnector): boolean {
+    try {
+      const provider = walletRegistry.get(connector);
+      if (!provider) {
+        return false;
+      }
+
+      // Check if provider has getIsInitializing method (type assertion)
+      const extendedProvider = provider as { getIsInitializing?: () => boolean };
+      if (extendedProvider.getIsInitializing) {
+        return extendedProvider.getIsInitializing();
+      }
+
+      return false;
+    } catch (error) {
+      console.error(`Failed to check initialization status for ${connector}:`, error);
+      return false;
     }
   }
 }

@@ -1,14 +1,18 @@
 {
   "vault-BetVault.json": {
     "contractName": "BetVault",
-    "hash": "f6b1e7302c88818bb21a9f116077cb2c1f3858628dbfb69bd36ea0ca794218cb"
+    "hash": "fe8f66d508adba89d3209454ddcf6e039922c9d6979fb3fd17af7252d74fa7d6"
   },
   "token_contract-Token.json": {
     "contractName": "Token",
-    "hash": "c9de2b181fdac274550e96a5ab56ae909021af3f66c8ae0914e52b9c21ec3524"
+    "hash": "c34c56925aff425e61db510a692e2cbd7f670c3ea74a8435ae11ba7700bcf80d"
   },
   "vault-Token.json": {
     "contractName": "Token",
     "hash": "d1296a9ee16d67f91fdc268a4e9e71fb4633dc9b40e39bc16fd49fb7f83108c7"
+  },
+  "wormhole_contracts-Wormhole.json": {
+    "contractName": "Wormhole",
+    "hash": "fb2a28994ac4718219bef24a9e37d612e4d0148cf97dfce68f0a46d5a0cbd5cc"
   }
 }

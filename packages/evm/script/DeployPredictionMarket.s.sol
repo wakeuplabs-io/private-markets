@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {PredictionMarketCore} from "../src/core/PredictionMarketCore.sol";
 import {Treasury} from "../src/tokens/Treasury.sol";
 import {WormholeReceiver} from "../src/wormhole/WormholeReceiver.sol";
+import {MockERC20} from "../src/mocks/MockERC20.sol";
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
@@ -15,64 +16,76 @@ import {console} from "forge-std/console.sol";
  * Deployer → WormholeReceiver → PredictionMarketCore → Treasury
  *
  * Usage:
- *   # Local deployment (Anvil)
- *   forge script script/DeployPredictionMarket.s.sol --fork-url http://localhost:8545 --broadcast
+ *   # Local deployment (Anvil) - uses ANVIL_PRIVATE_KEY
+ *   forge script script/DeployPredictionMarket.s.sol:DeployPredictionMarket \
+ *     --rpc-url $ANVIL_RPC_URL \
+ *     --private-key $ANVIL_PRIVATE_KEY \
+ *     --broadcast
  *
- *   # Arbitrum Sepolia testnet deployment
- *   forge script script/DeployPredictionMarket.s.sol --fork-url $ARBITRUM_SEPOLIA_RPC_URL --broadcast
+ *   # OR use npm script
+ *   npm run evm:deploy:local
  *
- * Required environment variables:
- *   PRIVATE_KEY - Deployer private key
+ *   # Arbitrum Sepolia testnet - uses TESTNET_PRIVATE_KEY
+ *   forge script script/DeployPredictionMarket.s.sol:DeployPredictionMarket \
+ *     --rpc-url $ARBITRUM_SEPOLIA_RPC_URL \
+ *     --private-key $TESTNET_PRIVATE_KEY \
+ *     --broadcast \
+ *     --verify
  *
- * Optional environment variables:
- *   WORMHOLE_ADDRESS - Override Wormhole Core contract address (default: official addresses)
- *   WORMHOLE_RELAYER_ADDRESS - Override WormholeRelayer address (default: official addresses)
- *   AZTEC_EMITTER_ADDRESS - Aztec contract address for cross-chain messaging (required for production)
- *   WORMHOLE_CHAIN_ID - Override Wormhole chain ID (default: 10003 for Arbitrum Sepolia)
- *   FINALITY - Override finality blocks (default: 2)
+ *   # OR use npm script
+ *   npm run evm:deploy:testnet
+ *
+ * Environment variables (see .env.example):
+ *   ANVIL_PRIVATE_KEY - Deployer key for local Anvil
+ *   ANVIL_RPC_URL - Anvil RPC endpoint (default: http://localhost:8545)
+ *   TESTNET_PRIVATE_KEY - Deployer key for Arbitrum Sepolia
+ *   ARBITRUM_SEPOLIA_RPC_URL - Arbitrum Sepolia RPC endpoint
+ *   AZTEC_EMITTER_ADDRESS - Aztec contract address for cross-chain messaging
+ *
+ * Optional overrides:
+ *   WORMHOLE_ADDRESS - Override Wormhole Core contract address
+ *   WORMHOLE_RELAYER_ADDRESS - Override WormholeRelayer address
+ *   WORMHOLE_CHAIN_ID - Override Wormhole chain ID
+ *   FINALITY - Override finality blocks
  *
  * Network Support:
- *   - Local Anvil (chain ID 31337): Mock addresses for testing
- *   - Arbitrum Sepolia (chain ID 421614): Official Wormhole addresses
- *   - Arbitrum Mainnet (chain ID 42161): Official Wormhole addresses
+ *   - Local Anvil (chain ID 31337): Mock token + mock Wormhole
+ *   - Arbitrum Sepolia (chain ID 421614): Mock token + real Wormhole
  */
 contract DeployPredictionMarket is Script {
 
     struct DeploymentAddresses {
+        address mockErc20;
         address treasury;
         address predictionMarketCore;
         address wormholeReceiver;
     }
 
     function run() external returns (DeploymentAddresses memory) {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        uint256 deployerPrivateKey = _getDeployerPrivateKey();
 
-        // Network-specific configuration based on chain ID
-        (address wormholeAddress, uint16 wormholeChainId, uint8 finality, bytes32 aztecEmitter) = _getNetworkConfig();
+        (address wormholeCoreAddress, uint16 wormholeChainId, uint8 finality, bytes32 aztecEmitter) = _getNetworkConfig();
 
         console.log("=== Prediction Market Deployment Configuration ===");
+        console.log("Network:", _getNetworkName());
         console.log("Chain ID:", block.chainid);
         console.log("Deployer:", vm.addr(deployerPrivateKey));
-        console.log("Wormhole Address:", wormholeAddress);
-        console.log("Wormhole Relayer Address:", _getWormholeRelayerAddress());
+        console.log("Wormhole Core (VAA verification):", wormholeCoreAddress);
         console.log("Wormhole Chain ID:", wormholeChainId);
         console.log("Finality:", finality);
         console.log("Aztec Emitter:", aztecEmitter == bytes32(0) ? "NOT SET" : vm.toString(aztecEmitter));
         console.log("===================================================");
+        console.log("NOTE: Using MANUAL VAA verification (no automatic Wormhole Relayer)");
 
         vm.startBroadcast(deployerPrivateKey);
 
-        // 1. Deploy Treasury contract
-        Treasury treasury = new Treasury(
-            "Prediction Market Token",
-            "PMT",
-            0 // Start with 0 supply, mint on demand
-        );
+        MockERC20 mockErc20 = new MockERC20("Mock USDC", "USDC", 6, 1_000_000_000 * 10**6);
+        console.log("MockERC20 deployed to:", address(mockErc20));
+
+        Treasury treasury = new Treasury(address(mockErc20));
         console.log("Treasury deployed to:", address(treasury));
 
-        // 2. Deploy PredictionMarketCore contract
         PredictionMarketCore predictionMarketCore = new PredictionMarketCore(
-            payable(wormholeAddress),
             wormholeChainId,
             block.chainid,
             finality,
@@ -80,11 +93,8 @@ contract DeployPredictionMarket is Script {
         );
         console.log("PredictionMarketCore deployed to:", address(predictionMarketCore));
 
-        // 3. Deploy WormholeReceiver contract
-        address wormholeRelayerAddress = _getWormholeRelayerAddress();
         WormholeReceiver wormholeReceiver = new WormholeReceiver(
-            payable(wormholeAddress),
-            wormholeRelayerAddress,
+            payable(wormholeCoreAddress),
             wormholeChainId,
             block.chainid,
             finality,
@@ -93,19 +103,14 @@ contract DeployPredictionMarket is Script {
         );
         console.log("WormholeReceiver deployed to:", address(wormholeReceiver));
 
-        // 4. Set up ownership architecture: owner → WormholeReceiver → PredictionMarketCore → Treasury
-
-        // Transfer Treasury ownership to PredictionMarketCore so it can mint/transfer tokens
         treasury.transferOwnership(address(predictionMarketCore));
         console.log("Treasury ownership transferred to PredictionMarketCore");
 
-        // Transfer PredictionMarketCore ownership to WormholeReceiver so it can process cross-chain bets
         predictionMarketCore.transferOwnership(address(wormholeReceiver));
         console.log("PredictionMarketCore ownership transferred to WormholeReceiver");
 
-        // Register Aztec sender in WormholeReceiver (only if emitter address is provided)
         if (aztecEmitter != bytes32(0)) {
-            wormholeReceiver.setRegisteredSender(56, aztecEmitter); // 56 = Aztec Wormhole Chain ID
+            wormholeReceiver.setRegisteredSender(56, aztecEmitter);
             console.log("Registered Aztec sender:", vm.toString(aztecEmitter));
         } else {
             console.log("WARNING: No Aztec emitter address provided - must be set manually later");
@@ -114,6 +119,9 @@ contract DeployPredictionMarket is Script {
         vm.stopBroadcast();
         console.log("");
         console.log("=== Deployment Summary ===");
+        if (address(mockErc20) != address(0)) {
+            console.log("MockERC20 Contract:", address(mockErc20));
+        }
         console.log("Treasury Contract:", address(treasury));
         console.log("[OK] PredictionMarketCore Contract:", address(predictionMarketCore));
         console.log("WormholeReceiver Contract:", address(wormholeReceiver));
@@ -130,18 +138,24 @@ contract DeployPredictionMarket is Script {
             console.log("Aztec emitter registered for chain ID 56");
         }
 
-        // Verify deployment by checking initial market count (should be 0)
-        uint256 initialMarketCount = predictionMarketCore.getMarketCount();
         console.log("=== Deployment Verification ===");
-        console.log("Initial market count:", initialMarketCount);
-        if (initialMarketCount == 0) {
-            console.log("[PASS] Verification PASSED: Market count is 0 as expected");
+        address treasuryOwner = treasury.owner();
+        address coreOwner = predictionMarketCore.owner();
+        bool ownershipCorrect = (treasuryOwner == address(predictionMarketCore)) && (coreOwner == address(wormholeReceiver));
+
+        if (ownershipCorrect) {
+            console.log("[PASS] Verification PASSED: Ownership chain configured correctly");
         } else {
-            console.log("[FAIL] Verification FAILED: Market count should be 0");
+            console.log("[FAIL] Verification FAILED: Ownership chain incorrect");
+            console.log("  Treasury owner:", treasuryOwner);
+            console.log("  Expected:", address(predictionMarketCore));
+            console.log("  Core owner:", coreOwner);
+            console.log("  Expected:", address(wormholeReceiver));
         }
         console.log("Deployment completed successfully!");
 
         return DeploymentAddresses({
+            mockErc20: address(mockErc20),
             treasury: address(treasury),
             predictionMarketCore: address(predictionMarketCore),
             wormholeReceiver: address(wormholeReceiver)
@@ -149,47 +163,57 @@ contract DeployPredictionMarket is Script {
     }
 
     /**
+     * @dev Get deployer private key based on chain ID
+     * Auto-detects whether to use ANVIL_PRIVATE_KEY or TESTNET_PRIVATE_KEY
+     */
+    function _getDeployerPrivateKey() internal view returns (uint256) {
+        if (block.chainid == 31337) {
+            return vm.envUint("ANVIL_PRIVATE_KEY");
+        } else if (block.chainid == 421614) {
+            return vm.envUint("TESTNET_PRIVATE_KEY");
+        } else {
+            revert(string.concat("Unsupported chain ID: ", vm.toString(block.chainid)));
+        }
+    }
+
+    /**
+     * @dev Get human-readable network name
+     */
+    function _getNetworkName() internal view returns (string memory) {
+        if (block.chainid == 31337) {
+            return "Local Anvil";
+        } else if (block.chainid == 421614) {
+            return "Arbitrum Sepolia";
+        } else {
+            return "Unknown";
+        }
+    }
+
+    /**
      * @dev Get network-specific configuration based on chain ID
+     * Returns Wormhole Core address (manual VAA verification, no Relayer)
      */
     function _getNetworkConfig() internal view returns (
-        address wormholeAddress,
+        address wormholeCoreAddress,
         uint16 wormholeChainId,
         uint8 finality,
         bytes32 aztecEmitter
     ) {
         if (block.chainid == 31337) {
-            // Local Anvil - well-known addresses
-            wormholeAddress = 0xC89Ce4735882C9F0f0FE26686c53074E09B0D550;
+            // Local Anvil - mock addresses for testing
+            wormholeCoreAddress = 0xC89Ce4735882C9F0f0FE26686c53074E09B0D550;
             wormholeChainId = 10003;
             finality = 2;
             aztecEmitter = 0x0f8a2300a7925c586135b1c142dc0b833f20d5c41ea6e815900d65d041e96cf5;
         } else if (block.chainid == 421614) {
-            // Arbitrum Sepolia - official Wormhole addresses (can override via env vars)
-            wormholeAddress = vm.envOr("WORMHOLE_ADDRESS", address(0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35));
-            wormholeChainId = uint16(vm.envOr("WORMHOLE_CHAIN_ID", uint256(10003))); // Official Arbitrum Sepolia Wormhole Chain ID
+            // Arbitrum Sepolia - official Wormhole Core address
+            wormholeCoreAddress = vm.envOr("WORMHOLE_CORE_ADDRESS", address(0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35));
+            wormholeChainId = uint16(vm.envOr("WORMHOLE_CHAIN_ID", uint256(10003)));
             finality = uint8(vm.envOr("FINALITY", uint256(2)));
-            aztecEmitter = vm.envOr("AZTEC_EMITTER_ADDRESS", bytes32(0)); // Must be provided for production
+            aztecEmitter = vm.envOr("AZTEC_EMITTER_ADDRESS", bytes32(0x19898ea9cd3f19e20a95d5a9448a7b0e9b4eb3ce2c9daa1d4f4606344997e014));
         } else {
             revert(string.concat("Unsupported chain ID: ", vm.toString(block.chainid), " (only local and testnet supported)"));
         }
     }
 
-    /**
-     * @dev Get WormholeRelayer address based on chain ID
-     * Can be overridden via WORMHOLE_RELAYER_ADDRESS environment variable
-     */
-    function _getWormholeRelayerAddress() internal view returns (address) {
-        if (block.chainid == 31337) {
-            // Local Anvil
-            return vm.envOr("WORMHOLE_RELAYER_ADDRESS", address(0xC89Ce4735882C9F0f0FE26686c53074E09B0D550));
-        } else if (block.chainid == 421614) {
-            // Arbitrum Sepolia
-            return vm.envOr("WORMHOLE_RELAYER_ADDRESS", address(0x7B1bD7a6b4E61c2a123AC6BC2cbfC614437D0470));
-        } else if (block.chainid == 42161) {
-            // Arbitrum Mainnet
-            return vm.envOr("WORMHOLE_RELAYER_ADDRESS", address(0x27428DD2d3DD32A4D7f7C497eAaa23130d894911));
-        } else {
-            revert(string.concat("Unsupported chain ID for WormholeRelayer: ", vm.toString(block.chainid)));
-        }
-    }
 }

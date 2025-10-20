@@ -76,7 +76,7 @@ export class BlockchainStatusService {
       await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getMarketCount',
+        functionName: 'getAllMarketsCount',
       })
 
       clearTimeout(timeoutId)

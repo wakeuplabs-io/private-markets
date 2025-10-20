@@ -8,6 +8,7 @@ import { useDefaultTokenInfo } from '@/hooks/useTokenInfo'
 import { useWallet } from '@/context'
 import { AztecConnectionBadge } from '@/components/AztecConnectionStatus'
 import dynamic from 'next/dynamic'
+import { useAccount } from 'wagmi'
 
 const EvmConnectButton = dynamic(
   () => import('@/components/ui/EvmConnectButton').then(mod => ({ default: mod.EvmConnectButton })),
@@ -22,6 +23,72 @@ const EvmConnectButton = dynamic(
     )
   }
 )
+
+const NetworkBadge = () => {
+  const { chain, isConnected } = useAccount()
+
+  if (!isConnected || !chain) {
+    return (
+      <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg">
+        <div className="flex items-center space-x-2">
+          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+          <span className="text-sm text-muted-foreground">No conectado</span>
+        </div>
+      </div>
+    )
+  }
+
+  const getNetworkInfo = () => {
+    console.log('chain', chain)
+    switch (chain.id) {
+      case 421614:
+        return {
+          name: 'Arbitrum Sepolia',
+          color: 'blue',
+          bgColor: 'bg-blue-500/20',
+          borderColor: 'border-blue-500/30',
+          textColor: 'text-blue-400',
+          dotColor: 'bg-blue-400'
+        }
+      case 31337:
+        return {
+          name: 'Anvil Local',
+          color: 'purple',
+          bgColor: 'bg-purple-500/20',
+          borderColor: 'border-purple-500/30',
+          textColor: 'text-purple-400',
+          dotColor: 'bg-purple-400'
+        }
+      default:
+        return {
+          name: chain.name,
+          color: 'gray',
+          bgColor: 'bg-gray-500/20',
+          borderColor: 'border-gray-500/30',
+          textColor: 'text-gray-400',
+          dotColor: 'bg-gray-400'
+        }
+    }
+  }
+
+  const networkInfo = getNetworkInfo()
+
+  return (
+    <div className={cn('px-4 py-3 border rounded-lg', networkInfo.bgColor, networkInfo.borderColor)}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <div className={cn('w-2 h-2 rounded-full', networkInfo.dotColor)}></div>
+          <span className={cn('text-sm font-medium', networkInfo.textColor)}>
+            {networkInfo.name}
+          </span>
+        </div>
+        <span className={cn('text-xs', networkInfo.textColor, 'opacity-70')}>
+          Chain ID: {chain.id}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 interface AvatarButtonProps {
   className?: string
@@ -87,7 +154,6 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
         onClick={(e) => {
@@ -96,12 +162,10 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
         }}
       />
       
-      {/* Modal Content */}
       <div 
         className="fixed top-20 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-50 bg-card border border-border rounded-lg shadow-lg p-4 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-foreground">User Menu</h3>
           <button
@@ -127,7 +191,11 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Connection Status */}
+        <div className="space-y-3">
+          <div className="text-sm font-medium text-muted-foreground">Active Network</div>
+          <NetworkBadge />
+        </div>
+
         <div className="space-y-3">
           <div className="text-sm font-medium text-muted-foreground">Connection Status</div>
           <div className="space-y-2">
@@ -136,7 +204,6 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Token Information */}
         <div className="space-y-3">
           <div className="text-sm font-medium text-muted-foreground">Token Information</div>
           <TokenInfoBadge
@@ -147,7 +214,6 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
           />
         </div>
 
-        {/* Actions */}
         <div className="space-y-3">
           <div className="text-sm font-medium text-muted-foreground">Actions</div>
           <div className="space-y-2">

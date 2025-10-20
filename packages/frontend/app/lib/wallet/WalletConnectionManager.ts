@@ -79,37 +79,6 @@ export class WalletConnectionManager {
   }
 
   /**
-   * Connect to a test account
-   * @param connector - The wallet provider identifier
-   * @param index - Test account index
-   * @returns Promise resolving to the connected test account
-   */
-  async connectTestAccount(connector: WalletConnector, index: number): Promise<IWalletAccount> {
-    try {
-      this.disconnect();
-
-      const provider = walletRegistry.get(connector);
-      if (!provider) {
-        throw new Error(`Wallet provider "${connector}" not found. Available providers: ${walletRegistry.getAvailable().join(", ")}`);
-      }
-
-      const extendedProvider = provider as IExtendedWalletProvider;
-      if (!extendedProvider.connectTestAccount) {
-        throw new Error(`Wallet provider "${connector}" does not support test accounts`);
-      }
-
-      this.account = await extendedProvider.connectTestAccount(index);
-      this.currentConnector = connector;
-      this.currentProvider = provider;
-
-      return this.account;
-    } catch (error) {
-      console.error(`Failed to connect test account with ${connector}:`, error);
-      throw error;
-    }
-  }
-
-  /**
    * Disconnect from the current wallet
    */
   disconnect(): void {
