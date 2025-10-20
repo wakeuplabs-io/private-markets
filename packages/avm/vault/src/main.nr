@@ -233,12 +233,12 @@ pub contract BetVault {
         let mut payload = [0u8; 98];
         payload[0] = 0x01;
 
-        let market_id_bytes = market_id.to_le_bytes::<32>();
+        let market_id_bytes = market_id.to_be_bytes::<32>();
         for i in 0..32 {
             payload[1 + i] = market_id_bytes[i];
         }
 
-        let bet_id_bytes = bet_id.to_le_bytes::<32>();
+        let bet_id_bytes = bet_id.to_be_bytes::<32>();
         for i in 0..32 {
             payload[33 + i] = bet_id_bytes[i];
         }
@@ -246,7 +246,7 @@ pub contract BetVault {
         payload[65] = outcome;
 
         let amount_field = amount.to_field();
-        let amount_bytes = amount_field.to_le_bytes::<32>();
+        let amount_bytes = amount_field.to_be_bytes::<32>();
         for i in 0..32 {
             payload[66 + i] = amount_bytes[i];
         }
@@ -276,23 +276,23 @@ pub contract BetVault {
         let mut payload = [0u8; 129];
         payload[0] = 0x02; // Message type: CLAIM
 
-        let market_id_bytes = market_id.to_le_bytes::<32>();
+        let market_id_bytes = market_id.to_be_bytes::<32>();
         for i in 0..32 {
             payload[1 + i] = market_id_bytes[i];
         }
 
-        let nullifier_bytes = nullifier.to_le_bytes::<32>();
+        let nullifier_bytes = nullifier.to_be_bytes::<32>();
         for i in 0..32 {
             payload[33 + i] = nullifier_bytes[i];
         }
 
         let bet_amount_field = bet_amount.to_field();
-        let bet_amount_bytes = bet_amount_field.to_le_bytes::<32>();
+        let bet_amount_bytes = bet_amount_field.to_be_bytes::<32>();
         for i in 0..32 {
             payload[65 + i] = bet_amount_bytes[i];
         }
 
-        let recipient_bytes = recipient.to_field().to_le_bytes::<32>();
+        let recipient_bytes = recipient.to_field().to_be_bytes::<32>();
         for i in 0..32 {
             payload[97 + i] = recipient_bytes[i];
         }

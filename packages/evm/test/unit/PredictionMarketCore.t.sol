@@ -277,7 +277,6 @@ contract PredictionMarketCoreTest is Test {
         // Formula: payout = (150 * 1000) / 150 = 1000 USDC (all pool)
         bytes32 nullifier = keccak256("nullifier1");
         uint256 betAmount = 150 * 10**6;
-        uint256 deadline = block.timestamp + 1 hours;
 
         uint256 balanceBefore = usdc.balanceOf(user1);
 
@@ -286,8 +285,7 @@ contract PredictionMarketCoreTest is Test {
             marketId,
             nullifier,
             betAmount,
-            user1,
-            deadline
+            user1
         );
 
         uint256 balanceAfter = usdc.balanceOf(user1);
@@ -310,8 +308,7 @@ contract PredictionMarketCoreTest is Test {
             marketId,
             nullifier,
             100 * 10**6,
-            user2,
-            block.timestamp + 1 hours
+            user2
         );
 
         uint256 balanceAfter = usdc.balanceOf(user2);
@@ -324,15 +321,13 @@ contract PredictionMarketCoreTest is Test {
         _resolveMarket(marketId, true);
 
         bytes32 nullifier = keccak256("nullifier1");
-        uint256 deadline = block.timestamp + 1 hours;
 
         vm.startPrank(wormholeReceiver);
         predictionMarket.processClaimAuthorization(
             marketId,
             nullifier,
             150 * 10**6,
-            user1,
-            deadline
+            user1
         );
 
         // Try duplicate
@@ -346,8 +341,7 @@ contract PredictionMarketCoreTest is Test {
             marketId,
             nullifier,
             150 * 10**6,
-            user2,
-            deadline
+            user2
         );
         vm.stopPrank();
     }
@@ -369,30 +363,11 @@ contract PredictionMarketCoreTest is Test {
             marketId,
             nullifier,
             150 * 10**6,
-            user1,
-            block.timestamp + 1 hours
+            user1
         );
     }
 
-    function test_claim_revertsIfDeadlineExpired() public {
-        _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
-        _resolveMarket(marketId, true);
-
-        uint256 deadline = block.timestamp + 1 hours;
-        vm.warp(deadline + 1); // Warp past deadline
-
-        bytes32 nullifier = keccak256("nullifier1");
-        vm.prank(wormholeReceiver);
-        vm.expectRevert(PredictionMarketCore.DeadlineExpired.selector);
-        predictionMarket.processClaimAuthorization(
-            marketId,
-            nullifier,
-            150 * 10**6,
-            user1,
-            deadline
-        );
-    }
+    // NOTE: test_claim_revertsIfDeadlineExpired removed since deadline parameter was eliminated
 
     // ============================================
     // Query Methods Tests (8)

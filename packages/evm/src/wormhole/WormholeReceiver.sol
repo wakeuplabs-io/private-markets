@@ -170,7 +170,7 @@ contract WormholeReceiver is PredictionMarketGetters {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // V3 BET message: exactly 98 bytes
+        // BET message: exactly 98 bytes
         if (payload.length != 98) revert PayloadTooShort(payload.length, 98);
         if (uint8(payload[0]) != 0x01) revert UnknownMessageType(uint8(payload[0]));
 
@@ -201,25 +201,25 @@ contract WormholeReceiver is PredictionMarketGetters {
 
     /**
      * @dev Processes claim authorization payload from Aztec (V3)
-     * Payload structure (149 bytes): [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | deadline(32)]
+     * Payload structure (129 bytes): [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipientField(32)]
+     * Note: recipientField is a 32-byte Field from Aztec that contains the EVM address in the last 20 bytes
      */
     function _processClaimAuthPayload(bytes memory payload) internal {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // V3 CLAIM_AUTHORIZATION message: exactly 149 bytes
-        if (payload.length != 149) revert PayloadTooShort(payload.length, 149);
+        // V3 CLAIM_AUTHORIZATION message: exactly 129 bytes
+        if (payload.length != 129) revert PayloadTooShort(payload.length, 129);
         if (uint8(payload[0]) != 0x02) revert UnknownMessageType(uint8(payload[0]));
 
         uint256 marketId;
         bytes32 nullifier;
         uint256 betAmount;
         address recipient;
-        uint256 deadline;
 
         assembly {
-            // payload structure: [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | deadline(32)]
-            // Total: 149 bytes (abi.encodePacked does NOT pad the 20-byte address)
+            // payload structure: [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipientField(32)]
+            // Total: 129 bytes
             // mload reads 32 bytes starting at given position
             // payload pointer points to length, so add 32 to get to data
             //
@@ -229,21 +229,17 @@ contract WormholeReceiver is PredictionMarketGetters {
             // [33-64]:  marketId (bytes 1-32 of payload)
             // [65-96]:  nullifier (bytes 33-64)
             // [97-128]: betAmount (bytes 65-96)
-            // [129-148]: recipient (bytes 97-116) - ONLY 20 bytes!
-            // [149-180]: deadline (bytes 117-148)
+            // [129-160]: recipientField (bytes 97-128) - 32 bytes Field containing address in last 20 bytes
 
             marketId := mload(add(payload, 33))        // Bytes 1-32
             nullifier := mload(add(payload, 65))       // Bytes 33-64
             betAmount := mload(add(payload, 97))       // Bytes 65-96
 
-            // For address (20 bytes at payload[97-116]):
-            // mload(129) reads bytes 97-128 (32 bytes starting at offset 97)
-            // We want the FIRST 20 bytes of those 32 bytes
-            // Shift right by 96 bits (12 bytes) to discard the trailing 12 bytes
-            let recipientBytes := mload(add(payload, 129))
-            recipient := shr(96, recipientBytes)
-
-            deadline := mload(add(payload, 149))       // Bytes 117-148
+            // For recipientField (32 bytes at payload[97-128]):
+            // The Field is big-endian and contains the address in the last 20 bytes
+            // Extract the last 20 bytes by masking
+            let recipientField := mload(add(payload, 129))  // Read full 32 bytes
+            recipient := and(recipientField, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)  // Mask to get last 20 bytes
         }
 
         // Validate extracted data (marketId validity checked by PREDICTION_MARKET)
@@ -251,8 +247,8 @@ contract WormholeReceiver is PredictionMarketGetters {
         if (betAmount == 0) revert ZeroAmount();
         if (recipient == address(0)) revert ZeroRecipient();
 
-        // Call PredictionMarketCore to process the claim authorization
-        PREDICTION_MARKET.processClaimAuthorization(marketId, nullifier, betAmount, recipient, deadline);
+        // Call PredictionMarketCore to process the claim authorization (no deadline)
+        PREDICTION_MARKET.processClaimAuthorization(marketId, nullifier, betAmount, recipient);
 
         emit ClaimAuthorizationReceived(marketId, nullifier, recipient, betAmount);
     }
