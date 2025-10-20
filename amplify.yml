@@ -1,0 +1,19 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm install --cache .npm --prefer-offline
+        - npm run build --workspace=packages/frontend
+    build:
+      commands:
+        - echo "Build completed in preBuild phase"
+  artifacts:
+    baseDirectory: packages/frontend/.next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - packages/frontend/.next/cache/**/*
+      - .npm/**/*
+      - node_modules/**/*
