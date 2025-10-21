@@ -1,3 +1,4 @@
+import { config } from "dotenv";
 import {
   createPXEClient,
   waitForPXE,
@@ -23,6 +24,7 @@ import { createStore } from "@aztec/kv-store/lmdb";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,7 +84,7 @@ export class AztecSetup {
 
   constructor() {
     const envNodeUrl = process.env.NODE_URL;
-    
+    console.log('envNodeUrl', envNodeUrl);
     if (envNodeUrl) {
       this.nodeUrl = envNodeUrl;
     } else {

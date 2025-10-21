@@ -86,7 +86,8 @@ export class VaultService implements IVaultService {
     // Generate secret and commitment using the same algorithm as the contract
     const secret = generateSecret();
     const marketIdBigInt = BigInt(params.marketId);
-    const commitment = await generateCommitment(marketIdBigInt, secret);
+    const amountBigInt = BigInt(params.amount);
+    const commitment = await generateCommitment(marketIdBigInt, amountBigInt, secret);
 
     // Generate unique bet ID using hash
     const betId = generateBetId();

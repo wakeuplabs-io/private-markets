@@ -35,7 +35,7 @@ pub contract BetVault {
     struct ClaimAuthorized {
         market_id: Field,
         nullifier: Field,
-        bet_amount: u128,
+        amount: u128,
         recipient: Field,
     }
 
@@ -150,20 +150,17 @@ pub contract BetVault {
         commitment: Field,
         secret: Field,
         recipient: AztecAddress,
-        bet_amount: u128,
+        amount: u128,
         authwit_nonce: Field,
     ) {
         let from = context.msg_sender();
 
-        // Verify secret
-        let calculated_commitment = poseidon2_hash([market_id, secret]);
-        assert(commitment == calculated_commitment, "Invalid secret for commitment");
-
-        // Verify amount is valid (basic sanity check)
-        assert(bet_amount > 0, "Bet amount must be greater than 0");
-
-        // Note: The verification that the bet note exists is done in TypeScript
-        // by calling find_bet_for_claim() before invoking authorizeClaim()
+        // Verify secret and amount match the commitment
+        let calculated_commitment = poseidon2_hash([market_id, amount as Field, secret]);
+        assert(commitment == calculated_commitment, "Invalid secret or amount for commitment");
+  
+        // Verify amount is valid
+        assert(amount > 0, "Bet amount must be greater than 0");
 
         // Generate nullifier
         let recipient_field = recipient.to_field();
@@ -179,7 +176,7 @@ pub contract BetVault {
            ClaimAuthorized {
                 market_id,
                 nullifier,
-                bet_amount,
+                amount,
                 recipient: recipient_field,
             },
             &mut context,
@@ -191,19 +188,19 @@ pub contract BetVault {
         let chunks = create_claim_payload(
             market_id,
             nullifier,
-            bet_amount,
+            amount,
             recipient,
         );
 
-        // let _ = Wormhole::at(storage.wormhole_address.read())
-        //     .publish_message_in_private(
-        //         1,                // consistency level
-        //         chunks,        // payload: [Field; 5]
-        //         0,          // nonce
-        //         2,          // emitter_chain
-        //         from,
-        //         authwit_nonce
-        //     ).call(&mut context);
+        let _ = Wormhole::at(storage.wormhole_address.read())
+            .publish_message_in_private(
+                1,                // consistency level
+                chunks,        // payload: [Field; 5]
+                0,          // nonce
+                2,          // emitter_chain
+                from,
+                authwit_nonce
+            ).call(&mut context);
     }
 
     // Public functions

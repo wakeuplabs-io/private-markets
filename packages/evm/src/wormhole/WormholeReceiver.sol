@@ -208,7 +208,7 @@ contract WormholeReceiver is PredictionMarketGetters {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // V3 CLAIM_AUTHORIZATION message: exactly 129 bytes
+        // CLAIM_AUTHORIZATION message: exactly 129 bytes
         if (payload.length != 129) revert PayloadTooShort(payload.length, 129);
         if (uint8(payload[0]) != 0x02) revert UnknownMessageType(uint8(payload[0]));
 
@@ -247,7 +247,7 @@ contract WormholeReceiver is PredictionMarketGetters {
         if (betAmount == 0) revert ZeroAmount();
         if (recipient == address(0)) revert ZeroRecipient();
 
-        // Call PredictionMarketCore to process the claim authorization (no deadline)
+        // Call PredictionMarketCore to process the claim authorization
         PREDICTION_MARKET.processClaimAuthorization(marketId, nullifier, betAmount, recipient);
 
         emit ClaimAuthorizationReceived(marketId, nullifier, recipient, betAmount);

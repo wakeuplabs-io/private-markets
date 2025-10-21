@@ -31,16 +31,18 @@ export function generateAuthwitNonce(): Fr {
 }
 
 /**
- * Generate commitment: poseidon2_hash([market_id, secret])
+ * Generate commitment: poseidon2_hash([market_id, amount, secret])
  * @param marketId - Market identifier
+ * @param amount - Bet amount (must match the actual bet amount)
  * @param secret - Random secret
  * @returns Commitment as Fr
  */
-export async function generateCommitment(marketId: bigint | Fr, secret: bigint | Fr): Promise<Fr> {
+export async function generateCommitment(marketId: bigint | Fr, amount: bigint | Fr, secret: bigint | Fr): Promise<Fr> {
   const marketIdFr = typeof marketId === 'bigint' ? new Fr(marketId) : marketId;
+  const amountFr = typeof amount === 'bigint' ? new Fr(amount) : amount;
   const secretFr = typeof secret === 'bigint' ? new Fr(secret) : secret;
 
-  return await poseidon2Hash([marketIdFr, secretFr]);
+  return await poseidon2Hash([marketIdFr, amountFr, secretFr]);
 }
 
 /**

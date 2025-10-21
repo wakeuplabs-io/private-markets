@@ -102,14 +102,15 @@ export function generateAuthwitNonce(): Fr {
 }
 
 /**
- * Generate commitment: poseidon2_hash([market_id, secret])
+ * Generate commitment: poseidon2_hash([market_id, amount, secret])
  * Matches contract logic in packages/avm/vault/src/main.nr
  * @param marketId - Market identifier
+ * @param amount - Bet amount (must match actual bet amount)
  * @param secret - Random secret
  * @returns Commitment as Fr
  */
-export async function generateCommitment(marketId: Fr, secret: Fr): Promise<Fr> {
-  return await poseidon2Hash([marketId, secret]);
+export async function generateCommitment(marketId: Fr, amount: bigint, secret: Fr): Promise<Fr> {
+  return await poseidon2Hash([marketId, new Fr(amount), secret]);
 }
 
 /**
@@ -130,14 +131,15 @@ export async function computeNullifier(
 
 /**
  * Generate realistic bet parameters
- * Creates a proper commitment from marketId and secret
+ * Creates a proper commitment from marketId, amount, and secret
  * @param marketId - Optional market ID (generated if not provided)
+ * @param amount - Bet amount (defaults to AMOUNT constant)
  * @returns Object with all bet parameters including secret for claiming
  */
-export async function generateBetParams(marketId?: Fr) {
+export async function generateBetParams(marketId?: Fr, amount: bigint = AMOUNT) {
   const market = marketId ?? Fr.random();
   const secret = generateSecret();
-  const commitment = await generateCommitment(market, secret);
+  const commitment = await generateCommitment(market, amount, secret);
   const betId = generateBetId();
   const authwitNonce = generateAuthwitNonce();
   const outcome = 1n; // YES
@@ -282,8 +284,8 @@ export async function placeBet(
     betId = options.betId ?? generateBetId();
     authwitNonce = options.authwitNonce ?? generateAuthwitNonce();
   } else {
-    // Generate realistic params with proper commitment = poseidon2Hash([marketId, secret])
-    const params = await generateBetParams(options?.marketId);
+    // Generate realistic params with proper commitment = poseidon2Hash([marketId, amount, secret])
+    const params = await generateBetParams(options?.marketId, amount);
     marketId = params.marketId;
     secret = params.secret;
     commitment = params.commitment;

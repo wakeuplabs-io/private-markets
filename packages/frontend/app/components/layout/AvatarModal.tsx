@@ -194,13 +194,14 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
         <div className="space-y-3">
           <div className="text-sm font-medium text-muted-foreground">Active Network</div>
           <NetworkBadge />
+          <EvmConnectButton />
+
         </div>
 
         <div className="space-y-3">
           <div className="text-sm font-medium text-muted-foreground">Connection Status</div>
           <div className="space-y-2">
             <AztecConnectionBadge />
-            <EvmConnectButton />
           </div>
         </div>
 

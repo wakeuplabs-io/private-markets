@@ -112,8 +112,8 @@ describe('BetVault - E2E Tests', () => {
 
     expect(tx.status).toBe(TxStatus.SUCCESS);
 
-    // Verify commitment was calculated correctly from secret
-    const expectedCommitment = await generateCommitment(betParams.marketId, secret);
+    // Verify commitment was calculated correctly from secret and amount
+    const expectedCommitment = await generateCommitment(betParams.marketId, AMOUNT, secret);
     expect(commitment.toString()).toBe(expectedCommitment.toString());
 
     await token.methods.sync_private_state().simulate({ from: alice.getAddress() });
@@ -147,8 +147,8 @@ describe('BetVault - E2E Tests', () => {
 
     expect(tx.status).toBe(TxStatus.SUCCESS);
 
-    // Verify commitment is correctly computed from secret
-    const expectedCommitment = await generateCommitment(marketId, secret);
+    // Verify commitment is correctly computed from secret and amount
+    const expectedCommitment = await generateCommitment(marketId, AMOUNT, secret);
     expect(commitment.toString()).toBe(expectedCommitment.toString());
 
     const aliceBets = await vault.methods.get_user_bets(alice.getAddress(), 0, 10).simulate({ from: alice.getAddress() });
@@ -210,8 +210,8 @@ describe('BetVault - E2E Tests', () => {
 
     expect(tx.status).toBe(TxStatus.SUCCESS);
 
-    // Verify commitment was correctly generated
-    const expectedCommitment = await generateCommitment(marketId, secret);
+    // Verify commitment was correctly generated from secret and amount
+    const expectedCommitment = await generateCommitment(marketId, AMOUNT, secret);
     expect(commitment.toString()).toBe(expectedCommitment.toString());
 
     // Define recipient for claim (bob's address)

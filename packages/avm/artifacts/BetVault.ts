@@ -39,7 +39,7 @@ export const BetVaultContractArtifact = loadContractArtifact(BetVaultContractArt
       export type ClaimAuthorized = {
         market_id: FieldLike
 nullifier: FieldLike
-bet_amount: (bigint | number)
+amount: (bigint | number)
 recipient: FieldLike
       }
     
@@ -156,8 +156,8 @@ user_bets: {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** authorizeClaim(market_id: field, commitment: field, secret: field, recipient: struct, bet_amount: integer, authwit_nonce: field) */
-    authorizeClaim: ((market_id: FieldLike, commitment: FieldLike, secret: FieldLike, recipient: AztecAddressLike, bet_amount: (bigint | number), authwit_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** authorizeClaim(market_id: field, commitment: field, secret: field, recipient: struct, amount: integer, authwit_nonce: field) */
+    authorizeClaim: ((market_id: FieldLike, commitment: FieldLike, secret: FieldLike, recipient: AztecAddressLike, amount: (bigint | number), authwit_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** bet(market_id: field, outcome: integer, amount: integer, commitment: field, bet_id: field, authwit_nonce: field, from: struct) */
     bet: ((market_id: FieldLike, outcome: (bigint | number), amount: (bigint | number), commitment: FieldLike, bet_id: FieldLike, authwit_nonce: FieldLike, from: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -213,7 +213,7 @@ user_bets: {
             }
         },
         {
-            "name": "bet_amount",
+            "name": "amount",
             "type": {
                 "kind": "integer",
                 "sign": "unsigned",
@@ -230,7 +230,7 @@ user_bets: {
     "path": "BetVault::ClaimAuthorized"
 },
         eventSelector: EventSelector.fromString("0xa6c1cbaa"),
-        fieldNames: ["market_id","nullifier","bet_amount","recipient"],
+        fieldNames: ["market_id","nullifier","amount","recipient"],
       },
 BetPlaced: {
         abiType: {
