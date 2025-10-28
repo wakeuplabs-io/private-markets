@@ -10,7 +10,7 @@ async function main(): Promise<void> {
   const deployer = await aztecSetup.getOrCreateWallet("deployer");
   console.log("Deployer address:", deployer.getAddress().toString());
 
-  const minterAddressArg = process.argv[2];
+  const minterAddressArg = process.env.MINTER_ADDRESS || process.argv[2];
   const minterAddress = minterAddressArg
     ? AztecAddress.fromString(minterAddressArg)
     : deployer.getAddress();

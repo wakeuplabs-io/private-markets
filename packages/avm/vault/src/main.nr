@@ -35,7 +35,7 @@ pub contract BetVault {
     struct ClaimAuthorized {
         market_id: Field,
         nullifier: Field,
-        bet_amount: u128,
+        amount: u128,
         recipient: Field,
     }
 
@@ -44,6 +44,7 @@ pub contract BetVault {
     struct Storage<Context> {
         processed_bets: Map<Field, PublicMutable<bool, Context>, Context>,
         used_nullifiers: Map<Field, PublicMutable<bool, Context>, Context>,
+        claimed_commitments: Map<Field, PublicMutable<bool, Context>, Context>,
         token_address: PublicImmutable<AztecAddress, Context>,
         wormhole_address: PublicImmutable<AztecAddress, Context>,
         admin: PublicImmutable<AztecAddress, Context>,
@@ -150,28 +151,25 @@ pub contract BetVault {
         commitment: Field,
         secret: Field,
         recipient: AztecAddress,
-        bet_amount: u128,
+        amount: u128,
         authwit_nonce: Field,
     ) {
         let from = context.msg_sender();
 
-        // Verify secret
-        let calculated_commitment = poseidon2_hash([market_id, secret]);
-        assert(commitment == calculated_commitment, "Invalid secret for commitment");
+        // Verify secret and amount match the commitment
+        let calculated_commitment = poseidon2_hash([market_id, amount as Field, secret]);
+        assert(commitment == calculated_commitment, "Invalid secret or amount for commitment");
 
-        // Verify amount is valid (basic sanity check)
-        assert(bet_amount > 0, "Bet amount must be greater than 0");
-
-        // Note: The verification that the bet note exists is done in TypeScript
-        // by calling find_bet_for_claim() before invoking authorizeClaim()
+        // Verify amount is valid
+        assert(amount > 0, "Bet amount must be greater than 0");
 
         // Generate nullifier
         let recipient_field = recipient.to_field();
         let nullifier = compute_nullifier(market_id, commitment, recipient_field);
 
-        // Mark nullifier as used
+        // Mark commitment as claimed and nullifier as used
         BetVault::at(context.this_address())
-            ._mark_nullifier_used(nullifier)
+            ._mark_claim_processed(commitment, nullifier)
             .enqueue(&mut context);
 
         // Emit event
@@ -179,7 +177,7 @@ pub contract BetVault {
            ClaimAuthorized {
                 market_id,
                 nullifier,
-                bet_amount,
+                amount,
                 recipient: recipient_field,
             },
             &mut context,
@@ -191,7 +189,7 @@ pub contract BetVault {
         let chunks = create_claim_payload(
             market_id,
             nullifier,
-            bet_amount,
+            amount,
             recipient,
         );
 
@@ -223,6 +221,28 @@ pub contract BetVault {
         storage.used_nullifiers.at(nullifier).write(true);
     }
 
+    #[public]
+    #[internal]
+    fn _mark_claim_processed(commitment: Field, nullifier: Field) {
+        // Check if commitment already claimed
+        let already_claimed = storage.claimed_commitments.at(commitment).read();
+        assert(!already_claimed, "Commitment already claimed");
+
+        // Check if nullifier already used
+        let already_used = storage.used_nullifiers.at(nullifier).read();
+        assert(!already_used, "Nullifier already used");
+
+        // Mark both as used
+        storage.claimed_commitments.at(commitment).write(true);
+        storage.used_nullifiers.at(nullifier).write(true);
+    }
+
+    #[public]
+    #[view]
+    fn is_commitment_claimed(commitment: Field) -> bool {
+        storage.claimed_commitments.at(commitment).read()
+    }
+
     #[contract_library_method]
     fn create_bet_payload(
         market_id: Field,
@@ -233,12 +253,12 @@ pub contract BetVault {
         let mut payload = [0u8; 98];
         payload[0] = 0x01;
 
-        let market_id_bytes = market_id.to_le_bytes::<32>();
+        let market_id_bytes = market_id.to_be_bytes::<32>();
         for i in 0..32 {
             payload[1 + i] = market_id_bytes[i];
         }
 
-        let bet_id_bytes = bet_id.to_le_bytes::<32>();
+        let bet_id_bytes = bet_id.to_be_bytes::<32>();
         for i in 0..32 {
             payload[33 + i] = bet_id_bytes[i];
         }
@@ -246,7 +266,7 @@ pub contract BetVault {
         payload[65] = outcome;
 
         let amount_field = amount.to_field();
-        let amount_bytes = amount_field.to_le_bytes::<32>();
+        let amount_bytes = amount_field.to_be_bytes::<32>();
         for i in 0..32 {
             payload[66 + i] = amount_bytes[i];
         }
@@ -276,23 +296,23 @@ pub contract BetVault {
         let mut payload = [0u8; 129];
         payload[0] = 0x02; // Message type: CLAIM
 
-        let market_id_bytes = market_id.to_le_bytes::<32>();
+        let market_id_bytes = market_id.to_be_bytes::<32>();
         for i in 0..32 {
             payload[1 + i] = market_id_bytes[i];
         }
 
-        let nullifier_bytes = nullifier.to_le_bytes::<32>();
+        let nullifier_bytes = nullifier.to_be_bytes::<32>();
         for i in 0..32 {
             payload[33 + i] = nullifier_bytes[i];
         }
 
         let bet_amount_field = bet_amount.to_field();
-        let bet_amount_bytes = bet_amount_field.to_le_bytes::<32>();
+        let bet_amount_bytes = bet_amount_field.to_be_bytes::<32>();
         for i in 0..32 {
             payload[65 + i] = bet_amount_bytes[i];
         }
 
-        let recipient_bytes = recipient.to_field().to_le_bytes::<32>();
+        let recipient_bytes = recipient.to_field().to_be_bytes::<32>();
         for i in 0..32 {
             payload[97 + i] = recipient_bytes[i];
         }
@@ -328,7 +348,7 @@ pub contract BetVault {
         market_id: Field,
     ) -> pub (bool, u128) {
         // Configure options for view_notes
-        let mut options = NoteViewerOptions::<BetNote, 7>::new();
+        let mut options = NoteViewerOptions::<BetNote, 8>::new();
         options = options.set_limit(10);
 
         // view_notes returns BoundedVec<BetNote, N> (without RetrievedNote wrapper)
@@ -362,7 +382,7 @@ pub contract BetVault {
         limit: u32
     ) -> pub BoundedVec<BetNote, 10> {
         assert(limit <= 10, "Limit must be <= 10");
-        let mut options = NoteViewerOptions::<BetNote, 7>::new();
+        let mut options = NoteViewerOptions::<BetNote, 8>::new();
         options = options.set_offset(offset);
         options = options.set_limit(limit);
         storage.user_bets.at(owner).view_notes(options)

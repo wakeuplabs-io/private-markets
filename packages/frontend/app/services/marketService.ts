@@ -1,69 +1,26 @@
 import { readContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions'
 import { config } from '@/config/wagmi'
-import { PREDICTION_MARKET_ABI } from '@/constants/contracts'
-import { Market, MarketStatus, BlockchainConnectionStatus, Bet } from '@/types'
+import { PREDICTION_MARKET_ABI } from '@/constants/abis'
+import {
+  PREDICTION_MARKET_FUNCTIONS,
+  PREDICTION_MARKET_GAS_LIMITS,
+  PREDICTION_MARKET_PAGINATION,
+} from '@/constants/contracts'
+import {
+  Market,
+  MarketStatus,
+  BlockchainConnectionStatus,
+  ContractMarket,
+  MarketStats,
+} from '@/types'
 import { BlockchainStatusService } from './blockchainStatusService'
 import { parseUnits } from 'viem'
+import { vaultService } from './vault'
+import { evmTokenService } from './token/EVMTokenService'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
 const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` // Arbitrum Sepolia USDC
 const TREASURY_ADDRESS = process.env.NEXT_PUBLIC_TREASURY_ADDRESS as `0x${string}`
-
-// Minimal ERC20 ABI for approve function
-const ERC20_ABI = [
-  {
-    inputs: [
-      { name: 'spender', type: 'address' },
-      { name: 'amount', type: 'uint256' }
-    ],
-    name: 'approve',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'nonpayable',
-    type: 'function'
-  },
-  {
-    inputs: [
-      { name: 'owner', type: 'address' },
-      { name: 'spender', type: 'address' }
-    ],
-    name: 'allowance',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function'
-  }
-] as const
-
-export interface ContractMarket {
-  id: bigint
-  owner: string
-  question: string
-  totalPool: bigint
-  yesTotal: bigint
-  noTotal: bigint
-  resolved: boolean
-  winningOutcome: boolean
-  createdAt: bigint
-  expiresAt: bigint
-}
-
-
-export interface AdminMarketData {
-  totalBets: number
-  yesCount: number
-  noCount: number
-  totalVolume: bigint
-  canResolve: boolean
-  canEdit: boolean
-}
-
-export interface MarketStats {
-  totalMarkets: number
-  activeMarkets: number
-  finalizedMarkets: number
-  resolvedMarkets: number
-  totalVolume: bigint
-  averageVolume: number
-}
 
 /**
  * Unified Market Service - Single source of truth for blockchain interaction
@@ -71,21 +28,17 @@ export interface MarketStats {
  */
 export class MarketService {
 
-  // === Core Contract Interaction ===
-
   static async getMarketCount(): Promise<number> {
     if (!CONTRACT_ADDRESS) {
       console.warn('Contract address not configured, using mock data')
     }
 
     try {
-      console.log('Getting market count from contract:', CONTRACT_ADDRESS)
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getAllMarketsCount',
+        functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKET_COUNT,
       })
-      console.log('Market count result:', Number(result))
       return Number(result)
     } catch (error) {
       console.warn('Failed to get market count from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
@@ -102,7 +55,7 @@ export class MarketService {
     const result = await readContract(config, {
       address: CONTRACT_ADDRESS,
       abi: PREDICTION_MARKET_ABI,
-      functionName: 'getMarket',
+      functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKET,
       args: [BigInt(marketId)],
     })
 
@@ -122,58 +75,6 @@ export class MarketService {
     }
   }
 
-  /**
-   * Check USDC allowance for Treasury
-   */
-  static async checkUSDCAllowance(ownerAddress: string): Promise<bigint> {
-    if (!TREASURY_ADDRESS) {
-      throw new Error('Treasury address not configured')
-    }
-
-    try {
-      const allowance = await readContract(config, {
-        address: USDC_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: 'allowance',
-        args: [ownerAddress as `0x${string}`, TREASURY_ADDRESS],
-      })
-      return allowance as bigint
-    } catch (error) {
-      console.error('Failed to check USDC allowance:', error)
-      return 0n
-    }
-  }
-
-  /**
-   * Approve USDC for Treasury (required before creating markets)
-   */
-  static async approveUSDC(amount: bigint): Promise<string> {
-    if (!TREASURY_ADDRESS) {
-      throw new Error('Treasury address not configured')
-    }
-
-    try {
-      console.log(`Approving ${amount} USDC for Treasury...`)
-      const hash = await writeContract(config, {
-        address: USDC_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [TREASURY_ADDRESS, amount],
-        gas: 100000n, // Standard gas for ERC20 approve
-      })
-
-      await waitForTransactionReceipt(config, {
-        hash,
-        confirmations: 1,
-      })
-
-      console.log('USDC approved:', hash)
-      return hash
-    } catch (error) {
-      console.error('Failed to approve USDC:', error)
-      throw error
-    }
-  }
 
   static async createMarket(question: string, totalPool: number, closingTime: Date, userAddress: string): Promise<string> {
     // Check if blockchain is available
@@ -198,18 +99,17 @@ export class MarketService {
       // USDC has 6 decimals
       const usdcAmount = parseUnits(totalPool.toString(), 6)
 
-      console.log('Creating market with question:', question, 'poolAmount:', poolAmount, 'closingTimestamp:', closingTimestamp)
-      console.log('USDC amount (with 6 decimals):', usdcAmount)
-
-      // Step 1: Check current allowance
-      const currentAllowance = await this.checkUSDCAllowance(userAddress)
+      // Check and approve USDC using EVMTokenService
+      const currentAllowance = await evmTokenService.checkAllowance(
+        USDC_ADDRESS,
+        userAddress as `0x${string}`,
+        TREASURY_ADDRESS
+      )
       console.log('Current USDC allowance:', currentAllowance)
 
-      // Step 2: Approve USDC if needed
       if (currentAllowance < usdcAmount) {
         console.log('⚠️  Insufficient allowance. Requesting approval for', usdcAmount.toString(), 'USDC')
-        // Approve the exact poolAmount needed
-        await this.approveUSDC(usdcAmount)
+        await evmTokenService.approve(USDC_ADDRESS, TREASURY_ADDRESS, usdcAmount)
         console.log('✅ USDC approved')
       } else {
         console.log('✅ Sufficient allowance already exists')
@@ -219,9 +119,9 @@ export class MarketService {
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'createMarket',
+        functionName: PREDICTION_MARKET_FUNCTIONS.CREATE_MARKET,
         args: [question, poolAmount, closingTimestamp],
-        gas: 500000n, // Reasonable gas limit for market creation
+        gas: PREDICTION_MARKET_GAS_LIMITS.CREATE_MARKET,
       })
 
       const waitForConfirmation = await waitForTransactionReceipt(config, {
@@ -255,8 +155,8 @@ export class MarketService {
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getMarketsByOwner',
-        args: [userAddress as `0x${string}`, BigInt(0), BigInt(100)],
+        functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKETS_BY_OWNER,
+        args: [userAddress as `0x${string}`, PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
 
       const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
@@ -279,10 +179,9 @@ export class MarketService {
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getActiveMarkets',
-        args: [BigInt(0), BigInt(100)],
+        functionName: PREDICTION_MARKET_FUNCTIONS.GET_ACTIVE_MARKETS,
+        args: [PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
-
       const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
       
       return marketResults.map((contractMarket, index) => 
@@ -311,8 +210,8 @@ export class MarketService {
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getMarketsByOwner',
-        args: [adminAddress as `0x${string}`, BigInt(0), BigInt(100)],
+        functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKETS_BY_OWNER,
+        args: [adminAddress as `0x${string}`, PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
 
       const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
@@ -369,15 +268,14 @@ export class MarketService {
     }
 
     try {
-      console.log(`Resolving market ${marketId} with winning option: ${winningOption}`)
       const winningOutcome = winningOption === 'yes'
 
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'resolveMarket',
+        functionName: PREDICTION_MARKET_FUNCTIONS.RESOLVE_MARKET,
         args: [BigInt(marketId), winningOutcome],
-        gas: 200000n, // Reasonable gas limit for market resolution
+        gas: PREDICTION_MARKET_GAS_LIMITS.RESOLVE_MARKET,
       })
 
       await waitForTransactionReceipt(config, {
@@ -392,8 +290,6 @@ export class MarketService {
     }
   }
 
-  // === Helper Methods ===
-
   static contractMarketToMarket(contractMarket: ContractMarket): Market {
     const{ yesTotal, noTotal, resolved, winningOutcome, createdAt, expiresAt } = contractMarket
     const totalBets = yesTotal + noTotal
@@ -404,7 +300,6 @@ export class MarketService {
 
     const yesOdds = yesTotal > 0 ? Number(totalBets) / Number(yesTotal) : 2.0
     const noOdds = noTotal > 0 ? Number(totalBets) / Number(noTotal) : 2.0
-
     let status: MarketStatus
     if (resolved) {
       status = 'resolved'
@@ -419,8 +314,6 @@ export class MarketService {
       name: winningOutcome ? 'Yes' : 'No',
       odds: winningOutcome ? yesOdds : noOdds
     } : undefined
-    console.log({winningOption})
-    console.log({contractMarket})
     return {
       id: contractMarket.id.toString(),
       question: contractMarket.question,
@@ -463,8 +356,6 @@ export class MarketService {
     return !!CONTRACT_ADDRESS && CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000'
   }
 
-  // === Helper Methods for Mock Data Conversion ===
-
 
   /**
    * Get blockchain connection status for UI display
@@ -474,82 +365,46 @@ export class MarketService {
     return status.evm
   }
 
-  // === User Activity Methods ===
-
-  /**
-   * Get user's betting activity (bets placed by the user)
-   */
-  static async getUserBets(): Promise<Bet[]> {
-    try {
-      // For now, return mock data. In a real implementation, this would:
-      // 1. Query the blockchain for user's bet events
-      // 2. Parse the events to extract bet information
-      // 3. Return structured bet data
-      
-      const mockBets: Bet[] = [
-        {
-          id: 'bet-1',
-          marketId: 'mock-000', // Open market
-          option: 'yes',
-          amount: 0.1,
-          status: 'confirmed',
-          placedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-          txHash: '0x123...',
-          userAddress: '0x456...'
-        },
-        {
-          id: 'bet-2',
-          marketId: 'mock-001', // Resolved market
-          option: 'yes', // Changed to 'yes' to match winning option
-          amount: 0.05,
-          status: 'claimable',
-          placedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-          txHash: '0x789...',
-          userAddress: '0x456...'
-        },
-        {
-          id: 'bet-3',
-          marketId: 'mock-002', // Finalized market
-          option: 'yes',
-          amount: 0.2,
-          status: 'claimed',
-          placedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
-          txHash: '0xabc...',
-          claimTxHash: '0xdef...',
-          claimedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-          userAddress: '0x456...'
-        }
-      ]
-
-      return mockBets
-    } catch (error) {
-      console.error('Error fetching user bets:', error)
-      throw new Error('Failed to fetch user bets')
-    }
-  }
 
   /**
    * Claim reward for a winning bet
+   *
+   * This will:
+   * 1. Call vaultService to authorize claim on Aztec
+   * 2. Aztec verifies the secret matches the commitment
+   * 3. Aztec generates nullifier and sends Wormhole message
+   * 4. Wormhole relays to Arbitrum
+   * 5. Arbitrum calculates payout and transfers USDC
    */
-  static async claimReward(betId: string): Promise<void> {
+  static async claimReward(betId: string, marketId: string, recipientAddress: string): Promise<void> {
     try {
-      // For now, simulate a successful claim
-      // In a real implementation, this would:
-      // 1. Verify the bet is claimable
-      // 2. Generate ZK proof if needed
-      // 3. Submit claim transaction to blockchain
-      // 4. Wait for confirmation
-      
-      console.log(`Claiming reward for bet ${betId}`)
-      
-      // Simulate async operation
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // In real implementation, update bet status to 'claimed'
-      // and store claim transaction hash
+      console.log(`Claiming reward for bet ${betId} in market ${marketId}`);
+      console.log(`Recipient (Aztec address): ${recipientAddress}`);
+
+      // Call vaultService to authorize claim on Aztec
+      // This will:
+      // - Retrieve commitment and secret from localStorage
+      // - Call BetVault.authorizeClaim() on Aztec
+      // - Send Wormhole message to Arbitrum
+      const txHash = await vaultService.authorizeClaim({
+        marketId: marketId,
+        betId: betId,
+        recipient: recipientAddress, // Aztec address for claim authorization
+      });
+
+      console.log(`Claim authorization transaction sent: ${txHash}`);
+      console.log('Transaction will be processed by Wormhole → Arbitrum automatically');
+      console.log('Payout will be sent to the recipient address on Arbitrum');
+
+      // Note: The actual payout happens asynchronously via Wormhole
+      // The user will receive USDC on Arbitrum after:
+      // 1. Wormhole guardians sign the VAA (~1-2 minutes)
+      // 2. Relayer delivers message to Arbitrum
+      // 3. PredictionMarketCore calculates payout
+      // 4. Treasury transfers USDC to recipient
     } catch (error) {
-      console.error('Error claiming reward:', error)
-      throw new Error('Failed to claim reward')
+      console.error('Error claiming reward:', error);
+      throw new Error(`Failed to claim reward: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

@@ -4,7 +4,9 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 import ConnectButton from '@/components/ui/ConnectButton'
 import { TokenInfoBadge } from '@/components/ui/TokenInfo'
+import { EVMTokenBalance } from '@/components/ui/EVMTokenBalance'
 import { useDefaultTokenInfo } from '@/hooks/useTokenInfo'
+import { useUSDCBalance } from '@/hooks/useEVMTokenBalance'
 import { useWallet } from '@/context'
 import { AztecConnectionBadge } from '@/components/AztecConnectionStatus'
 import dynamic from 'next/dynamic'
@@ -32,14 +34,13 @@ const NetworkBadge = () => {
       <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-          <span className="text-sm text-muted-foreground">No conectado</span>
+          <span className="text-sm text-muted-foreground">Not connected</span>
         </div>
       </div>
     )
   }
 
   const getNetworkInfo = () => {
-    console.log('chain', chain)
     switch (chain.id) {
       case 421614:
         return {
@@ -130,6 +131,7 @@ interface AvatarModalProps {
 const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
   const { status: walletStatus, isConnected, disconnectWallet } = useWallet()
   const tokenInfoResult = useDefaultTokenInfo()
+  const evmTokenResult = useUSDCBalance()
   const connectionKey = `${walletStatus}-${isConnected}`
   const { tokenInfo, isLoading, error } = tokenInfoResult
 
@@ -194,23 +196,34 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
         <div className="space-y-3">
           <div className="text-sm font-medium text-muted-foreground">Active Network</div>
           <NetworkBadge />
+          <EvmConnectButton />
+
         </div>
 
         <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">Connection Status</div>
+          <div className="text-sm font-medium text-muted-foreground">Aztec Network</div>
           <div className="space-y-2">
             <AztecConnectionBadge />
-            <EvmConnectButton />
           </div>
         </div>
 
         <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">Token Information</div>
+          <div className="text-sm font-medium text-muted-foreground">Token Information (Aztec)</div>
           <TokenInfoBadge
             tokenInfo={tokenInfo}
             loading={isLoading}
             error={error}
             key={connectionKey}
+          />
+        </div>
+
+        <div className="space-y-3">
+          <div className="text-sm font-medium text-muted-foreground">EVM Token Balance</div>
+          <EVMTokenBalance
+            tokenInfo={evmTokenResult.tokenInfo}
+            balance={evmTokenResult.balance}
+            loading={evmTokenResult.isLoading}
+            error={evmTokenResult.error}
           />
         </div>
 

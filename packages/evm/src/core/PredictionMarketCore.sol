@@ -150,8 +150,7 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
         if (market.owner == address(0)) revert MarketNotFound(marketId);
         if (market.owner != msg.sender) revert MarketNotOwner(marketId);
         if (market.resolved) revert MarketAlreadyResolved(marketId);
-        // TODO: uncomment this in production
-        // if (block.timestamp < market.expiresAt) revert MarketNotExpired(marketId);
+        if (block.timestamp < market.expiresAt) revert MarketNotExpired(marketId);
 
         market.resolved = true;
         market.winningOutcome = winningOutcome;
@@ -167,18 +166,15 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
      * @param nullifier Unique nullifier (prevents double claims)
      * @param betAmount Original bet amount from Aztec
      * @param recipient Address to receive USDC payout
-     * @param deadline Expiry timestamp for this claim
      */
     function processClaimAuthorization(
         uint256 marketId,
         bytes32 nullifier,
         uint256 betAmount,
-        address recipient,
-        uint256 deadline
+        address recipient
     ) external onlyOwner nonReentrant {
         if (isFork()) revert ChainIdMismatch();
         if (_state.consumedNullifiers[marketId][nullifier]) revert NullifierAlreadyConsumed(nullifier);
-        if (block.timestamp > deadline) revert DeadlineExpired();
         if (recipient == address(0)) revert ZeroRecipient();
         if (betAmount == 0) revert ZeroAmount();
 

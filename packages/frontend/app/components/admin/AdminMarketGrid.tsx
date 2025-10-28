@@ -32,15 +32,12 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
     onCreateMarket,
     onResolveMarket,
 }) => {
-    console.log('Markets:', markets)
     const { getStatusIconInfo } = useStatus();
     const ICON_DIMENSIONS = { width: 24, height: 24 };
     const getStatusIcon = (status: string | null | undefined) => {
         const strategy = getStatusIconInfo(status);
         return <Image src={strategy.src} alt={strategy.alt} width={ICON_DIMENSIONS.width} height={ICON_DIMENSIONS.height} />;
     };
-
-    
 
     return (
         <SafeRender
@@ -136,10 +133,9 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
 
                         {isLoading ? (
                             <div className="space-y-6 mt-4">
-                                <AdminMarketCardSkeleton />
-                                <AdminMarketCardSkeleton />
-                                <AdminMarketCardSkeleton />
-                                <AdminMarketCardSkeleton />
+                                {Array.from({ length: 4 }).map((_, index) => (
+                                    <AdminMarketCardSkeleton key={index} />
+                                ))}
                             </div>
                         ) : (
                             <div className="space-y-6 mt-4">
@@ -161,7 +157,6 @@ const AdminMarketGridContent: React.FC<AdminMarketGridContentProps> = ({
     );
 };
 
-// Individual market row component
 interface AdminMarketRowProps {
     market: Market;
     onResolveMarket: (marketId: string, winningOption: "yes" | "no") => void;
@@ -181,7 +176,6 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
     return (
         <div className="rounded-lg bg-[#1D293D]/65 backdrop-blur-sm overflow-hidden">
             <div className="grid grid-cols-12 gap-4 items-center px-4 sm:px-6 py-4 md:py-0 md:h-[100px] w-full">
-                {/* Market Column */}
                 <div className="col-span-12 md:col-span-8">
                     <div className="flex items-start space-x-3">
                         <span className="text-lg mt-0.5 w-6 h-6">
@@ -245,12 +239,14 @@ const AdminMarketRow: React.FC<AdminMarketRowProps> = ({
                                 <Button
                                     onClick={ () => onResolveMarket(market.id, "yes") }
                                     className="rounded-button w-full sm:w-auto"
+                                    disabled={market.status !== "finalized"}
                                 >
                                     Yes
                                 </Button>
                                 <Button
                                     onClick={ () => onResolveMarket(market.id, "no") }
                                     className="rounded-button w-full sm:w-auto"
+                                    disabled={market.status !== "finalized"}
                                 >
                                     No
                                 </Button>

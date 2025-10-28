@@ -29,7 +29,8 @@
   "dependencies": {
     "@aztec/accounts": "^2.0.3",
     "@aztec/aztec.js": "^2.0.3",
-    "@aztec/noir-contracts.js": "^2.0.3"
+    "@aztec/noir-contracts.js": "^2.0.3",
+    "dotenv": "^16.6.1"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",

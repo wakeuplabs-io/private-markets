@@ -9,6 +9,7 @@ import { pxeQueueService } from "@/services/pxeQueueService";
 import type { IVaultProvider, BetParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
+import { normalizeHex64 } from "@/lib/utils";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAccount = any;
@@ -25,6 +26,7 @@ interface BlockchainBet {
   bet_id: bigint;
   commitment: bigint;
   randomness: bigint;
+  placed_at: bigint;
   // Optional fields that might be added by the contract
   marketId?: string;
 }
@@ -139,7 +141,6 @@ export class PrivateVaultProvider implements IVaultProvider {
         fromAddress,
       );
       await walletConnectionManager.sendTransaction(interaction, [authwit], fromAddress);
-
       return 'Transaction sent successfully';
     } catch (error) {
       console.error('[VAULT:PRIVATE] Failed to place bet:', error);
@@ -257,16 +258,24 @@ export class PrivateVaultProvider implements IVaultProvider {
       const validBetsCount = Number(result.len);
       const blockchainBets = result.storage.slice(0, validBetsCount);
 
-      // Transform blockchain format to application Bet format
-      const bets: Bet[] = blockchainBets.map(blockchainBet => ({
-        id: blockchainBet.bet_id.toString(),
+      const claimedStatuses = await Promise.all(
+        blockchainBets.map(bet =>
+          contract.methods
+            .is_commitment_claimed(Fr.fromString('0x' + bet.commitment.toString(16)))
+            .simulate({ from, skipFeeEnforcement: true })
+        )
+      );
+
+      const bets: Bet[] = blockchainBets.map((blockchainBet, index) => ({
+        id: normalizeHex64(blockchainBet.bet_id),
         marketId: blockchainBet.market_id.toString(),
         option: blockchainBet.outcome === BigInt(1) ? 'yes' : 'no',
-        amount: Number(blockchainBet.amount) / 1e18, // Convert from e18 to normal units
-        status: 'confirmed' as const,
-        placedAt: new Date(), // TODO: Get actual timestamp from blockchain
-        // Optional fields that might come from blockchain
-        userAddress: blockchainBet.owner.toString(),
+        amount: Number(blockchainBet.amount) / 1e18,
+        status: claimedStatuses[index] ? 'claimed' as const : 'confirmed' as const,
+        placedAt: blockchainBet.placed_at > 0 ? new Date(Number(blockchainBet.placed_at) * 1000) : new Date(),
+        userAddress: normalizeHex64(blockchainBet.owner),
+        commitment: normalizeHex64(blockchainBet.commitment),
+        randomness: normalizeHex64(blockchainBet.randomness),
       }));
 
       return bets;
@@ -283,7 +292,7 @@ export class PrivateVaultProvider implements IVaultProvider {
    *
    * Contract reference: packages/avm/vault/src/main.nr line 151-213
    *
-   * @param params - Claim parameters including marketId, commitment, secret, recipient, deadline
+   * @param params - Claim parameters including marketId, commitment, secret, recipient, betAmount
    * @returns Transaction hash
    */
   async authorizeClaim(params: ClaimParams): Promise<string> {
@@ -295,25 +304,25 @@ export class PrivateVaultProvider implements IVaultProvider {
       console.log('[VAULT:PRIVATE] Authorizing claim...');
       console.log('[VAULT:PRIVATE] Market ID:', params.marketId);
       console.log('[VAULT:PRIVATE] Recipient:', params.recipient);
-      console.log('[VAULT:PRIVATE] Bet Amount:', params.betAmount);
+      console.log('[VAULT:PRIVATE] Bet Amount (normal):', params.betAmount);
 
-      console.log('[VAULT:PRIVATE] Submitting claim authorization transaction...');
+      const betAmountWei = BigInt(params.betAmount) * BigInt(10 ** 18);
+
+      console.log('[VAULT:PRIVATE] Bet Amount (wei):', betAmountWei.toString());
 
       const interaction = vaultContract.methods.authorizeClaim(
         Fr.fromString(params.marketId),
         Fr.fromString(params.commitment),
         Fr.fromString(params.secret),
         AztecAddress.fromString(params.recipient),
-        Fr.fromString(params.deadline),
+        betAmountWei,
         Fr.fromString(params.authwitNonce),
       );
 
-      // No need for authwit here since we're not transferring tokens
       await walletConnectionManager.sendTransaction(interaction, [], fromAddress);
 
       return 'Claim authorization sent successfully';
     } catch (error) {
-      console.error('[VAULT:PRIVATE] Failed to authorize claim:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 
       if (errorMsg.includes('has not been registered in the wallet\'s PXE')) {

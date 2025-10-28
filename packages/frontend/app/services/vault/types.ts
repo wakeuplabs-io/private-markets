@@ -9,7 +9,7 @@ export interface BetParams {
   authwitNonce: string;
   from: string;
   tokenAddress: string;
-  secret: string; // Secret used to generate the commitment
+  secret: string;
 }
 
 export interface SimpleBetParams {
@@ -23,16 +23,15 @@ export interface ClaimParams {
   marketId: string;
   commitment: string;
   secret: string;
-  recipient: string; // Aztec address for recipient
-  deadline: string;
+  recipient: string;
   authwitNonce: string;
   betAmount: number;
 }
 
 export interface SimpleClaimParams {
   marketId: string;
-  betId: string; // To retrieve from localStorage
-  recipient: string; // Aztec address for payout
+  betId: string;
+  recipient: string;
 }
 
 /**

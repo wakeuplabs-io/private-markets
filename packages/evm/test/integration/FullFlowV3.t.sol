@@ -131,8 +131,7 @@ contract FullFlowV3Test is Test {
                 marketId,
                 keccak256("nullifier1"),
                 150 * 10**6,
-                user1,
-                block.timestamp + 1 hours
+                user1
             );
 
             uint256 balanceAfter = usdc.balanceOf(user1);
@@ -152,8 +151,7 @@ contract FullFlowV3Test is Test {
                 marketId,
                 keccak256("nullifier3"),
                 50 * 10**6,
-                user3,
-                block.timestamp + 1 hours
+                user3
             );
 
             uint256 balanceAfter = usdc.balanceOf(user3);

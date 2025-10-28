@@ -1,5 +1,6 @@
 import { poseidon2Hash } from "@aztec/foundation/crypto";
 import { Fr } from "@aztec/foundation/fields";
+import { normalizeHex64 } from "@/lib/utils";
 
 /**
  * Utilities for generating IDs, secrets, commitments, and nullifiers
@@ -31,16 +32,18 @@ export function generateAuthwitNonce(): Fr {
 }
 
 /**
- * Generate commitment: poseidon2_hash([market_id, secret])
+ * Generate commitment: poseidon2_hash([market_id, amount, secret])
  * @param marketId - Market identifier
+ * @param amount - Bet amount in wei (e18 format, must match the amount stored in the contract)
  * @param secret - Random secret
  * @returns Commitment as Fr
  */
-export async function generateCommitment(marketId: bigint | Fr, secret: bigint | Fr): Promise<Fr> {
+export async function generateCommitment(marketId: bigint | Fr, amount: bigint | Fr, secret: bigint | Fr): Promise<Fr> {
   const marketIdFr = typeof marketId === 'bigint' ? new Fr(marketId) : marketId;
+  const amountFr = typeof amount === 'bigint' ? new Fr(amount) : amount;
   const secretFr = typeof secret === 'bigint' ? new Fr(secret) : secret;
 
-  return await poseidon2Hash([marketIdFr, secretFr]);
+  return await poseidon2Hash([marketIdFr, amountFr, secretFr]);
 }
 
 /**
@@ -94,10 +97,6 @@ export interface StoredBet {
   amount: string;
   outcome: boolean;
   timestamp: number;
-
-  // Optional metadata
-  marketQuestion?: string;
-  txHash?: string;
 }
 
 export function serializeBet(betData: StoredBet): string {
@@ -109,42 +108,16 @@ export function deserializeBet(json: string): StoredBet {
 }
 
 /**
- * Get all stored bets for a user
- * @param userAddress - User's Aztec address
- * @returns Array of stored bets
- */
-export function getStoredBets(userAddress: string): StoredBet[] {
-  if (typeof window === 'undefined') return [];
-
-  const bets: StoredBet[] = [];
-  const prefix = `bet_${userAddress}_`;
-
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(prefix)) {
-      const value = localStorage.getItem(key);
-      if (value) {
-        try {
-          bets.push(deserializeBet(value));
-        } catch (e) {
-          console.error(`Failed to parse bet from storage: ${key}`, e);
-        }
-      }
-    }
-  }
-
-  return bets.sort((a, b) => b.timestamp - a.timestamp);
-}
-
-/**
  * Save bet to localStorage
  * @param userAddress - User's Aztec address
  * @param betData - Bet data to store
  */
 export function storeBet(userAddress: string, betData: StoredBet): void {
   if (typeof window === 'undefined') return;
-
-  const key = `bet_${userAddress}_${betData.betId}`;
+  
+  const normalizedBetId = normalizeHex64(betData.betId);
+  const key = `bet_${userAddress}_${normalizedBetId}`;
+  
   localStorage.setItem(key, serializeBet(betData));
 }
 
@@ -156,8 +129,9 @@ export function storeBet(userAddress: string, betData: StoredBet): void {
  */
 export function getStoredBet(userAddress: string, betId: string): StoredBet | null {
   if (typeof window === 'undefined') return null;
-
-  const key = `bet_${userAddress}_${betId}`;
+  
+  const normalizedBetId = normalizeHex64(betId);
+  const key = `bet_${userAddress}_${normalizedBetId}`;
   const value = localStorage.getItem(key);
 
   if (!value) return null;

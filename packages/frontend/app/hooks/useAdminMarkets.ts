@@ -31,7 +31,6 @@ const fetchAdminData = async (adminAddress: string | undefined): Promise<{
         const adminMarkets = adminAddress 
             ? await MarketService.getAdminMarkets(adminAddress)
             : [];
-        console.log("Admin markets:", adminMarkets);
         return {
             markets: adminMarkets,
             connectionStatus: blockchainStatus,

@@ -26,7 +26,6 @@ const fetchUserMarkets = async (): Promise<{ activeMarkets: Market[], connection
   try {
     const blockchainStatus = await MarketService.getConnectionStatus()
     const openMarkets = await MarketService.getActiveMarkets()
-
     return {
       activeMarkets: openMarkets,
       connectionStatus: blockchainStatus

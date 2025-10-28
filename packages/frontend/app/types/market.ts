@@ -140,3 +140,98 @@ export interface ResolveMarketResponse {
   marketId: string
   winningOption: MarketOptionWithOdds
 }
+
+/**
+ * Contract-level market representation (from blockchain)
+ *
+ * This is the raw data structure returned by the PredictionMarketCore smart contract.
+ * All fields use bigint for accurate representation of Solidity uint256 values.
+ *
+ * This type represents the low-level contract data before transformation into
+ * the application-level Market type.
+ *
+ * @see Market - Application-level market type with transformed data
+ */
+export interface ContractMarket {
+  /** Market ID (from contract storage) */
+  id: bigint;
+
+  /** Address of the market creator/owner */
+  owner: string;
+
+  /** Market question (e.g., "Will ETH reach $5000 by 2025?") */
+  question: string;
+
+  /** Total USDC pool deposited by market owner (in wei, 6 decimals for USDC) */
+  totalPool: bigint;
+
+  /** Total amount bet on YES outcome (in wei) */
+  yesTotal: bigint;
+
+  /** Total amount bet on NO outcome (in wei) */
+  noTotal: bigint;
+
+  /** Whether the market has been resolved */
+  resolved: boolean;
+
+  /** Winning outcome (true = YES, false = NO). Only valid if resolved = true */
+  winningOutcome: boolean;
+
+  /** Unix timestamp when market was created */
+  createdAt: bigint;
+
+  /** Unix timestamp when market expires/closes for betting */
+  expiresAt: bigint;
+}
+
+/**
+ * Admin-specific market data
+ *
+ * Additional metrics and permissions for market management in the admin dashboard.
+ * This extends the basic market data with administrative information.
+ */
+export interface AdminMarketData {
+  /** Total number of bets placed on this market */
+  totalBets: number;
+
+  /** Number of bets on YES outcome */
+  yesCount: number;
+
+  /** Number of bets on NO outcome */
+  noCount: number;
+
+  /** Total volume (yesTotal + noTotal) in wei */
+  totalVolume: bigint;
+
+  /** Whether the admin can resolve this market (market expired && not resolved) */
+  canResolve: boolean;
+
+  /** Whether the admin can edit this market (market not resolved) */
+  canEdit: boolean;
+}
+
+/**
+ * Market statistics aggregation
+ *
+ * Used for dashboard analytics and overview displays.
+ * Provides high-level metrics across all markets.
+ */
+export interface MarketStats {
+  /** Total number of markets ever created */
+  totalMarkets: number;
+
+  /** Number of markets currently open for betting */
+  activeMarkets: number;
+
+  /** Number of markets that have expired but not yet resolved */
+  finalizedMarkets: number;
+
+  /** Number of markets that have been resolved */
+  resolvedMarkets: number;
+
+  /** Total volume across all markets (in wei) */
+  totalVolume: bigint;
+
+  /** Average volume per market (in normal units, e.g., ETH) */
+  averageVolume: number;
+}

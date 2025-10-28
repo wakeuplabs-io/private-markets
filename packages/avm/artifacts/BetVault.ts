@@ -39,7 +39,7 @@ export const BetVaultContractArtifact = loadContractArtifact(BetVaultContractArt
       export type ClaimAuthorized = {
         market_id: FieldLike
 nullifier: FieldLike
-bet_amount: (bigint | number)
+amount: (bigint | number)
 recipient: FieldLike
       }
     
@@ -129,7 +129,7 @@ export class BetVaultContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'processed_bets' | 'used_nullifiers' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'> {
+  public static get storage(): ContractStorageLayout<'processed_bets' | 'used_nullifiers' | 'claimed_commitments' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'> {
       return {
         processed_bets: {
       slot: new Fr(1n),
@@ -137,27 +137,30 @@ export class BetVaultContract extends ContractBase {
 used_nullifiers: {
       slot: new Fr(2n),
     },
-token_address: {
+claimed_commitments: {
       slot: new Fr(3n),
     },
+token_address: {
+      slot: new Fr(4n),
+    },
 wormhole_address: {
-      slot: new Fr(5n),
+      slot: new Fr(6n),
     },
 admin: {
-      slot: new Fr(7n),
+      slot: new Fr(8n),
     },
 user_bets: {
-      slot: new Fr(9n),
+      slot: new Fr(10n),
     }
-      } as ContractStorageLayout<'processed_bets' | 'used_nullifiers' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'>;
+      } as ContractStorageLayout<'processed_bets' | 'used_nullifiers' | 'claimed_commitments' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'>;
     }
     
 
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
-    /** authorizeClaim(market_id: field, commitment: field, secret: field, recipient: struct, bet_amount: integer, authwit_nonce: field) */
-    authorizeClaim: ((market_id: FieldLike, commitment: FieldLike, secret: FieldLike, recipient: AztecAddressLike, bet_amount: (bigint | number), authwit_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** authorizeClaim(market_id: field, commitment: field, secret: field, recipient: struct, amount: integer, authwit_nonce: field) */
+    authorizeClaim: ((market_id: FieldLike, commitment: FieldLike, secret: FieldLike, recipient: AztecAddressLike, amount: (bigint | number), authwit_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** bet(market_id: field, outcome: integer, amount: integer, commitment: field, bet_id: field, authwit_nonce: field, from: struct) */
     bet: ((market_id: FieldLike, outcome: (bigint | number), amount: (bigint | number), commitment: FieldLike, bet_id: FieldLike, authwit_nonce: FieldLike, from: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -176,6 +179,9 @@ user_bets: {
 
     /** get_user_bets(owner: struct, offset: integer, limit: integer) */
     get_user_bets: ((owner: AztecAddressLike, offset: (bigint | number), limit: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** is_commitment_claimed(commitment: field) */
+    is_commitment_claimed: ((commitment: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** is_nullifier_used(nullifier: field) */
     is_nullifier_used: ((nullifier: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -213,7 +219,7 @@ user_bets: {
             }
         },
         {
-            "name": "bet_amount",
+            "name": "amount",
             "type": {
                 "kind": "integer",
                 "sign": "unsigned",
@@ -230,7 +236,7 @@ user_bets: {
     "path": "BetVault::ClaimAuthorized"
 },
         eventSelector: EventSelector.fromString("0xa6c1cbaa"),
-        fieldNames: ["market_id","nullifier","bet_amount","recipient"],
+        fieldNames: ["market_id","nullifier","amount","recipient"],
       },
 BetPlaced: {
         abiType: {

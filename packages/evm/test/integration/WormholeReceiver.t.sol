@@ -141,18 +141,16 @@ contract WormholeReceiverTest is IntegrationBase {
         bytes32 nullifier = keccak256("nullifier1");
         uint256 betAmount = 150 * 10**6;
         address recipient = user1;
-        uint256 nonce = 1;
-        uint256 deadline = block.timestamp + 1 hours;
+        // Convert address to bytes32 (recipientField) - address in last 20 bytes
+        bytes32 recipientField = bytes32(uint256(uint160(recipient)));
 
-        // Encode CLAIM_AUTH: 0x02 | marketId(32) | nullifier(32) | betAmount(32) | recipient(20) | nonce(32) | deadline(32)
+        // Encode CLAIM_AUTH: 0x02 | marketId(32) | nullifier(32) | betAmount(32) | recipientField(32)
         bytes memory claimPayload = abi.encodePacked(
             uint8(0x02),
             MARKET_ID,
             nullifier,
             betAmount,
-            recipient,
-            nonce,
-            deadline
+            recipientField
         );
 
         uint256 balanceBefore = mockErc20.balanceOf(recipient);
@@ -183,14 +181,15 @@ contract WormholeReceiverTest is IntegrationBase {
 
         // Claim: betAmount=150, totalPool=1000, winningTotal=150
         // Expected payout = (150 * 1000) / 150 = 1000 USDC
+        // Convert address to bytes32 (recipientField) - address in last 20 bytes
+        bytes32 recipientField = bytes32(uint256(uint160(user2)));
+
         bytes memory claimPayload = abi.encodePacked(
             uint8(0x02),
             MARKET_ID,
             keccak256("nullifier1"),
             uint256(150 * 10**6),
-            user2,
-            uint256(1),
-            block.timestamp + 1 hours
+            recipientField
         );
 
         uint256 balanceBefore = mockErc20.balanceOf(user2);
@@ -202,14 +201,15 @@ contract WormholeReceiverTest is IntegrationBase {
     }
 
     function test_receiveClaimMessage_revertsIfUnregisteredSender() public {
+        // Convert address to bytes32 (recipientField) - address in last 20 bytes
+        bytes32 recipientField = bytes32(uint256(uint160(user1)));
+
         bytes memory claimPayload = abi.encodePacked(
             uint8(0x02),
             MARKET_ID,
             keccak256("nullifier1"),
             uint256(150 * 10**6),
-            user1,
-            uint256(1),
-            block.timestamp + 1 hours
+            recipientField
         );
 
         bytes32 unregisteredEmitter = bytes32(uint256(0x8888));
