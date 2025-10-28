@@ -1,70 +1,26 @@
 import { readContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions'
 import { config } from '@/config/wagmi'
-import { PREDICTION_MARKET_ABI } from '@/constants/contracts'
-import { Market, MarketStatus, BlockchainConnectionStatus } from '@/types'
+import { PREDICTION_MARKET_ABI } from '@/constants/abis'
+import {
+  PREDICTION_MARKET_FUNCTIONS,
+  PREDICTION_MARKET_GAS_LIMITS,
+  PREDICTION_MARKET_PAGINATION,
+} from '@/constants/contracts'
+import {
+  Market,
+  MarketStatus,
+  BlockchainConnectionStatus,
+  ContractMarket,
+  MarketStats,
+} from '@/types'
 import { BlockchainStatusService } from './blockchainStatusService'
 import { parseUnits } from 'viem'
 import { vaultService } from './vault'
+import { evmTokenService } from './token/EVMTokenService'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
 const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` // Arbitrum Sepolia USDC
 const TREASURY_ADDRESS = process.env.NEXT_PUBLIC_TREASURY_ADDRESS as `0x${string}`
-
-// Minimal ERC20 ABI for approve function
-const ERC20_ABI = [
-  {
-    inputs: [
-      { name: 'spender', type: 'address' },
-      { name: 'amount', type: 'uint256' }
-    ],
-    name: 'approve',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'nonpayable',
-    type: 'function'
-  },
-  {
-    inputs: [
-      { name: 'owner', type: 'address' },
-      { name: 'spender', type: 'address' }
-    ],
-    name: 'allowance',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function'
-  }
-] as const
-
-export interface ContractMarket {
-  id: bigint
-  owner: string
-  question: string
-  totalPool: bigint
-  yesTotal: bigint
-  noTotal: bigint
-  resolved: boolean
-  winningOutcome: boolean
-  createdAt: bigint
-  expiresAt: bigint
-}
-
-
-export interface AdminMarketData {
-  totalBets: number
-  yesCount: number
-  noCount: number
-  totalVolume: bigint
-  canResolve: boolean
-  canEdit: boolean
-}
-
-export interface MarketStats {
-  totalMarkets: number
-  activeMarkets: number
-  finalizedMarkets: number
-  resolvedMarkets: number
-  totalVolume: bigint
-  averageVolume: number
-}
 
 /**
  * Unified Market Service - Single source of truth for blockchain interaction
@@ -72,21 +28,17 @@ export interface MarketStats {
  */
 export class MarketService {
 
-  // === Core Contract Interaction ===
-
   static async getMarketCount(): Promise<number> {
     if (!CONTRACT_ADDRESS) {
       console.warn('Contract address not configured, using mock data')
     }
 
     try {
-      console.log('Getting market count from contract:', CONTRACT_ADDRESS)
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getAllMarketsCount',
+        functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKET_COUNT,
       })
-      console.log('Market count result:', Number(result))
       return Number(result)
     } catch (error) {
       console.warn('Failed to get market count from blockchain, using mock data:', error instanceof Error ? error.message : 'Unknown error')
@@ -103,7 +55,7 @@ export class MarketService {
     const result = await readContract(config, {
       address: CONTRACT_ADDRESS,
       abi: PREDICTION_MARKET_ABI,
-      functionName: 'getMarket',
+      functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKET,
       args: [BigInt(marketId)],
     })
 
@@ -123,58 +75,6 @@ export class MarketService {
     }
   }
 
-  /**
-   * Check USDC allowance for Treasury
-   */
-  static async checkUSDCAllowance(ownerAddress: string): Promise<bigint> {
-    if (!TREASURY_ADDRESS) {
-      throw new Error('Treasury address not configured')
-    }
-
-    try {
-      const allowance = await readContract(config, {
-        address: USDC_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: 'allowance',
-        args: [ownerAddress as `0x${string}`, TREASURY_ADDRESS],
-      })
-      return allowance as bigint
-    } catch (error) {
-      console.error('Failed to check USDC allowance:', error)
-      return 0n
-    }
-  }
-
-  /**
-   * Approve USDC for Treasury (required before creating markets)
-   */
-  static async approveUSDC(amount: bigint): Promise<string> {
-    if (!TREASURY_ADDRESS) {
-      throw new Error('Treasury address not configured')
-    }
-
-    try {
-      console.log(`Approving ${amount} USDC for Treasury...`)
-      const hash = await writeContract(config, {
-        address: USDC_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [TREASURY_ADDRESS, amount],
-        gas: 100000n,
-      })
-
-      await waitForTransactionReceipt(config, {
-        hash,
-        confirmations: 1,
-      })
-
-      console.log('USDC approved:', hash)
-      return hash
-    } catch (error) {
-      console.error('Failed to approve USDC:', error)
-      throw error
-    }
-  }
 
   static async createMarket(question: string, totalPool: number, closingTime: Date, userAddress: string): Promise<string> {
     // Check if blockchain is available
@@ -199,18 +99,17 @@ export class MarketService {
       // USDC has 6 decimals
       const usdcAmount = parseUnits(totalPool.toString(), 6)
 
-      console.log('Creating market with question:', question, 'poolAmount:', poolAmount, 'closingTimestamp:', closingTimestamp)
-      console.log('USDC amount (with 6 decimals):', usdcAmount)
-
-      // Step 1: Check current allowance
-      const currentAllowance = await this.checkUSDCAllowance(userAddress)
+      // Check and approve USDC using EVMTokenService
+      const currentAllowance = await evmTokenService.checkAllowance(
+        USDC_ADDRESS,
+        userAddress as `0x${string}`,
+        TREASURY_ADDRESS
+      )
       console.log('Current USDC allowance:', currentAllowance)
 
-      // Step 2: Approve USDC if needed
       if (currentAllowance < usdcAmount) {
         console.log('⚠️  Insufficient allowance. Requesting approval for', usdcAmount.toString(), 'USDC')
-        // Approve the exact poolAmount needed
-        await this.approveUSDC(usdcAmount)
+        await evmTokenService.approve(USDC_ADDRESS, TREASURY_ADDRESS, usdcAmount)
         console.log('✅ USDC approved')
       } else {
         console.log('✅ Sufficient allowance already exists')
@@ -220,9 +119,9 @@ export class MarketService {
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'createMarket',
+        functionName: PREDICTION_MARKET_FUNCTIONS.CREATE_MARKET,
         args: [question, poolAmount, closingTimestamp],
-        gas: 500000n, // Reasonable gas limit for market creation
+        gas: PREDICTION_MARKET_GAS_LIMITS.CREATE_MARKET,
       })
 
       const waitForConfirmation = await waitForTransactionReceipt(config, {
@@ -256,8 +155,8 @@ export class MarketService {
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getMarketsByOwner',
-        args: [userAddress as `0x${string}`, BigInt(0), BigInt(100)],
+        functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKETS_BY_OWNER,
+        args: [userAddress as `0x${string}`, PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
 
       const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
@@ -280,8 +179,8 @@ export class MarketService {
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getActiveMarkets',
-        args: [BigInt(0), BigInt(100)],
+        functionName: PREDICTION_MARKET_FUNCTIONS.GET_ACTIVE_MARKETS,
+        args: [PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
       const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
       
@@ -311,8 +210,8 @@ export class MarketService {
       const result = await readContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'getMarketsByOwner',
-        args: [adminAddress as `0x${string}`, BigInt(0), BigInt(100)],
+        functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKETS_BY_OWNER,
+        args: [adminAddress as `0x${string}`, PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
 
       const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
@@ -369,15 +268,14 @@ export class MarketService {
     }
 
     try {
-      console.log(`Resolving market ${marketId} with winning option: ${winningOption}`)
       const winningOutcome = winningOption === 'yes'
 
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
-        functionName: 'resolveMarket',
+        functionName: PREDICTION_MARKET_FUNCTIONS.RESOLVE_MARKET,
         args: [BigInt(marketId), winningOutcome],
-        gas: 200000n, // Reasonable gas limit for market resolution
+        gas: PREDICTION_MARKET_GAS_LIMITS.RESOLVE_MARKET,
       })
 
       await waitForTransactionReceipt(config, {
@@ -391,8 +289,6 @@ export class MarketService {
       throw error
     }
   }
-
-  // === Helper Methods ===
 
   static contractMarketToMarket(contractMarket: ContractMarket): Market {
     const{ yesTotal, noTotal, resolved, winningOutcome, createdAt, expiresAt } = contractMarket

@@ -11,6 +11,9 @@ export type {
   MarketResolutionData,
   BlockchainConnectionStatus,
   MarketOptionWithOdds,
+  ContractMarket,
+  AdminMarketData,
+  MarketStats,
 } from './market'
 
 // Betting types

@@ -69,18 +69,13 @@ const fetchUserActivity = async (): Promise<UserActivityData> => {
         const betMarketId = String(bet.marketId);
         const contractMarket = marketsMap.get(betMarketId)!;
 
-        // Get market status
         const marketStatus = getMarketStatus(contractMarket);
-        console.log("marketStatus", marketStatus);
-        // Determine winning option
         const winningOption: MarketOption | undefined = contractMarket.resolved
           ? (contractMarket.winningOutcome ? 'yes' : 'no')
           : undefined;
 
-        // Determine if bet is winning
         const isWinning = contractMarket.resolved && winningOption === bet.option;
 
-        // Determine if bet is claimable
         const isClaimable = contractMarket.resolved &&
                            isWinning &&
                            bet.status !== 'claimed';
@@ -175,10 +170,12 @@ export function useUserActivity(): UseUserActivityReturn {
     isConnected ? 'user-activity' : null, // Only fetch when connected
     fetchUserActivity,
     {
-      refreshInterval: 60000, // Auto-refresh every 10 seconds
-      revalidateOnFocus: true, // Revalidate when window gains focus
-      revalidateOnReconnect: true, // Revalidate when network reconnects
+      refreshInterval: 0, // Disable auto-refresh to prevent navigation blocking
+      revalidateOnFocus: false, // Disable revalidation on focus to prevent blocking during navigation
+      revalidateOnReconnect: false, // Disable revalidation on reconnect to prevent race conditions
       dedupingInterval: 5000, // Prevent duplicate requests within 5 seconds
+      suspense: false, // Prevent suspending during revalidation
+      keepPreviousData: true, // Keep previous data while fetching new data
       onError: (err) => {
         console.error('Error loading user activity:', err)
         setConnectionStatus('error')

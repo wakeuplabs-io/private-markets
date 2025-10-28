@@ -71,11 +71,6 @@ export class PrivateTokenProvider implements ITokenProvider {
       try {
         const account = await ensureWalletConnected();
         const pxe = pxeService.getPXE();
-
-        console.log('[TOKEN:PRIVATE] Getting token name for:', address);
-        console.log('[TOKEN:PRIVATE] From account:', account.getAddress().toString());
-
-        // Create CopyCat wallet for simulation
         const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
         const aztecAddress = AztecAddress.fromString(address);
         const contract = await Contract.at(aztecAddress, TokenContract.artifact, copyCatWallet);
@@ -102,8 +97,6 @@ export class PrivateTokenProvider implements ITokenProvider {
       try {
         const account = await ensureWalletConnected();
         const pxe = pxeService.getPXE();
-
-        // Create CopyCat wallet for simulation
         const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
         const aztecAddress = AztecAddress.fromString(address);
         const contract = await Contract.at(aztecAddress, TokenContract.artifact, copyCatWallet);
@@ -130,8 +123,6 @@ export class PrivateTokenProvider implements ITokenProvider {
       try {
         const account = await ensureWalletConnected();
         const pxe = pxeService.getPXE();
-
-        // Create CopyCat wallet for simulation
         const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
         const aztecAddress = AztecAddress.fromString(address);
         const contract = await Contract.at(aztecAddress, TokenContract.artifact, copyCatWallet);
@@ -158,14 +149,6 @@ export class PrivateTokenProvider implements ITokenProvider {
       try {
         const account = await ensureWalletConnected();
         const pxe = pxeService.getPXE();
-
-        console.log('[TOKEN:PRIVATE] Getting private balance:', {
-          tokenAddress: address,
-          ownerAddress: owner.toString(),
-          fromAddress: account.getAddress().toString(),
-        });
-
-        // Create CopyCat wallet for simulation
         const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
         const aztecAddress = AztecAddress.fromString(address);
         const contract = await Contract.at(aztecAddress, TokenContract.artifact, copyCatWallet);
@@ -196,17 +179,8 @@ export class PrivateTokenProvider implements ITokenProvider {
       const contract = await this.getContract(address);
       const account = await ensureWalletConnected();
       const from = account.getAddress();
-
-      console.log('[TOKEN:PRIVATE] Minting to private:', from.toString(), recipient.toString(), amount.toString());
-
-      // Create transaction interaction - mint_to_private expects (from, to, amount)
       const interaction = contract.methods.mint_to_private(from, recipient, amount);
-
-      console.log('[TOKEN:PRIVATE] Transaction interaction created:', interaction);
-
-      // Submit through wallet connection manager (handles user approval)
       await walletConnectionManager.sendTransaction(interaction);
-
       return 'Transaction sent successfully';
     } catch (error) {
       console.error('[TOKEN:PRIVATE] Failed to mint to private:', error);

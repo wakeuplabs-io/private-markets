@@ -32,15 +32,12 @@ export const AdminMarketGrid: React.FC<AdminMarketGridProps> = ({
     onCreateMarket,
     onResolveMarket,
 }) => {
-    console.log('Markets:', markets)
     const { getStatusIconInfo } = useStatus();
     const ICON_DIMENSIONS = { width: 24, height: 24 };
     const getStatusIcon = (status: string | null | undefined) => {
         const strategy = getStatusIconInfo(status);
         return <Image src={strategy.src} alt={strategy.alt} width={ICON_DIMENSIONS.width} height={ICON_DIMENSIONS.height} />;
     };
-
-    
 
     return (
         <SafeRender
