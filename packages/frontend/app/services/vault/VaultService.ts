@@ -140,8 +140,6 @@ export class VaultService implements IVaultService {
       }
 
       const result = await this.privateProvider.placeBet(fullParams);
-
-      // Store bet in localStorage after successful transaction
       const cleanedAddress = this.cleanAddress(params.userAddress);
       const betData: StoredBet = {
         marketId: fullParams.marketId,

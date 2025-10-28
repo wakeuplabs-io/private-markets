@@ -1,5 +1,6 @@
 import { poseidon2Hash } from "@aztec/foundation/crypto";
 import { Fr } from "@aztec/foundation/fields";
+import { normalizeHex64 } from "@/lib/utils";
 
 /**
  * Utilities for generating IDs, secrets, commitments, and nullifiers
@@ -113,8 +114,10 @@ export function deserializeBet(json: string): StoredBet {
  */
 export function storeBet(userAddress: string, betData: StoredBet): void {
   if (typeof window === 'undefined') return;
-
-  const key = `bet_${userAddress}_${betData.betId}`;
+  
+  const normalizedBetId = normalizeHex64(betData.betId);
+  const key = `bet_${userAddress}_${normalizedBetId}`;
+  
   localStorage.setItem(key, serializeBet(betData));
 }
 
@@ -126,9 +129,9 @@ export function storeBet(userAddress: string, betData: StoredBet): void {
  */
 export function getStoredBet(userAddress: string, betId: string): StoredBet | null {
   if (typeof window === 'undefined') return null;
-
-  const key = `bet_${userAddress}_${betId}`;
-  console.log("key", key);
+  
+  const normalizedBetId = normalizeHex64(betId);
+  const key = `bet_${userAddress}_${normalizedBetId}`;
   const value = localStorage.getItem(key);
 
   if (!value) return null;

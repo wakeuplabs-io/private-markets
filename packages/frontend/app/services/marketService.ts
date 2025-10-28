@@ -283,7 +283,6 @@ export class MarketService {
         functionName: 'getActiveMarkets',
         args: [BigInt(0), BigInt(100)],
       })
-
       const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
       
       return marketResults.map((contractMarket, index) => 
@@ -405,7 +404,6 @@ export class MarketService {
 
     const yesOdds = yesTotal > 0 ? Number(totalBets) / Number(yesTotal) : 2.0
     const noOdds = noTotal > 0 ? Number(totalBets) / Number(noTotal) : 2.0
-
     let status: MarketStatus
     if (resolved) {
       status = 'resolved'

@@ -94,11 +94,9 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
         amount: parseFloat(amount)
       })
 
-      // Reset form
       setSelectedOption(null)
       setAmount('')
       setError('')
-      onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to place bet')
     }

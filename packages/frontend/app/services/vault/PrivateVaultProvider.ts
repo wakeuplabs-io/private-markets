@@ -9,6 +9,7 @@ import { pxeQueueService } from "@/services/pxeQueueService";
 import type { IVaultProvider, BetParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
+import { normalizeHex64 } from "@/lib/utils";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAccount = any;
@@ -140,7 +141,6 @@ export class PrivateVaultProvider implements IVaultProvider {
         fromAddress,
       );
       await walletConnectionManager.sendTransaction(interaction, [authwit], fromAddress);
-
       return 'Transaction sent successfully';
     } catch (error) {
       console.error('[VAULT:PRIVATE] Failed to place bet:', error);
@@ -257,9 +257,7 @@ export class PrivateVaultProvider implements IVaultProvider {
 
       const validBetsCount = Number(result.len);
       const blockchainBets = result.storage.slice(0, validBetsCount);
-      console.log("blockchainBets", blockchainBets);
 
-      // Query claimed status for each bet in parallel using is_commitment_claimed
       const claimedStatuses = await Promise.all(
         blockchainBets.map(bet =>
           contract.methods
@@ -268,18 +266,16 @@ export class PrivateVaultProvider implements IVaultProvider {
         )
       );
 
-      // Transform blockchain format to application Bet format
       const bets: Bet[] = blockchainBets.map((blockchainBet, index) => ({
-        id: '0x' + blockchainBet.bet_id.toString(16),
+        id: normalizeHex64(blockchainBet.bet_id),
         marketId: blockchainBet.market_id.toString(),
         option: blockchainBet.outcome === BigInt(1) ? 'yes' : 'no',
-        amount: Number(blockchainBet.amount) / 1e18, // Convert from e18 to normal units
+        amount: Number(blockchainBet.amount) / 1e18,
         status: claimedStatuses[index] ? 'claimed' as const : 'confirmed' as const,
         placedAt: blockchainBet.placed_at > 0 ? new Date(Number(blockchainBet.placed_at) * 1000) : new Date(),
-        // Optional fields that might come from blockchain
-        userAddress: '0x' + blockchainBet.owner.toString(16),
-        commitment: '0x' + blockchainBet.commitment.toString(16),
-        randomness: '0x' + blockchainBet.randomness.toString(16),
+        userAddress: normalizeHex64(blockchainBet.owner),
+        commitment: normalizeHex64(blockchainBet.commitment),
+        randomness: normalizeHex64(blockchainBet.randomness),
       }));
 
       return bets;

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { MarketGrid } from "./MarketGrid";
-import { PlaceBetModal } from "@/components/betting";
+import { PlaceBetModal, BetSuccessModal } from "@/components/betting";
 import { Market, PlaceBetData, MarketOption } from "@/types";
 import { useVault } from "@/hooks/useVault";
 import { useWallet } from "@/context/WalletContext";
@@ -33,6 +33,14 @@ export function MarketsPage() {
     const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
     const [isBetModalOpen, setIsBetModalOpen] = useState(false);
     const [selectedOption, setSelectedOption] = useState<MarketOption | null>(null);
+
+    const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+    const [successBetData, setSuccessBetData] = useState<{
+        market: Market;
+        option: MarketOption;
+        amount: number;
+        txHash?: string;
+    } | null>(null);
 
     const { activeMarkets, isLoading } = useUserMarkets();
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -71,7 +79,17 @@ export function MarketsPage() {
                 userAddress,
             });
 
-            alert(`Bet placed successfully! Transaction: ${txHash}`);
+            setIsBetModalOpen(false);
+
+            if (selectedMarket) {
+                setSuccessBetData({
+                    market: selectedMarket,
+                    option: betData.option,
+                    amount: betData.amount,
+                    txHash,
+                });
+                setIsSuccessModalOpen(true);
+            }
         } catch (error) {
             console.error("Failed to place bet:", error);
             throw error;
@@ -80,6 +98,13 @@ export function MarketsPage() {
 
     const handleCloseModal = () => {
         setIsBetModalOpen(false);
+        setSelectedMarket(null);
+        setSelectedOption(null);
+    };
+
+    const handleCloseSuccessModal = () => {
+        setIsSuccessModalOpen(false);
+        setSuccessBetData(null);
         setSelectedMarket(null);
         setSelectedOption(null);
     };
@@ -134,6 +159,14 @@ export function MarketsPage() {
                     selectedOption={selectedOption}
                     onPlaceBet={handlePlaceBet}
                     isLoading={isPlacingBet}
+                />
+                <BetSuccessModal
+                    isOpen={isSuccessModalOpen}
+                    onClose={handleCloseSuccessModal}
+                    market={successBetData?.market ?? null}
+                    selectedOption={successBetData?.option ?? null}
+                    amount={successBetData?.amount ?? 0}
+                    txHash={successBetData?.txHash}
                 />
             </div>
         </>

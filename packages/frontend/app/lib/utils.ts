@@ -25,3 +25,20 @@ export const formatTime = (date: Date | null | undefined) => {
     minute: '2-digit'
   }, 'Unknown time')
 }
+
+/**
+ * Normalize hex string to 64 characters (32 bytes) with leading zeros
+ * @param hex - Hex string or BigInt to normalize
+ * @returns Normalized hex string with 0x prefix and 64 characters
+ */
+export function normalizeHex64(hex: string | bigint): string {
+  let hexStr: string;
+  
+  if (typeof hex === 'bigint') {
+    hexStr = hex.toString(16);
+  } else {
+    hexStr = hex.startsWith('0x') ? hex.slice(2) : hex;
+  }
+  const paddedHex = hexStr.padStart(64, '0');
+  return '0x' + paddedHex;
+}
