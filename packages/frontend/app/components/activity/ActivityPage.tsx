@@ -8,7 +8,6 @@ import { ErrorState } from "../ui/Fallbacks";
 export function ActivityPage() {
     const { activityData, isLoading, error, refreshActivity, claimReward } =
         useUserActivity();
-
     return (
         <div className="container mx-auto px-8 py-8">
             <div className="flex justify-between items-center mb-8">

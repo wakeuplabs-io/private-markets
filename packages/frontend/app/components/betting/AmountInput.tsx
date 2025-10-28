@@ -3,6 +3,7 @@
 import React from 'react'
 import { Input } from '@/components/ui/Input'
 import { cn } from '@/lib/utils'
+import { Lightbulb, Lock } from 'lucide-react'
 
 interface AmountInputProps {
   amount: string
@@ -36,8 +37,14 @@ const AmountInput: React.FC<AmountInputProps> = ({
       />
 
       <div className="text-xs text-muted-foreground space-y-1">
-        <p>💡 You&apos;ll need ETH for gas and USDC for your bet</p>
-        <p>🔒 Your address remains private, only the market resolution is public</p>
+        <p className="flex items-center gap-1">
+          <Lightbulb className="h-3 w-3" />
+          You&apos;ll need ETH for gas and USDC for your bet
+        </p>
+        <p className="flex items-center gap-1">
+          <Lock className="h-3 w-3" />
+          Your address remains private, only the market resolution is public
+        </p>
       </div>
 
       <div className="flex gap-2">

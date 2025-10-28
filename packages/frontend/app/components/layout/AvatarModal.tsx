@@ -32,14 +32,13 @@ const NetworkBadge = () => {
       <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-          <span className="text-sm text-muted-foreground">No conectado</span>
+          <span className="text-sm text-muted-foreground">Not connected</span>
         </div>
       </div>
     )
   }
 
   const getNetworkInfo = () => {
-    console.log('chain', chain)
     switch (chain.id) {
       case 421614:
         return {
@@ -199,7 +198,7 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">Connection Status</div>
+          <div className="text-sm font-medium text-muted-foreground">Aztec Network</div>
           <div className="space-y-2">
             <AztecConnectionBadge />
           </div>

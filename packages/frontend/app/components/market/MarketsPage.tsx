@@ -9,6 +9,7 @@ import { useWallet } from "@/context/WalletContext";
 import { useUserMarkets } from "@/hooks/useUserMarkets";
 import { MarketDetailModal } from "./MarketDetailModal";
 import { EmptyState } from "@/components/ui/Fallbacks";
+import { NetworkMismatchAlert } from "@/components/ui/NetworkMismatchAlert";
 import Image from "next/image";
 
 const MarketsEmptyState = () => {
@@ -31,6 +32,7 @@ const MarketsEmptyState = () => {
 export function MarketsPage() {
     const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
     const [isBetModalOpen, setIsBetModalOpen] = useState(false);
+    const [selectedOption, setSelectedOption] = useState<MarketOption | null>(null);
 
     const { activeMarkets, isLoading } = useUserMarkets();
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -42,6 +44,7 @@ export function MarketsPage() {
         const market = activeMarkets.find((m) => m.id === marketId);
         if (market) {
             setSelectedMarket(market);
+            setSelectedOption(option);
             setIsBetModalOpen(true);
         }
     };
@@ -78,6 +81,7 @@ export function MarketsPage() {
     const handleCloseModal = () => {
         setIsBetModalOpen(false);
         setSelectedMarket(null);
+        setSelectedOption(null);
     };
 
     const handleConnectWallet = async () => {
@@ -105,6 +109,8 @@ export function MarketsPage() {
                     </p>
                 </div>
 
+                <NetworkMismatchAlert className="mb-6" />
+
                 <MarketGrid
                     markets={activeMarkets}
                     onOptionClick={handleOptionClick}
@@ -125,6 +131,7 @@ export function MarketsPage() {
                     isOpen={isBetModalOpen}
                     onClose={handleCloseModal}
                     market={selectedMarket}
+                    selectedOption={selectedOption}
                     onPlaceBet={handlePlaceBet}
                     isLoading={isPlacingBet}
                 />

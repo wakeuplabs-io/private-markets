@@ -86,8 +86,10 @@ export class VaultService implements IVaultService {
     // Generate secret and commitment using the same algorithm as the contract
     const secret = generateSecret();
     const marketIdBigInt = BigInt(params.marketId);
-    const amountBigInt = BigInt(params.amount);
-    const commitment = await generateCommitment(marketIdBigInt, amountBigInt, secret);
+    // Convert amount to wei (e18) for commitment generation
+    // The contract stores amount in wei, so commitment must use wei too
+    const amountInWei = BigInt(params.amount) * BigInt(10 ** 18);
+    const commitment = await generateCommitment(marketIdBigInt, amountInWei, secret);
 
     // Generate unique bet ID using hash
     const betId = generateBetId();
@@ -137,7 +139,7 @@ export class VaultService implements IVaultService {
         throw new Error('Place bet operation not supported by current provider');
       }
 
-      const txHash = await this.privateProvider.placeBet(fullParams);
+      const result = await this.privateProvider.placeBet(fullParams);
 
       // Store bet in localStorage after successful transaction
       const cleanedAddress = this.cleanAddress(params.userAddress);
@@ -149,13 +151,12 @@ export class VaultService implements IVaultService {
         amount: params.amount.toString(),
         outcome: params.outcome === 1, // Convert to boolean (true = yes, false = no)
         timestamp: Date.now(),
-        txHash: txHash,
       };
 
       storeBet(cleanedAddress, betData);
       console.log('[VAULT] Bet stored in localStorage:', betData.betId);
 
-      return txHash;
+      return result;
     } catch (error) {
       console.error('[VAULT] Failed to place bet:', error);
       throw new Error(`Failed to place bet: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -260,17 +261,12 @@ export class VaultService implements IVaultService {
       // Generate authorization nonce
       const authwitNonce = generateAuthwitNonce();
 
-      // Generate deadline (24 hours from now)
-      const deadlineTimestamp = Math.floor(Date.now() / 1000) + (24 * 60 * 60);
-      const deadline = deadlineTimestamp.toString();
-
       // Create full claim params
       const fullParams: ClaimParams = {
         marketId: storedBet.marketId,
         commitment: storedBet.commitment,
         secret: storedBet.secret,
         recipient: params.recipient,
-        deadline,
         authwitNonce: authwitNonce.toString(),
         betAmount: parseFloat(storedBet.amount),
       };

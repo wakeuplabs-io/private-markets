@@ -140,7 +140,6 @@ export class PrivateTokenProvider implements ITokenProvider {
           from: account.getAddress(),
           skipFeeEnforcement: true
         });
-
         return Number(decimals);
       } catch (error) {
         console.error('[TOKEN:PRIVATE] Failed to get token decimals:', error);

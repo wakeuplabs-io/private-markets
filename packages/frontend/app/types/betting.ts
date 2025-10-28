@@ -10,9 +10,9 @@ export interface Bet {
   status: BetStatus
   placedAt: Date
   txHash?: string
-  // Private bet info (encrypted/hidden)
   userAddress?: string
-  // Claiming info
+  commitment?: string
+  randomness?: string
   claimTxHash?: string
   claimedAt?: Date
 }

@@ -44,6 +44,7 @@ pub contract BetVault {
     struct Storage<Context> {
         processed_bets: Map<Field, PublicMutable<bool, Context>, Context>,
         used_nullifiers: Map<Field, PublicMutable<bool, Context>, Context>,
+        claimed_commitments: Map<Field, PublicMutable<bool, Context>, Context>,
         token_address: PublicImmutable<AztecAddress, Context>,
         wormhole_address: PublicImmutable<AztecAddress, Context>,
         admin: PublicImmutable<AztecAddress, Context>,
@@ -158,7 +159,7 @@ pub contract BetVault {
         // Verify secret and amount match the commitment
         let calculated_commitment = poseidon2_hash([market_id, amount as Field, secret]);
         assert(commitment == calculated_commitment, "Invalid secret or amount for commitment");
-  
+
         // Verify amount is valid
         assert(amount > 0, "Bet amount must be greater than 0");
 
@@ -166,9 +167,9 @@ pub contract BetVault {
         let recipient_field = recipient.to_field();
         let nullifier = compute_nullifier(market_id, commitment, recipient_field);
 
-        // Mark nullifier as used
+        // Mark commitment as claimed and nullifier as used
         BetVault::at(context.this_address())
-            ._mark_nullifier_used(nullifier)
+            ._mark_claim_processed(commitment, nullifier)
             .enqueue(&mut context);
 
         // Emit event
@@ -192,15 +193,15 @@ pub contract BetVault {
             recipient,
         );
 
-        let _ = Wormhole::at(storage.wormhole_address.read())
-            .publish_message_in_private(
-                1,                // consistency level
-                chunks,        // payload: [Field; 5]
-                0,          // nonce
-                2,          // emitter_chain
-                from,
-                authwit_nonce
-            ).call(&mut context);
+        // let _ = Wormhole::at(storage.wormhole_address.read())
+        //     .publish_message_in_private(
+        //         1,                // consistency level
+        //         chunks,        // payload: [Field; 5]
+        //         0,          // nonce
+        //         2,          // emitter_chain
+        //         from,
+        //         authwit_nonce
+        //     ).call(&mut context);
     }
 
     // Public functions
@@ -218,6 +219,28 @@ pub contract BetVault {
         let already_used = storage.used_nullifiers.at(nullifier).read();
         assert(!already_used, "nullifier already used");
         storage.used_nullifiers.at(nullifier).write(true);
+    }
+
+    #[public]
+    #[internal]
+    fn _mark_claim_processed(commitment: Field, nullifier: Field) {
+        // Check if commitment already claimed
+        let already_claimed = storage.claimed_commitments.at(commitment).read();
+        assert(!already_claimed, "Commitment already claimed");
+
+        // Check if nullifier already used
+        let already_used = storage.used_nullifiers.at(nullifier).read();
+        assert(!already_used, "Nullifier already used");
+
+        // Mark both as used
+        storage.claimed_commitments.at(commitment).write(true);
+        storage.used_nullifiers.at(nullifier).write(true);
+    }
+
+    #[public]
+    #[view]
+    fn is_commitment_claimed(commitment: Field) -> bool {
+        storage.claimed_commitments.at(commitment).read()
     }
 
     #[contract_library_method]
@@ -325,7 +348,7 @@ pub contract BetVault {
         market_id: Field,
     ) -> pub (bool, u128) {
         // Configure options for view_notes
-        let mut options = NoteViewerOptions::<BetNote, 7>::new();
+        let mut options = NoteViewerOptions::<BetNote, 8>::new();
         options = options.set_limit(10);
 
         // view_notes returns BoundedVec<BetNote, N> (without RetrievedNote wrapper)
@@ -359,7 +382,7 @@ pub contract BetVault {
         limit: u32
     ) -> pub BoundedVec<BetNote, 10> {
         assert(limit <= 10, "Limit must be <= 10");
-        let mut options = NoteViewerOptions::<BetNote, 7>::new();
+        let mut options = NoteViewerOptions::<BetNote, 8>::new();
         options = options.set_offset(offset);
         options = options.set_limit(limit);
         storage.user_bets.at(owner).view_notes(options)

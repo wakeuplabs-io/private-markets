@@ -1,9 +1,10 @@
 import { readContract, waitForTransactionReceipt, writeContract } from 'wagmi/actions'
 import { config } from '@/config/wagmi'
 import { PREDICTION_MARKET_ABI } from '@/constants/contracts'
-import { Market, MarketStatus, BlockchainConnectionStatus, Bet } from '@/types'
+import { Market, MarketStatus, BlockchainConnectionStatus } from '@/types'
 import { BlockchainStatusService } from './blockchainStatusService'
 import { parseUnits } from 'viem'
+import { vaultService } from './vault'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
 const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` // Arbitrum Sepolia USDC
@@ -159,7 +160,7 @@ export class MarketService {
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [TREASURY_ADDRESS, amount],
-        gas: 100000n, // Standard gas for ERC20 approve
+        gas: 100000n,
       })
 
       await waitForTransactionReceipt(config, {
@@ -419,8 +420,6 @@ export class MarketService {
       name: winningOutcome ? 'Yes' : 'No',
       odds: winningOutcome ? yesOdds : noOdds
     } : undefined
-    console.log({winningOption})
-    console.log({contractMarket})
     return {
       id: contractMarket.id.toString(),
       question: contractMarket.question,
@@ -463,8 +462,6 @@ export class MarketService {
     return !!CONTRACT_ADDRESS && CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000'
   }
 
-  // === Helper Methods for Mock Data Conversion ===
-
 
   /**
    * Get blockchain connection status for UI display
@@ -474,82 +471,46 @@ export class MarketService {
     return status.evm
   }
 
-  // === User Activity Methods ===
-
-  /**
-   * Get user's betting activity (bets placed by the user)
-   */
-  static async getUserBets(): Promise<Bet[]> {
-    try {
-      // For now, return mock data. In a real implementation, this would:
-      // 1. Query the blockchain for user's bet events
-      // 2. Parse the events to extract bet information
-      // 3. Return structured bet data
-      
-      const mockBets: Bet[] = [
-        {
-          id: 'bet-1',
-          marketId: 'mock-000', // Open market
-          option: 'yes',
-          amount: 0.1,
-          status: 'confirmed',
-          placedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-          txHash: '0x123...',
-          userAddress: '0x456...'
-        },
-        {
-          id: 'bet-2',
-          marketId: 'mock-001', // Resolved market
-          option: 'yes', // Changed to 'yes' to match winning option
-          amount: 0.05,
-          status: 'claimable',
-          placedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-          txHash: '0x789...',
-          userAddress: '0x456...'
-        },
-        {
-          id: 'bet-3',
-          marketId: 'mock-002', // Finalized market
-          option: 'yes',
-          amount: 0.2,
-          status: 'claimed',
-          placedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
-          txHash: '0xabc...',
-          claimTxHash: '0xdef...',
-          claimedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-          userAddress: '0x456...'
-        }
-      ]
-
-      return mockBets
-    } catch (error) {
-      console.error('Error fetching user bets:', error)
-      throw new Error('Failed to fetch user bets')
-    }
-  }
 
   /**
    * Claim reward for a winning bet
+   *
+   * This will:
+   * 1. Call vaultService to authorize claim on Aztec
+   * 2. Aztec verifies the secret matches the commitment
+   * 3. Aztec generates nullifier and sends Wormhole message
+   * 4. Wormhole relays to Arbitrum
+   * 5. Arbitrum calculates payout and transfers USDC
    */
-  static async claimReward(betId: string): Promise<void> {
+  static async claimReward(betId: string, marketId: string, recipientAddress: string): Promise<void> {
     try {
-      // For now, simulate a successful claim
-      // In a real implementation, this would:
-      // 1. Verify the bet is claimable
-      // 2. Generate ZK proof if needed
-      // 3. Submit claim transaction to blockchain
-      // 4. Wait for confirmation
-      
-      console.log(`Claiming reward for bet ${betId}`)
-      
-      // Simulate async operation
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // In real implementation, update bet status to 'claimed'
-      // and store claim transaction hash
+      console.log(`Claiming reward for bet ${betId} in market ${marketId}`);
+      console.log(`Recipient (Aztec address): ${recipientAddress}`);
+
+      // Call vaultService to authorize claim on Aztec
+      // This will:
+      // - Retrieve commitment and secret from localStorage
+      // - Call BetVault.authorizeClaim() on Aztec
+      // - Send Wormhole message to Arbitrum
+      const txHash = await vaultService.authorizeClaim({
+        marketId: marketId,
+        betId: betId,
+        recipient: recipientAddress, // Aztec address for claim authorization
+      });
+
+      console.log(`Claim authorization transaction sent: ${txHash}`);
+      console.log('Transaction will be processed by Wormhole → Arbitrum automatically');
+      console.log('Payout will be sent to the recipient address on Arbitrum');
+
+      // Note: The actual payout happens asynchronously via Wormhole
+      // The user will receive USDC on Arbitrum after:
+      // 1. Wormhole guardians sign the VAA (~1-2 minutes)
+      // 2. Relayer delivers message to Arbitrum
+      // 3. PredictionMarketCore calculates payout
+      // 4. Treasury transfers USDC to recipient
     } catch (error) {
-      console.error('Error claiming reward:', error)
-      throw new Error('Failed to claim reward')
+      console.error('Error claiming reward:', error);
+      throw new Error(`Failed to claim reward: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

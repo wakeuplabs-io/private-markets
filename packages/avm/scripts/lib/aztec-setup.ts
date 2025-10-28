@@ -84,13 +84,11 @@ export class AztecSetup {
 
   constructor() {
     const envNodeUrl = process.env.NODE_URL;
-    console.log('envNodeUrl', envNodeUrl);
     if (envNodeUrl) {
       this.nodeUrl = envNodeUrl;
     } else {
       this.nodeUrl = "https://aztec-testnet-fullnode.zkv.xyz/";
     }
-    
     this.deploysDir = path.join(__dirname, "..", "deploys");
     this.keysFile = path.join(this.deploysDir, "keys.json");
     this.accountsFile = path.join(this.deploysDir, "accounts.json");
@@ -230,7 +228,6 @@ export class AztecSetup {
 
   private async createSchnorrWallet(keys: AccountKeys): Promise<Wallet> {
     if (!this.pxe) throw new Error("PXE not initialized");
-
     const privateKeyFr = Fr.fromHexString(keys.privateKey);
     const saltFr = Fr.fromHexString(keys.salt);
 
@@ -240,14 +237,8 @@ export class AztecSetup {
       deriveSigningKey(privateKeyFr),
       saltFr.toBigInt()
     );
-    const accountData = {
-      address: schnorrAccount.getAddress().toString(),
-      signingKey: deriveSigningKey(privateKeyFr).toBuffer().toString('hex'),
-      secretKey: privateKeyFr.toString(),
-      salt: saltFr.toString(),
-    };
-    const accountAddress = schnorrAccount.getAddress();
 
+    const accountAddress = schnorrAccount.getAddress();
     // Para testnet con PXE local, necesitamos registrar la instancia del contrato de cuenta
     if (this.network === "testnet" && this.nodeClient) {
       console.log(`  Fetching account contract instance from node...`);
@@ -298,10 +289,9 @@ export class AztecSetup {
 
       console.log("Schnorr account deployed successfully");
     } catch (error) {
-      console.warn("⚠️ Account deployment failed (may already exist):", error);
+      console.warn("Account deployment failed (may already exist):", error);
     }
 
-    // Obtener wallet SIN re-registrar (mantiene las notas)
     const wallet = await schnorrAccount.getWallet();
     
     console.log(`Account ready: ${wallet.getAddress().toString()}`);
@@ -310,29 +300,10 @@ export class AztecSetup {
 
   async getOrCreateWallet(accountName: string = "deployer"): Promise<Wallet> {
     if (!this.pxe) throw new Error("PXE not initialized. Call setupPXE() first");
-
-    if (this.network === "sandbox") {
-      console.log(`Using sandbox account: ${accountName}`);
-      const wallets = await getInitialTestAccountsWallets(this.pxe);
-      const accountIndex = accountName === "user" ? 1 : 0;
-      const wallet = wallets[accountIndex] || wallets[0];
-
-      // Save sandbox account info for debugging/persistence
-      this.saveAccountInfo(accountName, {
-        address: wallet.getAddress().toString(),
-        deployed: true,
-      });
-
-      console.log(`Account ${accountName}: ${wallet.getAddress().toString()}`);
-      return wallet;
-    }
-
-    // Testnet flow
     console.log(`Loading/creating testnet account: ${accountName}`);
 
     let keys = this.loadKeys(accountName);
     let accountInfo = this.loadAccountInfo(accountName);
-
     if (!keys) {
       console.log(`Generating new keys for ${accountName}...`);
       keys = this.generateRandomKeys();
@@ -358,25 +329,6 @@ export class AztecSetup {
     return wallet;
   }
 
-  async getExistingWallet(accountName: string): Promise<Wallet | null> {
-    if (!this.pxe) throw new Error("PXE not initialized");
-
-    if (this.network === "sandbox") {
-      const wallets = await getInitialTestAccountsWallets(this.pxe);
-      const accountIndex = accountName === "user" ? 1 : 0;
-      return wallets[accountIndex] || wallets[0];
-    }
-
-    const keys = this.loadKeys(accountName);
-    const accountInfo = this.loadAccountInfo(accountName);
-
-    if (!keys || !accountInfo?.deployed) {
-      return null;
-    }
-
-    return await this.createSchnorrWallet(keys);
-  }
-
   saveContractAddress(contractName: string, address: string): void {
     this.ensureDeploysDir();
 
@@ -397,7 +349,6 @@ export class AztecSetup {
   }
 
   async getSponsoredPaymentMethod(): Promise<SponsoredFeePaymentMethod | null> {
-    if (this.network === "sandbox") return null;
 
     const sponsoredFPC = await this.getSponsoredFPCInstance();
     return new SponsoredFeePaymentMethod(sponsoredFPC.address);

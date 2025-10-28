@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { BetOptionSelector } from './BetOptionSelector'
+// Bet option now comes from MarketCard click; selector removed
 import { AmountInput } from './AmountInput'
 import { SafeRender, InvalidDataState, LoadingState } from '@/components/ui/Fallbacks'
 import { cn } from '@/lib/utils'
@@ -11,8 +11,6 @@ import { Market, MarketOption, PlaceBetData } from '@/types'
 import {
   isValidMarket,
   safeGetMarketClosingDate,
-  safeGetMarketOptions,
-  getMarketOptionName,
   isValidMarketOptionChoice,
   isValidAmount,
   safeFormatDate
@@ -22,6 +20,7 @@ interface PlaceBetModalProps {
   isOpen: boolean
   onClose: () => void
   market: Market | null | undefined
+  selectedOption: MarketOption | null
   onPlaceBet: (betData: PlaceBetData) => Promise<void>
   isLoading?: boolean
   className?: string
@@ -31,11 +30,20 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
   isOpen,
   onClose,
   market,
+  selectedOption: selectedOptionProp,
   onPlaceBet,
   isLoading = false,
   className
 }) => {
+  // Option now provided externally
   const [selectedOption, setSelectedOption] = useState<MarketOption | null>(null)
+  
+  // Sync selected option from parent when modal opens or prop changes
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedOption(selectedOptionProp ?? null)
+    }
+  }, [isOpen, selectedOptionProp])
   const [amount, setAmount] = useState('')
   const [error, setError] = useState('')
 
@@ -137,7 +145,6 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
             <PlaceBetModalContent
               market={validMarket}
               selectedOption={selectedOption}
-              setSelectedOption={setSelectedOption}
               amount={amount}
               handleAmountChange={handleAmountChange}
               error={error}
@@ -157,7 +164,6 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
 interface PlaceBetModalContentProps {
   market: Market
   selectedOption: MarketOption | null
-  setSelectedOption: (option: MarketOption | null) => void
   amount: string
   handleAmountChange: (amount: string) => void
   error: string
@@ -170,7 +176,6 @@ interface PlaceBetModalContentProps {
 const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
   market,
   selectedOption,
-  setSelectedOption,
   amount,
   handleAmountChange,
   error,
@@ -180,7 +185,6 @@ const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
   handleClose
 }) => {
   const closingDate = safeGetMarketClosingDate(market)
-  const options = safeGetMarketOptions(market)
 
   const formatClosingDate = () => {
     if (!closingDate) return 'TBD'
@@ -193,32 +197,31 @@ const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
     }, 'TBD')
   }
 
-  const getOptionNames = () => {
-    return {
-      yes: getMarketOptionName(options, 'yes', 'Yes'),
-      no: getMarketOptionName(options, 'no', 'No')
-    }
-  }
-
   return (
     <div className="space-y-8">
-      <div className="p-4 rounded-lg bg-muted space-y-3 mb-8">
-        <h3 className="font-semibold text-foreground">
+      <div className="p-4 rounded-lg bg-muted space-y-4 mb-8">
+        <h3 className="font-semibold text-foreground text-lg">
           {market.question || 'Untitled Market'}
         </h3>
-        <div className="text-xs text-muted-foreground space-y-1">
-          <div>Closes: {formatClosingDate()}</div>
-          {market.disclaimer && (
-            <div className="italic">{market.disclaimer}</div>
-          )}
+        
+        <div className="space-y-2">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-muted-foreground">Selected option:</span>
+            <span className="font-medium text-foreground">{selectedOption ? selectedOption === 'yes' ? 'Yes' : 'No' : '—'}</span>
+          </div>
+          
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-muted-foreground">Closing date:</span>
+            <span className="font-medium text-foreground">{formatClosingDate()}</span>
+          </div>
         </div>
+        
+        {market.disclaimer && (
+          <div className="text-xs text-muted-foreground italic pt-2 border-t border-border/50">
+            {market.disclaimer}
+          </div>
+        )}
       </div>
-
-      <BetOptionSelector
-        options={getOptionNames()}
-        selectedOption={selectedOption}
-        onOptionSelect={setSelectedOption}
-      />
 
       <AmountInput
         amount={amount}

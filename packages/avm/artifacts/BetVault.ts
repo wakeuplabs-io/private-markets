@@ -129,7 +129,7 @@ export class BetVaultContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'processed_bets' | 'used_nullifiers' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'> {
+  public static get storage(): ContractStorageLayout<'processed_bets' | 'used_nullifiers' | 'claimed_commitments' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'> {
       return {
         processed_bets: {
       slot: new Fr(1n),
@@ -137,19 +137,22 @@ export class BetVaultContract extends ContractBase {
 used_nullifiers: {
       slot: new Fr(2n),
     },
-token_address: {
+claimed_commitments: {
       slot: new Fr(3n),
     },
+token_address: {
+      slot: new Fr(4n),
+    },
 wormhole_address: {
-      slot: new Fr(5n),
+      slot: new Fr(6n),
     },
 admin: {
-      slot: new Fr(7n),
+      slot: new Fr(8n),
     },
 user_bets: {
-      slot: new Fr(9n),
+      slot: new Fr(10n),
     }
-      } as ContractStorageLayout<'processed_bets' | 'used_nullifiers' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'>;
+      } as ContractStorageLayout<'processed_bets' | 'used_nullifiers' | 'claimed_commitments' | 'token_address' | 'wormhole_address' | 'admin' | 'user_bets'>;
     }
     
 
@@ -176,6 +179,9 @@ user_bets: {
 
     /** get_user_bets(owner: struct, offset: integer, limit: integer) */
     get_user_bets: ((owner: AztecAddressLike, offset: (bigint | number), limit: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** is_commitment_claimed(commitment: field) */
+    is_commitment_claimed: ((commitment: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** is_nullifier_used(nullifier: field) */
     is_nullifier_used: ((nullifier: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
