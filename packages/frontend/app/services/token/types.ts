@@ -10,7 +10,7 @@ export interface TokenInfo {
 
 /**
  * Token provider interface
- * - PrivateTokenProvider: Full access (READ + WRITE)
+ * - TokenProvider: Full access (READ + WRITE)
  * - PublicTokenProvider: Read-only (throws on write ops)
  */
 export interface ITokenProvider {

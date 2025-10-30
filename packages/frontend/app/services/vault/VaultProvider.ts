@@ -41,7 +41,7 @@ interface WalletAccount {
 }
 
 /**
- * Private Vault Provider
+ * Vault Provider
  *
  * Handles vault contract interactions using the connected user's wallet.
  * This provider is used when a wallet is connected and provides:
@@ -49,10 +49,10 @@ interface WalletAccount {
  * - Transaction submissions through user's wallet
  * - Contract method calls authenticated by the user
  *
- * Context: PRIVATE (User's Connected Wallet)
+ * Context: User's Connected Wallet
  * Use case: Production environment with real user wallets
  */
-export class PrivateVaultProvider implements IVaultProvider {
+export class VaultProvider implements IVaultProvider {
   private contract: Contract | null = null;
 
   constructor(private contractAddress: string) {}

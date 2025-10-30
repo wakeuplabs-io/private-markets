@@ -36,7 +36,7 @@ export interface SimpleClaimParams {
 
 /**
  * Vault provider interface
- * - PrivateVaultProvider: Full access (READ + WRITE)
+ * - VaultProvider: Full access (READ + WRITE)
  */
 export interface IVaultProvider {
   getContract(): Promise<unknown>;

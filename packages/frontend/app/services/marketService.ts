@@ -13,6 +13,9 @@ import {
   ContractMarket,
   MarketStats,
 } from '@/types'
+
+// Re-export types for external use
+export type { ContractMarket, MarketStats }
 import { BlockchainStatusService } from './blockchainStatusService'
 import { parseUnits } from 'viem'
 import { vaultService } from './vault'

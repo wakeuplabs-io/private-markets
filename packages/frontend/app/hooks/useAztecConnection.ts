@@ -1,7 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { aztecService, type AztecConnectionStatus, type AztecConnectionError } from '@/services/aztecService'
+import { useState, useCallback } from 'react'
+import { useWallet } from '@/context'
+import { walletRegistry } from '@/lib/wallet/WalletRegistry'
+
+// Re-export types for backwards compatibility
+export type AztecConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
+export interface AztecConnectionError {
+  message: string
+  code?: string
+}
 
 interface UseAztecConnectionReturn {
   status: AztecConnectionStatus
@@ -25,67 +33,61 @@ interface UseAztecConnectionReturn {
 /**
  * Hook para manejar el estado de conexión con Aztec
  * Proporciona información sobre el estado de conexión y manejo de errores
+ *
+ * REFACTORED: Now uses WalletContext instead of aztecService
  */
 export function useAztecConnection(): UseAztecConnectionReturn {
-  const [status, setStatus] = useState<AztecConnectionStatus>('disconnected')
-  const [error, setError] = useState<AztecConnectionError | null>(null)
+  const { status, isConnected, isConnecting, error, connectWallet, resetWallet } = useWallet()
   const [isRetrying, setIsRetrying] = useState(false)
 
-  // Update connection status
-  const updateStatus = useCallback(() => {
-    const currentStatus = aztecService.getStatus()
-    const currentError = aztecService.getLastError()
-    
-    setStatus(currentStatus)
-    setError(currentError)
-  }, [])
+  // Convert wallet error string to structured error
+  const structuredError: AztecConnectionError | null = error
+    ? { message: error }
+    : null
 
-  // Check connection status periodically
-  useEffect(() => {
-    updateStatus()
-    
-    const interval = setInterval(() => {
-      updateStatus()
-    }, 2000) // Check every 2 seconds
-
-    return () => clearInterval(interval)
-  }, [updateStatus])
-
-  // Retry connection
+  // Retry connection by attempting to reconnect
   const retry = useCallback(async () => {
     if (isRetrying) return
 
     setIsRetrying(true)
     try {
-      await aztecService.retry()
-      updateStatus()
+      // Reset wallet state first
+      resetWallet()
+      // Wait a bit for cleanup
+      await new Promise(resolve => setTimeout(resolve, 500))
+      // Try to reconnect
+      await connectWallet('aztec')
     } catch (error) {
       console.error('Retry failed:', error)
-      updateStatus()
     } finally {
       setIsRetrying(false)
     }
-  }, [isRetrying, updateStatus])
+  }, [isRetrying, resetWallet, connectWallet])
 
-  // Clear error
+  // Clear error by resetting wallet state
   const clearError = useCallback(() => {
-    aztecService.clearError()
-    updateStatus()
-  }, [updateStatus])
+    resetWallet()
+  }, [resetWallet])
 
-  // Computed properties
-  const isConnected = status === 'connected'
-  const isConnecting = status === 'connecting' || isRetrying
-  const canRetry = aztecService.canRetry() && !isRetrying
-  const errorMessage = error?.message || null
-  const healthInfo = aztecService.getHealthInfo()
+  // Check if retry is possible (can retry if there's an error and not currently retrying)
+  const canRetry = status === 'error' && !isRetrying
+
+  // Health info (simplified, no retry count tracking)
+  const healthInfo = {
+    status: status as AztecConnectionStatus,
+    isConnected,
+    error: structuredError,
+    canRetry,
+    retryCount: 0, // Not tracked anymore
+    maxRetries: 3, // Static value for UI
+  }
 
   return {
-    status,
+    status: status as AztecConnectionStatus,
     isConnected,
-    isConnecting,
-    error,
-    errorMessage,
+    isConnecting: isConnecting || isRetrying,
+    error: structuredError,
+    errorMessage: error,
     canRetry,
     retry,
     clearError,
@@ -94,7 +96,8 @@ export function useAztecConnection(): UseAztecConnectionReturn {
 }
 
 /**
- * Hook simplificado para verificar si Aztec está disponible
+ *
+ * REFACTORED: Now checks if Aztec provider is initialized via walletService
  */
 export function useAztecAvailable(): {
   isAvailable: boolean
@@ -103,11 +106,14 @@ export function useAztecAvailable(): {
 } {
   const [isAvailable, setIsAvailable] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
-  
+  const { isInitializingProvider } = useWallet()
+
   const checkAvailability = useCallback(async (): Promise<boolean> => {
     setIsChecking(true)
     try {
-      const available = await aztecService.isAvailable()
+      // Check if Aztec provider is registered
+      const provider = walletRegistry.get('aztec')
+      const available = provider !== null
       setIsAvailable(available)
       return available
     } catch {
@@ -118,13 +124,9 @@ export function useAztecAvailable(): {
     }
   }, [])
 
-  useEffect(() => {
-    checkAvailability()
-  }, [checkAvailability])
-
   return {
-    isAvailable,
-    isChecking,
+    isAvailable: isAvailable && !isInitializingProvider,
+    isChecking: isChecking || isInitializingProvider,
     checkAvailability
   }
 }

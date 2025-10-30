@@ -1,7 +1,7 @@
 import { AztecAddress } from "@aztec/aztec.js";
 import { fieldToString } from "@/lib/aztecUtils";
 import { walletService } from "../walletService";
-import { PrivateTokenProvider } from "./PrivateTokenProvider";
+import { TokenProvider } from "./TokenProvider";
 import type { ITokenService, ITokenProvider, TokenInfo } from "./types";
 import { FALLBACK_VALUES } from "./types";
 
@@ -11,12 +11,12 @@ import { FALLBACK_VALUES } from "./types";
  * Orchestrates token contract interactions by delegating to the appropriate provider
  * based on wallet connection status:
  *
- * - When wallet is connected → Uses PrivateTokenProvider (user's wallet)
+ * - When wallet is connected → Uses TokenProvider (user's wallet)
  * - When wallet is disconnected → Returns FALLBACK_VALUES without errors
  *
  * This service acts as a facade that:
  * 1. Checks wallet connection status
- * 2. Delegates operations to PrivateTokenProvider if connected
+ * 2. Delegates operations to TokenProvider if connected
  * 3. Returns fallback values if disconnected (graceful degradation)
  * 4. Provides a stable API regardless of connection state
  *
@@ -39,7 +39,7 @@ export class TokenService implements ITokenService {
     privateProvider?: ITokenProvider
   ) {
     // Allow dependency injection for testing
-    this.privateProvider = privateProvider || new PrivateTokenProvider();
+    this.privateProvider = privateProvider || new TokenProvider();
   }
 
   /**

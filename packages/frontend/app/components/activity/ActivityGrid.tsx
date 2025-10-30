@@ -378,16 +378,20 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                             )}
                         </Button>
                     ) : (
-                        <div className={cn(
-                            "text-xs px-3 py-2 rounded-md inline-block",
-                            bet.status === 'claimed'
-                                ? "bg-green-500/10 text-green-400"
-                                : bet.marketStatus !== 'resolved'
-                                ? "bg-yellow-500/10 text-yellow-400"
-                                : "bg-red-500/10 text-red-400"
-                        )}>
+                        <Button
+                            disabled
+                            variant="secondary"
+                            className={cn(
+                                "rounded-button",
+                                bet.status === 'claimed'
+                                    ? "bg-green-500/10 text-green-400"
+                                    : bet.marketStatus !== 'resolved'
+                                    ? "bg-yellow-500/10 text-yellow-400"
+                                    : "bg-red-500/10 text-red-400"
+                            )}
+                        >
                             {getClaimStatusMessage(bet)}
-                        </div>
+                        </Button>
                     )}
                 </div>
             </div>

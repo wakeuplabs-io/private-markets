@@ -12,7 +12,7 @@ import { FALLBACK_VALUES } from "./types";
 type AnyAccount = any;
 
 /**
- * Private Token Provider
+ * Token Provider
  *
  * Handles token contract interactions using the connected user's wallet.
  * This provider is used when a wallet is connected and provides:
@@ -20,10 +20,10 @@ type AnyAccount = any;
  * - Transaction submissions through user's wallet
  * - Contract method calls authenticated by the user
  *
- * Context: PRIVATE (User's Connected Wallet)
+ * Context: User's Connected Wallet
  * Use case: Production environment with real user wallets
  */
-export class PrivateTokenProvider implements ITokenProvider {
+export class TokenProvider implements ITokenProvider {
   private contract: Contract | null = null;
   private contractAddress: string | null = null;
 

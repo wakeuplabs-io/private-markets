@@ -110,7 +110,8 @@ pub contract BetVault {
             authwit_nonce
         ).call(&mut context);
 
-        let bet_note = BetNote::new(from, market_id, outcome, amount, bet_id, commitment);
+        let mut bet_note = BetNote::new(from, market_id, outcome, amount, bet_id, commitment);
+        bet_note.placed_at = context.timestamp();
 
         storage.user_bets.at(from)
           .insert(bet_note)
@@ -251,6 +252,7 @@ pub contract BetVault {
         amount: u128,
     ) -> [[u8; 31]; 8] {
         let mut payload = [0u8; 98];
+        // Message type: BET
         payload[0] = 0x01;
 
         let market_id_bytes = market_id.to_be_bytes::<32>();
@@ -294,7 +296,8 @@ pub contract BetVault {
         recipient: AztecAddress,
     ) -> [[u8; 31]; 8] {
         let mut payload = [0u8; 129];
-        payload[0] = 0x02; // Message type: CLAIM
+        // Message type: CLAIM
+        payload[0] = 0x02; 
 
         let market_id_bytes = market_id.to_be_bytes::<32>();
         for i in 0..32 {
@@ -374,7 +377,6 @@ pub contract BetVault {
         (found, bet_amount)
     }
 
-    // Returns up to 10 user bets. Limit parameter must be <= 10.
     #[utility]
     unconstrained fn get_user_bets(
         owner: AztecAddress,

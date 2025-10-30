@@ -4,7 +4,7 @@ import type { PXE } from '@aztec/aztec.js';
  * PXE Service Singleton
  *
  * Provides global access to the PXE instance created by AztecWalletProvider.
- * This allows other services (like PrivateTokenProvider, PrivateVaultProvider)
+ * This allows other services (like TokenProvider, VaultProvider)
  * to access the PXE without tight coupling.
  *
  * Usage:

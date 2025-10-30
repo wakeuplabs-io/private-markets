@@ -1,9 +1,10 @@
 import { Bet } from "@/types";
 import { walletService } from "../walletService";
-import { PrivateVaultProvider } from "./PrivateVaultProvider";
+import { VaultProvider } from "./VaultProvider";
 import type { IVaultService, IVaultProvider, SimpleBetParams, BetParams, SimpleClaimParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
-import { generateCommitment, generateSecret, generateBetId, generateAuthwitNonce, getStoredBet, storeBet, type StoredBet } from "@/utils/idGenerator";
+import { generateCommitment, generateSecret, generateBetId, generateAuthwitNonce } from "@/utils/idGenerator";
+import { betStorageService, type StoredBet } from "../betStorageService";
 
 /**
  * Vault Service (Facade Pattern)
@@ -11,12 +12,12 @@ import { generateCommitment, generateSecret, generateBetId, generateAuthwitNonce
  * Orchestrates vault contract interactions by delegating to the appropriate provider
  * based on wallet connection status:
  *
- * - When wallet is connected → Uses PrivateVaultProvider (user's wallet)
+ * - When wallet is connected → Uses VaultProvider (user's wallet)
  * - When wallet is disconnected → Returns FALLBACK_VALUES without errors
  *
  * This service acts as a facade that:
  * 1. Checks wallet connection status
- * 2. Delegates operations to PrivateVaultProvider if connected
+ * 2. Delegates operations to VaultProvider if connected
  * 3. Returns fallback values if disconnected (graceful degradation)
  * 4. Handles parameter transformation (simplified API → full params)
  *
@@ -47,7 +48,7 @@ export class VaultService implements IVaultService {
     }
 
     // Allow dependency injection for testing
-    this.privateProvider = privateProvider || new PrivateVaultProvider(this.contractAddress);
+    this.privateProvider = privateProvider || new VaultProvider(this.contractAddress);
   }
 
   /**
@@ -151,7 +152,7 @@ export class VaultService implements IVaultService {
         timestamp: Date.now(),
       };
 
-      storeBet(cleanedAddress, betData);
+      betStorageService.storeBet(cleanedAddress, betData);
       console.log('[VAULT] Bet stored in localStorage:', betData.betId);
 
       return result;
@@ -246,7 +247,7 @@ export class VaultService implements IVaultService {
       const userAddress = this.cleanAddress(account.getAddress().toString());
 
       // Retrieve bet from localStorage
-      const storedBet = getStoredBet(userAddress, params.betId);
+      const storedBet = betStorageService.getBet(userAddress, params.betId);
       if (!storedBet) {
         throw new Error(`No bet found with ID ${params.betId} for this user. Make sure the bet was placed and stored locally.`);
       }
