@@ -1,23 +1,29 @@
-import { AztecAddress, Fr, IntentAction } from "@aztec/aztec.js";
-import { TokenContract } from "../artifacts/Token.js";
-import { BetVaultContract } from "../artifacts/BetVault.js";
-import { aztecSetup } from "./lib/aztec-setup.js";
-import { WormholeContract } from "../artifacts/Wormhole.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { Fr } from "@aztec/foundation/fields";
+import type { IntentAction } from "@aztec/aztec.js/authorization";
+import { TokenContract } from "../../artifacts/Token.js";
+import { BetVaultContract } from "../../artifacts/BetVault.js";
+import { aztecSetup } from "../lib/aztec-setup.js";
+import { WormholeContract } from "../../artifacts/Wormhole.js";
 
 const WORMHOLE_ADDRESS = "0x0e61ae3f9f51ae20042f48674e2bf1c19cde5c916ae3a5ed114d84c873cc9a8f";
 
 async function main(): Promise<void> {
   console.log("🎲 Starting Place Bet Script...\n");
 
-  await aztecSetup.setupPXE();
+  // Initialize Aztec setup (Node → PXE → Wallet)
+  await aztecSetup.initialize();
   const network = aztecSetup.getNetwork();
   console.log(`Network: ${network.toUpperCase()}\n`);
 
-  const deployer = await aztecSetup.getOrCreateWallet("deployer");
-  const deployerAddress = deployer.getAddress();
+  // Get or create accounts
+  const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
+  const executorAddress = await aztecSetup.getOrCreateAccount("executor");
+
+  // Get wallet instance
+  const wallet = aztecSetup.getWallet();
+
   console.log("✅ Deployer address:", deployerAddress.toString());
-  const executor = await aztecSetup.getOrCreateWallet("executor");
-  const executorAddress = executor.getAddress();
   console.log("✅ Executor address:", executorAddress.toString());
 
   const tokenAddress = aztecSetup.loadContractAddress("token");
@@ -34,7 +40,7 @@ async function main(): Promise<void> {
   }
   console.log("Vault address:", vaultAddress);
 
-  console.log("\n📝 Registering contracts with PXE...");
+  console.log("\n📝 Registering contracts with wallet...");
   const tokenAddr = AztecAddress.fromString(tokenAddress);
   const vaultAddr = AztecAddress.fromString(vaultAddress);
 
@@ -42,8 +48,8 @@ async function main(): Promise<void> {
   await aztecSetup.registerContract(vaultAddr, BetVaultContract.artifact);
   await aztecSetup.registerContract(AztecAddress.fromString(WORMHOLE_ADDRESS), WormholeContract.artifact);
 
-  const token = await TokenContract.at(tokenAddr, executor);
-  const vault = await BetVaultContract.at(vaultAddr, executor);
+  const token = await TokenContract.at(tokenAddr, wallet);
+  const vault = await BetVaultContract.at(vaultAddr, wallet);
 
   const marketId = Fr.random();
   const outcome = 1n; // 1 = YES, 0 = NO
@@ -96,7 +102,7 @@ async function main(): Promise<void> {
     action: transferAction,
   };
 
-  const witness = await executor.createAuthWit(intent);
+  const witness = await wallet.createAuthWit(intent);
   console.log("✅ Authorization witness created");
 
   console.log("\n🎲 Placing bet...");

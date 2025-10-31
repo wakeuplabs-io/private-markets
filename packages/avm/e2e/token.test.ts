@@ -11,7 +11,9 @@ import {
 import { AMOUNT, deployTokenWithMinter, expectTokenBalances, expectUintNote, setupPXE, wad } from './utils.js';
 import { PXE } from '@aztec/stdlib/interfaces/client';
 import { AztecLmdbStore } from '@aztec/kv-store/lmdb';
-import { getInitialTestAccountsManagers } from '@aztec/accounts/testing';
+import { getInitialTestAccountsData } from '@aztec/accounts/testing';
+import { AccountManager } from '@aztec/aztec.js';
+import { SchnorrAccountContract } from '@aztec/accounts/schnorr';
 import { TokenContractArtifact, TokenContract } from '../artifacts/Token.js';
 
 export async function deployTokenWithInitialSupply(deployer: Wallet, options: any) {
@@ -28,8 +30,25 @@ export async function deployTokenWithInitialSupply(deployer: Wallet, options: an
 
 const setupTestSuite = async () => {
   const { pxe, store } = await setupPXE();
-  const managers = await getInitialTestAccountsManagers(pxe);
-  const wallets = await Promise.all(managers.map((acc) => acc.register()));
+
+  // Get initial test accounts data (fixed sandbox accounts)
+  const accountsData = await getInitialTestAccountsData();
+
+  // Create AccountManagers for each test account
+  const managers = await Promise.all(
+    accountsData.map(async (data) => {
+      const accountContract = new SchnorrAccountContract(data.signingKey);
+      return await AccountManager.create(
+        pxe,
+        data.secret,
+        accountContract,
+        data.salt
+      );
+    })
+  );
+
+  // Get account wallets (accounts are already deployed in sandbox)
+  const wallets = await Promise.all(managers.map((acc) => acc.getAccount()));
   const [deployer] = wallets;
 
   return { pxe, store, deployer, wallets };

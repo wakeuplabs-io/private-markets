@@ -1,27 +1,32 @@
-import { AztecAddress } from "@aztec/aztec.js";
-import { TokenContract } from "../artifacts/Token.js";
-import { aztecSetup } from "./lib/aztec-setup.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { TokenContract } from "../../artifacts/Token.js";
+import { aztecSetup } from "../lib/aztec-setup.js";
 
 async function main(): Promise<void> {
   console.log("🚀 Starting Token deployment...\n");
-  
-  await aztecSetup.setupPXE();
-  
-  const deployer = await aztecSetup.getOrCreateWallet("deployer");
-  console.log("Deployer address:", deployer.getAddress().toString());
+
+  // Initialize Aztec setup (Node → PXE → Wallet)
+  await aztecSetup.initialize();
+
+  // Get or create deployer account
+  const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
+  console.log("Deployer address:", deployerAddress.toString());
+
+  // Get wallet instance
+  const wallet = aztecSetup.getWallet();
 
   const minterAddressArg = process.env.MINTER_ADDRESS || process.argv[2];
   const minterAddress = minterAddressArg
     ? AztecAddress.fromString(minterAddressArg)
-    : deployer.getAddress();
+    : deployerAddress;
 
   console.log("Minter address:", minterAddress.toString());
 
   console.log("\n>> Deploying Token contract...");
-  const deployTxOptions = await aztecSetup.getTxOptions(deployer.getAddress());
+  const deployTxOptions = await aztecSetup.getTxOptions(deployerAddress);
 
   const deployTx = await TokenContract.deployWithOpts(
-    { wallet: deployer, method: 'constructor_with_minter' },
+    { wallet: wallet, method: 'constructor_with_minter' },
     "Aztec USD",
     "AUSD",
     18,

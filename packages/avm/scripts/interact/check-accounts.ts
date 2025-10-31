@@ -1,10 +1,11 @@
-import { AztecAddress } from "@aztec/aztec.js";
-import { aztecSetup } from "./lib/aztec-setup.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { aztecSetup } from "../lib/aztec-setup.js";
 
 async function main(): Promise<void> {
   console.log("🔍 Checking Account Deployment Status...\n");
 
-  await aztecSetup.setupPXE();
+  // Initialize Aztec setup (Node → PXE → Wallet)
+  await aztecSetup.initialize();
   const network = aztecSetup.getNetwork();
   console.log(`Network: ${network.toUpperCase()}\n`);
 
@@ -40,18 +41,14 @@ async function main(): Promise<void> {
 
     // Check if contract instance exists on node
     try {
-      const nodeClient = aztecSetup.getNodeClient();
-      if (nodeClient) {
-        const instance = await nodeClient.getContract(address);
-        if (instance) {
-          console.log(`   On-chain status: ✅ CONTRACT DEPLOYED`);
-          console.log(`   Deployer: ${instance.deployer?.toString() || "N/A"}`);
-          console.log(`   Contract class: ${instance.contractClassId?.toString() || "N/A"}`);
-        } else {
-          console.log(`   On-chain status: ❌ CONTRACT NOT DEPLOYED`);
-        }
+      const node = aztecSetup.getNode();
+      const instance = await node.getContract(address);
+      if (instance) {
+        console.log(`   On-chain status: ✅ CONTRACT DEPLOYED`);
+        console.log(`   Deployer: ${instance.deployer?.toString() || "N/A"}`);
+        console.log(`   Contract class: ${instance.contractClassId?.toString() || "N/A"}`);
       } else {
-        console.log(`   On-chain status: ⚠️  Cannot check (sandbox mode)`);
+        console.log(`   On-chain status: ❌ CONTRACT NOT DEPLOYED`);
       }
     } catch (error) {
       console.log(`   On-chain status: ❌ CONTRACT NOT DEPLOYED`);
@@ -62,15 +59,14 @@ async function main(): Promise<void> {
 
   console.log("=========================\n");
 
-  // Try to create wallets and check if they can be used
-  console.log("=== TESTING WALLET CREATION ===\n");
+  // Try to create accounts and check if they can be used
+  console.log("=== TESTING ACCOUNT LOADING ===\n");
 
   for (const accountName of Object.keys(accountsFile)) {
-    console.log(`🔑 Testing wallet: ${accountName}`);
+    console.log(`🔑 Testing account: ${accountName}`);
     try {
-      const wallet = await aztecSetup.getOrCreateWallet(accountName);
-      const address = wallet.getAddress();
-      console.log(`   ✅ Wallet loaded successfully`);
+      const address = await aztecSetup.getOrCreateAccount(accountName);
+      console.log(`   ✅ Account loaded successfully`);
       console.log(`   Address: ${address.toString()}`);
 
       // Check if account can interact with contracts
@@ -80,13 +76,13 @@ async function main(): Promise<void> {
         console.log(`   Node info: Error getting node information`);
       }
     } catch (error) {
-      console.log(`   ❌ Failed to load wallet`);
+      console.log(`   ❌ Failed to load account`);
       console.log(`   Error: ${error instanceof Error ? error.message : String(error)}`);
     }
     console.log("");
   }
 
-  console.log("===============================");
+  console.log("==============================");
 }
 
 main().catch((err) => {

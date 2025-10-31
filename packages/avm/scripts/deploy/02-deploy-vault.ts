@@ -1,19 +1,24 @@
-import { AztecAddress } from "@aztec/aztec.js";
-import { TokenContract } from "../artifacts/Token.js";
-import { BetVaultContract } from "../artifacts/BetVault.js";
-import { aztecSetup } from "./lib/aztec-setup.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { TokenContract } from "../../artifacts/Token.js";
+import { BetVaultContract } from "../../artifacts/BetVault.js";
+import { aztecSetup } from "../lib/aztec-setup.js";
 
 async function main(): Promise<void> {
   // Get Wormhole address from environment variable
   // const WORMHOLE_ADDRESS = process.env.WORMHOLE_ADDRESS;
   const WORMHOLE_ADDRESS = "0x0e61ae3f9f51ae20042f48674e2bf1c19cde5c916ae3a5ed114d84c873cc9a8f";
 
-  await aztecSetup.setupPXE();
+  // Initialize Aztec setup (Node → PXE → Wallet)
+  await aztecSetup.initialize();
   const network = aztecSetup.getNetwork();
   console.log(`Deploying to ${network.toUpperCase()} environment`);
 
-  const deployer = await aztecSetup.getOrCreateWallet("deployer");
-  console.log("Deployer address:", deployer.getAddress().toString());
+  // Get or create deployer account
+  const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
+  console.log("Deployer address:", deployerAddress.toString());
+
+  // Get wallet instance
+  const wallet = aztecSetup.getWallet();
 
   const providedTokenAddress = process.argv[2];
   let tokenAddress: string;
@@ -33,13 +38,13 @@ async function main(): Promise<void> {
   }
 
   console.log("\n>> Deploying BetVault contract...");
-  const vaultDeployTxOptions = await aztecSetup.getTxOptions(deployer.getAddress());
+  const vaultDeployTxOptions = await aztecSetup.getTxOptions(deployerAddress);
 
   const deployTx = BetVaultContract.deploy(
-    deployer,
+    wallet,
     AztecAddress.fromString(tokenAddress),
     AztecAddress.fromString(WORMHOLE_ADDRESS),
-    deployer.getAddress(), // admin address
+    deployerAddress, // admin address
   ).send(vaultDeployTxOptions);
 
   console.log("   Deployment transaction sent, waiting for confirmation...");

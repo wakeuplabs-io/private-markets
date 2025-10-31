@@ -1,13 +1,11 @@
 import { config } from "dotenv";
 import { createAztecNodeClient, waitForNode, type AztecNode } from "@aztec/aztec.js/node";
-import { createPXE, getPXEConfig, type PXE } from "@aztec/pxe/server";
-import { BaseWallet } from "@aztec/aztec.js/wallet";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { getContractInstanceFromInstantiationParams, type ContractInstanceWithAddress } from "@aztec/stdlib/contract";
-import type { Account } from "@aztec/aztec.js/account";
+import type { Wallet } from "@aztec/aztec.js/wallet";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { GrumpkinScalar, Fr } from "@aztec/foundation/fields";
-import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
+import { SchnorrAccountContract, getSchnorrAccountContractAddress } from "@aztec/accounts/schnorr";
 import { deriveSigningKey } from "@aztec/stdlib/keys";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { SPONSORED_FPC_SALT } from "@aztec/constants";
@@ -22,64 +20,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * ScriptWallet - Production wallet implementation for deployment scripts
+ * AztecSetup - Connection and account management for Aztec 3.0.0
  *
- * Extends BaseWallet to provide proper Aztec 3.0.0-devnet.2 architecture:
- * - Node → PXE → Wallet → Account chain
- * - Account management with internal storage
- * - Transaction signing and contract registration
- */
-class ScriptWallet extends BaseWallet {
-  private accounts: Map<string, Account> = new Map();
-
-  constructor(pxe: PXE, node: AztecNode) {
-    super(pxe, node);
-  }
-
-  /**
-   * Required by BaseWallet - retrieves account by address
-   */
-  protected async getAccountFromAddress(address: AztecAddress): Promise<Account> {
-    const account = this.accounts.get(address.toString());
-    if (!account) {
-      throw new Error(`Account not found: ${address.toString()}`);
-    }
-    return account;
-  }
-
-  /**
-   * Add an account to the wallet's internal storage
-   */
-  addAccount(address: AztecAddress, account: Account): void {
-    this.accounts.set(address.toString(), account);
-  }
-
-  /**
-   * Get all account addresses managed by this wallet
-   */
-  getAccountAddresses(): AztecAddress[] {
-    return Array.from(this.accounts.keys()).map(addr => AztecAddress.fromString(addr));
-  }
-
-  /**
-   * Required by BaseWallet - returns all accounts with aliases
-   */
-  async getAccounts(): Promise<Array<{ alias: string; item: AztecAddress }>> {
-    return this.getAccountAddresses().map((address, index) => ({
-      alias: `account-${index}`,
-      item: address
-    }));
-  }
-}
-
-/**
- * AztecSetup - Connection and account management for Aztec 3.0.0-devnet.2
- *
- * Proper architecture implementation:
- * 1. Node (blockchain connection)
- * 2. PXE (private execution environment - embedded library)
- * 3. Wallet (account management - extends BaseWallet)
- * 4. Accounts (signing objects created by AccountManager)
+ * In Aztec 3.0.0, the architecture is simplified:
+ * - Connect to an Aztec Node (which provides wallet functionality)
+ * - For sandbox: http://localhost:8080
+ * - For testnet: https://aztec-testnet-fullnode.zkv.xyz/
  *
  * Environment variables:
  * - AZTEC_NETWORK: Explicitly set network ("sandbox" | "testnet")
@@ -117,8 +63,6 @@ export interface ContractAddresses {
 
 export class AztecSetup {
   private node: AztecNode | null = null;
-  private pxe: PXE | null = null;
-  private wallet: ScriptWallet | null = null;
   private network: NetworkType;
   private nodeUrl: string;
   private deploymentsDir: string;
@@ -126,6 +70,7 @@ export class AztecSetup {
   private accountsFile: string;
   private contractsFile: string;
   private pxeStoreDir: string;
+  private wallet: Wallet;
 
   constructor(network?: NetworkType) {
     // Use deployment manager for network detection and paths
@@ -153,82 +98,24 @@ export class AztecSetup {
     deploymentManager.logDeploymentInfo();
   }
 
-  /**
-   * Initialize the Aztec setup
-   * Creates the proper chain: Node → PXE → Wallet
-   *
-   * This must be called before using any account-related methods
-   */
-  async initialize(): Promise<void> {
-    if (this.wallet) {
-      console.log("Already initialized");
-      return;
-    }
-
-    console.log(`Initializing Aztec setup for ${this.network} network`);
-    console.log(`  NODE_URL: ${this.nodeUrl}`);
-    console.log(`  PXE Store: ${this.pxeStoreDir}`);
-
-    // 1. Create and connect to Aztec Node
-    this.node = createAztecNodeClient(this.nodeUrl);
-    await waitForNode(this.node);
-    console.log(`✅ Connected to Aztec node`);
-
-    // 2. Create PXE with persistent storage
-    const pxeConfig = Object.assign(getPXEConfig(), {
-      dataDirectory: this.pxeStoreDir,
-      proverEnabled: false,
-      l2BlockPollingIntervalMS: this.network === 'sandbox' ? 1000 : 5000,
-      l2StartingBlock: 1,
-    });
-
-    this.pxe = await createPXE(this.node, pxeConfig);
-    console.log(`✅ PXE initialized with persistent storage`);
-
-    // 3. Create Wallet
-    this.wallet = new ScriptWallet(this.pxe, this.node);
-    console.log(`✅ ScriptWallet created`);
-
-    console.log(`Initialization complete`);
-  }
-
-  /**
-   * Get the wallet instance
-   * @throws Error if initialize() hasn't been called
-   */
-  getWallet(): ScriptWallet {
-    if (!this.wallet) {
-      throw new Error("Wallet not initialized. Call initialize() first");
-    }
-    return this.wallet;
-  }
-
-  /**
-   * Get the PXE instance
-   * @throws Error if initialize() hasn't been called
-   */
-  getPXE(): PXE {
-    if (!this.pxe) {
-      throw new Error("PXE not initialized. Call initialize() first");
-    }
-    return this.pxe;
-  }
-
-  /**
-   * Get the Node client instance
-   * @throws Error if initialize() hasn't been called
-   */
-  getNode(): AztecNode {
-    if (!this.node) {
-      throw new Error("Node not initialized. Call initialize() first");
-    }
-    return this.node;
-  }
-
   private ensureDeploymentsDir(): void {
     if (!fs.existsSync(this.deploymentsDir)) {
       fs.mkdirSync(this.deploymentsDir, { recursive: true });
     }
+  }
+
+  async setupPXE(): Promise<AztecNode> {
+    if (this.node) return this.node;
+
+    console.log(`Connecting to ${this.network} network`);
+    console.log(`  NODE_URL: ${this.nodeUrl}`);
+
+    this.node = createAztecNodeClient(this.nodeUrl);
+    await waitForNode(this.node);
+
+    console.log(`Connected to Aztec node`);
+
+    return this.node;
   }
 
   private async getSponsoredFPCInstance(): Promise<ContractInstanceWithAddress> {
@@ -288,23 +175,23 @@ export class AztecSetup {
   }
 
   /**
-   * Creates a Schnorr AccountManager from keys
+   * Creates a Schnorr AccountManager from keys (does not deploy)
+   * Used for loading existing accounts or preparing for deployment
    *
    * @param privateKey - Account secret key (Fr)
    * @param signingKey - Schnorr signing key (GrumpkinScalar)
-   * @param salt - Account instantiation salt (Fr)
+   * @param salt - Account instantiation salt (bigint)
    * @returns AccountManager instance
    */
   private async createSchnorrAccountManager(
     privateKey: Fr,
     signingKey: GrumpkinScalar,
-    salt: Fr
+    salt: bigint
   ): Promise<AccountManager> {
-    if (!this.wallet) throw new Error("Wallet not initialized. Call initialize() first");
+    if (!this.node) throw new Error("Node not initialized");
 
     const accountContract = new SchnorrAccountContract(signingKey);
 
-    // CRITICAL: Pass wallet (not node) to AccountManager.create()
     const accountManager = await AccountManager.create(
       this.wallet,
       privateKey,
@@ -316,8 +203,23 @@ export class AztecSetup {
   }
 
   /**
-   * Deploy an AccountManager to the network
+   * Gets a Wallet from an AccountManager
+   *
+   * @param accountManager - AccountManager instance
+   * @returns Wallet ready to use
+   */
+  private async getWalletFromAccountManager(
+    accountManager: AccountManager
+  ): Promise<AccountWithSecretKey> {
+    const wallet = await accountManager.getAccount();
+    return wallet;
+  }
+
+  /**
+   * Deploys an AccountManager to the network
    * Uses sponsored fee payment method if available
+   *
+   * @param accountManager - AccountManager to deploy
    */
   private async deployAccountManager(
     accountManager: AccountManager
@@ -339,118 +241,80 @@ export class AztecSetup {
     }
   }
 
-  /**
-   * Load or create an account
-   * Returns the account's AztecAddress
-   *
-   * The account is automatically added to the wallet's internal storage
-   *
-   * @param accountName - Name identifier for the account (e.g., "deployer", "user1")
-   * @returns AztecAddress of the account
-   */
-  async getOrCreateAccount(accountName: string = "deployer"): Promise<AztecAddress> {
-    if (!this.wallet) throw new Error("Wallet not initialized. Call initialize() first");
+  private async createSchnorrWallet(keys: AccountKeys): Promise<Wallet> {
+    if (!this.node) throw new Error("Node not initialized");
 
+    const privateKeyFr = Fr.fromHexString(keys.privateKey);
+    const saltFr = Fr.fromHexString(keys.salt);
+    const signingKey = deriveSigningKey(privateKeyFr);
+
+    const accountManager = await this.createSchnorrAccountManager(
+      privateKeyFr,
+      signingKey,
+      saltFr.toBigInt()
+    );
+
+    const wallet = await this.getWalletFromAccountManager(accountManager);
+
+    const address = await this.getAddressFromWallet(wallet);
+    console.log(`Wallet loaded: ${address}`);
+    return wallet;
+  }
+
+  private async deploySchnorrAccount(keys: AccountKeys): Promise<Wallet> {
+    if (!this.node) throw new Error("Node not initialized");
+
+    console.log("Deploying new Schnorr account...");
+
+    const privateKeyFr = Fr.fromHexString(keys.privateKey);
+    const saltFr = Fr.fromHexString(keys.salt);
+    const signingKey = deriveSigningKey(privateKeyFr);
+
+    const accountManager = await this.createSchnorrAccountManager(
+      privateKeyFr,
+      signingKey,
+      saltFr.toBigInt()
+    );
+
+    await this.deployAccountManager(accountManager);
+
+    const wallet = await this.getWalletFromAccountManager(accountManager);
+
+    const address = await this.getAddressFromWallet(wallet);
+    console.log(`Account ready: ${address}`);
+    return wallet;
+  }
+
+  async getOrCreateWallet(accountName: string = "deployer"): Promise<Wallet> {
+    if (!this.node) throw new Error("Node not initialized. Call setupPXE() first");
     console.log(`Loading/creating account: ${accountName}`);
 
-    // 1. Load or generate keys
     let keys = this.loadKeys(accountName);
+    let accountInfo = this.loadAccountInfo(accountName);
     if (!keys) {
       console.log(`Generating new keys for ${accountName}...`);
       keys = this.generateRandomKeys();
       this.saveKeys(accountName, keys);
     }
 
-    const privateKeyFr = Fr.fromHexString(keys.privateKey);
-    const saltFr = Fr.fromHexString(keys.salt);
-    const signingKey = deriveSigningKey(privateKeyFr);
-
-    // 2. Create AccountManager
-    const accountManager = await this.createSchnorrAccountManager(
-      privateKeyFr,
-      signingKey,
-      saltFr
-    );
-
-    const address = accountManager.address;
-
-    // 3. Check if already deployed
-    const accountInfo = this.loadAccountInfo(accountName);
-
-    if (!accountInfo?.deployed) {
+    let wallet: Wallet;
+    let address: string;
+    if (accountInfo?.deployed) {
+      console.log(`Loading existing deployed account: ${accountName}`);
+      wallet = await this.createSchnorrWallet(keys);
+      address = await this.getAddressFromWallet(wallet);
+    } else {
       console.log(`Deploying new account: ${accountName}`);
-      await this.deployAccountManager(accountManager);
+      wallet = await this.deploySchnorrAccount(keys);
+      address = await this.getAddressFromWallet(wallet);
       this.saveAccountInfo(accountName, {
-        address: address.toString(),
+        address,
         deployed: true,
       });
-    } else {
-      console.log(`Loading existing deployed account: ${accountName}`);
-
-      // Register the account contract with PXE if it's already deployed
-      // CRITICAL: Must pass secretKey to initialize private state
-      const instance = accountManager.getInstance();
-      const accountContract = new SchnorrAccountContract(signingKey);
-      const artifact = await accountContract.getContractArtifact();
-
-      try {
-        await this.wallet.registerContract(instance, artifact, privateKeyFr);
-        console.log(`   Registered account contract with PXE (with secret key)`);
-      } catch (error) {
-        // May already be registered, ignore error
-      }
     }
 
-    // 4. Get Account object and add to wallet
-    const account = await accountManager.getAccount();
-    this.wallet.addAccount(address, account);
-
-    console.log(`✅ Account ready: ${address.toString()}`);
-    return address;
-  }
-
-  /**
-   * Load a wallet from exact provided credentials
-   * Useful for importing accounts from external sources
-   *
-   * @param credentials Object with address, signingKey, secretKey (privateKey), and salt
-   * @returns AztecAddress of the loaded account
-   */
-  async loadAccountFromCredentials(credentials: {
-    address: string;
-    signingKey: string;
-    secretKey: string;
-    salt: string;
-  }): Promise<AztecAddress> {
-    if (!this.wallet) throw new Error("Wallet not initialized. Call initialize() first");
-
-    console.log(`Loading account from provided credentials...`);
-    console.log(`  Address: ${credentials.address}`);
-
-    const privateKeyFr = Fr.fromHexString(credentials.secretKey);
-    const signingKeyScalar = GrumpkinScalar.fromString(credentials.signingKey);
-    const saltFr = Fr.fromHexString(credentials.salt);
-
-    const accountManager = await this.createSchnorrAccountManager(
-      privateKeyFr,
-      signingKeyScalar,
-      saltFr
-    );
-
-    // Verify the address matches
-    const accountAddress = accountManager.address;
-    if (accountAddress.toString() !== credentials.address) {
-      throw new Error(
-        `Address mismatch! Expected ${credentials.address} but got ${accountAddress.toString()}`
-      );
-    }
-
-    // Get Account object and add to wallet
-    const account = await accountManager.getAccount();
-    this.wallet.addAccount(accountAddress, account);
-
-    console.log(`✅ Account loaded successfully: ${accountAddress.toString()}`);
-    return accountAddress;
+    console.log(`Account ready: ${address}`);
+    return wallet;
   }
 
   saveContractAddress(contractName: string, address: string): void {
@@ -473,12 +337,13 @@ export class AztecSetup {
   }
 
   async getSponsoredPaymentMethod(): Promise<SponsoredFeePaymentMethod | null> {
+
     const sponsoredFPC = await this.getSponsoredFPCInstance();
     return new SponsoredFeePaymentMethod(sponsoredFPC.address);
   }
 
   /**
-   * Get transaction options with mandatory "from" parameter for Aztec 3.0.0+
+  * Get transaction options with mandatory "from" parameter for Aztec 2.0.2+
    * Includes sponsored fee payment for testnet if available
    */
   async getTxOptions(fromAddress: AztecAddress): Promise<any> {
@@ -493,9 +358,11 @@ export class AztecSetup {
     return this.network;
   }
 
-  /**
-   * @deprecated Use getNode() instead
-   */
+  getPXE(): AztecNode {
+    if (!this.node) throw new Error("Node not initialized");
+    return this.node;
+  }
+
   getNodeClient(): AztecNode | null {
     return this.node;
   }
@@ -505,31 +372,25 @@ export class AztecSetup {
     return JSON.parse(fs.readFileSync(this.accountsFile, "utf8"));
   }
 
-  /**
-   * Register a contract sender address with the wallet
-   * Required before interacting with contracts
-   */
-  async registerSender(address: AztecAddress): Promise<void> {
-    const wallet = this.getWallet();
+  async registerSender(wallet: Wallet, address: AztecAddress): Promise<void> {
     try {
       await wallet.registerSender(address);
       console.log("Registered sender: " + address.toString());
     } catch (error) {
-      console.warn("Failed to register sender (may already be registered):", error);
+      console.warn(" Failed to register sender (may already be registered):", error);
     }
   }
 
   /**
-   * Register a deployed contract instance with the Wallet
-   * Required before calling contract methods
+   * Register a deployed contract instance with a Wallet
+   * In 3.0.0, we fetch the contract instance from the node first
    */
-  async registerContract(address: AztecAddress, artifact: any): Promise<void> {
-    const node = this.getNode();
-    const wallet = this.getWallet();
+  async registerContract(wallet: Wallet, address: AztecAddress, artifact: any): Promise<void> {
+    if (!this.node) throw new Error("Node not initialized");
 
     try {
       console.log(`Fetching contract instance from node for ${address.toString()}...`);
-      const contractInstance = await node.getContract(address);
+      const contractInstance = await this.node.getContract(address);
 
       if (!contractInstance) {
         console.warn(`⚠️  Contract instance not found on node for ${address.toString()}`);
@@ -546,6 +407,53 @@ export class AztecSetup {
     } catch (error: any) {
       console.warn(`⚠️  Failed to register contract (may already be registered):`, error.message);
     }
+  }
+
+  /**
+   * Create or load a wallet from exact provided credentials
+   * @param credentials Object with address, signingKey, secretKey (privateKey), and salt
+   * @returns Wallet instance
+   */
+  async loadWalletFromCredentials(credentials: {
+    address: string;
+    signingKey: string;
+    secretKey: string;
+    salt: string;
+  }): Promise<Wallet> {
+    if (!this.node) throw new Error("Node not initialized");
+
+    console.log(`Loading wallet from provided credentials...`);
+    console.log(`  Address: ${credentials.address}`);
+
+    const privateKeyFr = Fr.fromHexString(credentials.secretKey);
+    const signingKeyScalar = GrumpkinScalar.fromString(credentials.signingKey);
+    const saltFr = Fr.fromHexString(credentials.salt);
+
+    const accountManager = await this.createSchnorrAccountManager(
+      privateKeyFr,
+      signingKeyScalar,
+      saltFr.toBigInt()
+    );
+
+    // Verify the address matches
+    const accountAddress = accountManager.address;
+    if (accountAddress.toString() !== credentials.address) {
+      throw new Error(
+        `Address mismatch! Expected ${credentials.address} but got ${accountAddress.toString()}`
+      );
+    }
+
+    const wallet = await this.getWalletFromAccountManager(accountManager);
+
+    const address = await this.getAddressFromWallet(wallet);
+    console.log(`✅ Wallet loaded successfully: ${address}`);
+    return wallet;
+  }
+
+  async getAddressFromWallet(wallet: Wallet): Promise<string> {
+    const accounts = await wallet.getAccounts();
+    const addr = accounts[0]?.item;
+    return addr?.toString() || "";
   }
 }
 

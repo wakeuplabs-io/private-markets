@@ -1,19 +1,23 @@
-import { AztecAddress } from "@aztec/aztec.js";
-import { TokenContract } from "../artifacts/Token.js";
-import { aztecSetup } from "./lib/aztec-setup.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { TokenContract } from "../../artifacts/Token.js";
+import { aztecSetup } from "../lib/aztec-setup.js";
 
 async function main(): Promise<void> {
   console.log("🪙 Starting Token Mint Script...\n");
 
-  await aztecSetup.setupPXE();
+  // Initialize Aztec setup (Node → PXE → Wallet)
+  await aztecSetup.initialize();
   const network = aztecSetup.getNetwork();
   console.log(`Network: ${network.toUpperCase()}\n`);
 
-  const deployer = await aztecSetup.getOrCreateWallet("deployer");
-  const executor = await aztecSetup.getOrCreateWallet("executor");
-  const deployerAddress = deployer.getAddress();
-  const executorAddress = executor.getAddress();
+  // Get or create accounts
+  const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
+  const executorAddress = await aztecSetup.getOrCreateAccount("executor");
 
+  // Get wallet instance
+  const wallet = aztecSetup.getWallet();
+
+  console.log("✅ Deployer address:", deployerAddress.toString());
   console.log("✅ Executor address:", executorAddress.toString());
 
   const tokenAddress = aztecSetup.loadContractAddress("token");
@@ -24,11 +28,11 @@ async function main(): Promise<void> {
 
   console.log("✅ Token address:", tokenAddress);
 
-  console.log("\n📝 Registering Token contract with PXE...");
+  console.log("\n📝 Registering Token contract with wallet...");
   const tokenAddr = AztecAddress.fromString(tokenAddress);
   await aztecSetup.registerContract(tokenAddr, TokenContract.artifact);
 
-  const token = await TokenContract.at(tokenAddr, deployer);
+  const token = await TokenContract.at(tokenAddr, wallet);
 
   console.log("\n📊 Checking initial balance...");
 

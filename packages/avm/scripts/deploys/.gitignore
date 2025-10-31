@@ -1,5 +1,0 @@
-# Exclude sensitive key files from git
-keys.json
-
-# Include template files
-!keys.template.json

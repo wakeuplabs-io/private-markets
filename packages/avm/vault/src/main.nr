@@ -5,20 +5,29 @@ pub mod types;
 #[aztec]
 pub contract BetVault {
     use dep::aztec::{
-        macros::{storage::storage, events::event, functions::{private, public, internal, view, initializer, utility}},
-        state_vars::{map::Map, public_mutable::PublicMutable, public_immutable::PublicImmutable, private_set::PrivateSet},
-        protocol_types::address::AztecAddress,
-        note::note_viewer_options::NoteViewerOptions,
-        messages::logs::note,
-        event::event_interface::{emit_event_in_private, MessageDelivery},
-        protocol_types::{
-          hash::poseidon2_hash,
-          traits::ToField
+        macros::{
+            storage::storage,
+            events::event,
+            functions::{external, initializer, internal, view}
         },
+        state_vars::{
+            map::Map,
+            public_mutable::PublicMutable,
+            public_immutable::PublicImmutable,
+            private_set::PrivateSet
+        },
+        protocol_types::{
+            address::AztecAddress,
+            hash::poseidon2_hash,
+            traits::ToField
+        },
+        note::note_viewer_options::NoteViewerOptions,
+        messages::message_delivery::MessageDelivery,
     };
+    use dep::aztec::event::event_emission::emit_event_in_private;
     use dep::token::Token;
     use crate::types::bet_note::BetNote;
-    use dep::wormhole::Wormhole;
+    // use dep::wormhole::Wormhole;
 
 
     // Events
@@ -52,7 +61,7 @@ pub contract BetVault {
     }
 
     // Constructor
-    #[public]
+    #[external("public")]
     #[initializer]
     fn constructor(token_address: AztecAddress, wormhole_address: AztecAddress, admin: AztecAddress) {
         assert(!token_address.is_zero(), "invalid token address");
@@ -64,25 +73,25 @@ pub contract BetVault {
     }
 
     // View functions
-    #[public]
+    #[external("public")]
     #[view]
     fn is_processed(bet_id: Field) -> bool {
         storage.processed_bets.at(bet_id).read()
     }
 
-    #[public]
+    #[external("public")]
     #[view]
     fn is_nullifier_used(nullifier: Field) -> bool {
         storage.used_nullifiers.at(nullifier).read()
     }
 
-    #[public]
+    #[external("public")]
     #[view]
     fn get_token_address() -> AztecAddress {
         storage.token_address.read()
     }
 
-    #[public]
+    #[external("public")]
     #[view]
     fn get_admin() -> AztecAddress {
         storage.admin.read()
@@ -90,7 +99,7 @@ pub contract BetVault {
 
 
     // Private functions
-    #[private]
+    #[external("private")]
     fn bet(
         market_id: Field,
         outcome: u8,
@@ -111,28 +120,24 @@ pub contract BetVault {
         ).call(&mut context);
 
         let mut bet_note = BetNote::new(from, market_id, outcome, amount, bet_id, commitment);
-        bet_note.placed_at = context.timestamp();
+        bet_note.placed_at = 0; // TODO: Fix timestamp API in 3.0.0
 
         storage.user_bets.at(from)
           .insert(bet_note)
-          .emit(note::encode_and_encrypt_note(&mut context, from));
+          .emit(from, MessageDelivery.CONSTRAINED_ONCHAIN);
 
         BetVault::at(context.this_address())
             ._mark_bet_processed(bet_id)
             .enqueue(&mut context);
 
-        emit_event_in_private(
-            BetPlaced {
-                market_id,
-                outcome,
-                amount,
-                bet_id,
-                commitment,
-            },
-            &mut context,
-            from,
-            MessageDelivery.CONSTRAINED_ONCHAIN,
-        );
+        // TODO: Fix event emission API in 3.0.0
+        // BetPlaced {
+        //     market_id,
+        //     outcome,
+        //     amount,
+        //     bet_id,
+        //     commitment,
+        // }.emit(from, MessageDelivery.CONSTRAINED_ONCHAIN);
 
         let chunks: [[u8; 31]; 8] = create_bet_payload(market_id, bet_id, outcome, amount);
         // let _ = Wormhole::at(storage.wormhole_address.read())
@@ -146,7 +151,7 @@ pub contract BetVault {
         //     ).call(&mut context);
     }
 
-    #[private]
+    #[external("private")]
     fn authorizeClaim(
         market_id: Field,
         commitment: Field,
@@ -155,7 +160,7 @@ pub contract BetVault {
         amount: u128,
         authwit_nonce: Field,
     ) {
-        let from = context.msg_sender();
+        let from = context.msg_sender().unwrap();
 
         // Verify secret and amount match the commitment
         let calculated_commitment = poseidon2_hash([market_id, amount as Field, secret]);
@@ -173,18 +178,13 @@ pub contract BetVault {
             ._mark_claim_processed(commitment, nullifier)
             .enqueue(&mut context);
 
-        // Emit event
-        emit_event_in_private(
-           ClaimAuthorized {
-                market_id,
-                nullifier,
-                amount,
-                recipient: recipient_field,
-            },
-            &mut context,
-            from,
-            MessageDelivery.CONSTRAINED_ONCHAIN,
-        );
+        // TODO: Fix event emission API in 3.0.0
+        // ClaimAuthorized {
+        //     market_id,
+        //     nullifier,
+        //     amount,
+        //     recipient: recipient_field,
+        // }.emit(from, MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Create Wormhole payload
         let chunks = create_claim_payload(
@@ -206,7 +206,7 @@ pub contract BetVault {
     }
 
     // Public functions
-    #[public]
+    #[external("public")]
     #[internal]
     fn _mark_bet_processed(bet_id: Field) {
         let already = storage.processed_bets.at(bet_id).read();
@@ -214,7 +214,7 @@ pub contract BetVault {
         storage.processed_bets.at(bet_id).write(true);
     }
 
-    #[public]
+    #[external("public")]
     #[internal]
     fn _mark_nullifier_used(nullifier: Field) {
         let already_used = storage.used_nullifiers.at(nullifier).read();
@@ -222,7 +222,7 @@ pub contract BetVault {
         storage.used_nullifiers.at(nullifier).write(true);
     }
 
-    #[public]
+    #[external("public")]
     #[internal]
     fn _mark_claim_processed(commitment: Field, nullifier: Field) {
         // Check if commitment already claimed
@@ -238,7 +238,7 @@ pub contract BetVault {
         storage.used_nullifiers.at(nullifier).write(true);
     }
 
-    #[public]
+    #[external("public")]
     #[view]
     fn is_commitment_claimed(commitment: Field) -> bool {
         storage.claimed_commitments.at(commitment).read()
@@ -344,7 +344,7 @@ pub contract BetVault {
     /// Returns bet note details for claim authorization
     /// This function is unconstrained and meant to be called from TypeScript before authorizeClaim
     /// Returns (found: bool, amount: u128)
-    #[utility]
+    #[external("utility")]
     unconstrained fn find_bet_for_claim(
         owner: AztecAddress,
         commitment: Field,
@@ -377,7 +377,7 @@ pub contract BetVault {
         (found, bet_amount)
     }
 
-    #[utility]
+    #[external("utility")]
     unconstrained fn get_user_bets(
         owner: AztecAddress,
         offset: u32,
