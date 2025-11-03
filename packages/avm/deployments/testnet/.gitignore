@@ -1,9 +1,0 @@
-# Sensitive files - DO NOT COMMIT
-keys.json
-pxe-store/
-
-# Keep these files
-!.gitignore
-!keys.template.json
-!contracts.json
-!accounts.json

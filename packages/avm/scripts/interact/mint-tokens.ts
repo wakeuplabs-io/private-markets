@@ -45,11 +45,16 @@ async function main(): Promise<void> {
   const amountToMint = 1000n * 10n ** 18n;
   console.log(`🪙 Minting ${amountToMint.toString()} tokens to executor...`);
 
-  const txOptions = await aztecSetup.getTxOptions(deployerAddress);
+  // Get sponsored payment method for fee payment
+  const sponsoredPaymentMethod = await aztecSetup.getSponsoredPaymentMethod();
 
+  // Send with fee payment method to avoid "Insufficient fee payer balance"
   const mintTx = await token.methods
     .mint_to_private(executorAddress, amountToMint)
-    .send(txOptions);
+    .send({
+      from: deployerAddress,
+      ...(sponsoredPaymentMethod ? { fee: { paymentMethod: sponsoredPaymentMethod } } : {})
+    });
 
   console.log("   Mint transaction sent, waiting for confirmation...");
   console.log("   (This may take several minutes on testnet)");

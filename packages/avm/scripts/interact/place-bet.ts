@@ -106,8 +106,11 @@ async function main(): Promise<void> {
   console.log("✅ Authorization witness created");
 
   console.log("\n🎲 Placing bet...");
-  const txOptions = await aztecSetup.getTxOptions(executorAddress);
 
+  // Get sponsored payment method for fee payment
+  const sponsoredPaymentMethod = await aztecSetup.getSponsoredPaymentMethod();
+
+  // Send with fee payment method to avoid "Insufficient fee payer balance"
   const betTx = await vault.methods
     .bet(
       marketId,
@@ -118,7 +121,11 @@ async function main(): Promise<void> {
       authwitNonce,
       executorAddress,
     )
-    .send({ ...txOptions, authWitnesses: [witness] });
+    .send({
+      from: executorAddress,
+      authWitnesses: [witness],
+      ...(sponsoredPaymentMethod ? { fee: { paymentMethod: sponsoredPaymentMethod } } : {})
+    });
 
   console.log("   Bet transaction sent, waiting for confirmation...");
   console.log("   (This may take several minutes on testnet)");

@@ -69,7 +69,7 @@ export class AztecSetup {
       this.nodeUrl =
         this.network === "sandbox"
           ? "http://localhost:8080"
-          : "https://aztec-testnet-fullnode.zkv.xyz/";
+          : "https://devnet.aztec-labs.com";
     }
 
     // Log deployment configuration
@@ -103,7 +103,7 @@ export class AztecSetup {
     const pxeConfig = {
       ...getPXEConfig(),
       l1Contracts,
-      proverEnabled: false,
+      proverEnabled: this.network === 'sandbox' ? false : true,
       l2BlockPollingIntervalMS: this.network === 'sandbox' ? 1000 : 5000,
       l2StartingBlock: 1,
     };

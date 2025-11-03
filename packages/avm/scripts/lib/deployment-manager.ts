@@ -1,6 +1,27 @@
+import { config } from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
+// Get the package root directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const packageRoot = path.resolve(__dirname, "..", "..");
+
+// Load .env from package root first
+const packageEnvPath = path.join(packageRoot, ".env");
+const packageEnvResult = config({ path: packageEnvPath });
+
+// Also try to load from monorepo root (2 levels up) - don't override existing vars
+const monorepoRoot = path.resolve(packageRoot, "..", "..");
+const monorepoEnvPath = path.join(monorepoRoot, ".env");
+const monorepoEnvResult = config({ path: monorepoEnvPath, override: false });
+
+// Log which .env files were loaded (only in debug mode)
+if (process.env.DEBUG) {
+  console.log("🔧 Environment files:");
+  console.log(`   Package .env: ${packageEnvResult.error ? '❌ Not found' : '✅ Loaded'} (${packageEnvPath})`);
+  console.log(`   Monorepo .env: ${monorepoEnvResult.error ? '❌ Not found' : '✅ Loaded'} (${monorepoEnvPath})`);
+}
 /**
  * Supported Aztec networks
  */
@@ -18,12 +39,6 @@ export class DeploymentManager {
 
   constructor(network?: NetworkType) {
     this.network = network || this.detectNetworkFromEnv();
-
-    // Get package root (2 levels up from this file)
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const packageRoot = path.resolve(__dirname, "..", "..");
-
     this.deploymentsRoot = path.join(packageRoot, "deployments", this.network);
   }
 
@@ -82,25 +97,28 @@ export class DeploymentManager {
     // Priority 1: Explicit network env var
     const explicitNetwork = process.env.AZTEC_NETWORK;
     if (explicitNetwork === "sandbox" || explicitNetwork === "testnet") {
-      console.log(`🌐 Using explicit network: ${explicitNetwork}`);
+      console.log(`🌐 Network: ${explicitNetwork} (from AZTEC_NETWORK)`);
       return explicitNetwork;
     }
 
-    // Priority 2: Infer from NODE_URL
+    // Priority 2: Infer from NODE_URL or PXE_URL
     const nodeUrl = process.env.NODE_URL || process.env.PXE_URL;
     if (nodeUrl) {
       const isLocal =
         nodeUrl.includes("localhost") ||
         nodeUrl.includes("127.0.0.1") ||
-        nodeUrl.includes("0.0.0.0");
+        nodeUrl.includes("0.0.0.0") ||
+        nodeUrl.includes("8080"); // Sandbox default port
 
       const detectedNetwork: NetworkType = isLocal ? "sandbox" : "testnet";
-      console.log(`🌐 Detected network from URL: ${detectedNetwork} (${nodeUrl})`);
+      const urlSource = process.env.NODE_URL ? "NODE_URL" : "PXE_URL";
+      console.log(`🌐 Network: ${detectedNetwork} (detected from ${urlSource}: ${nodeUrl})`);
       return detectedNetwork;
     }
 
     // Default: testnet
-    console.log(`🌐 Using default network: testnet`);
+    console.log(`🌐 Network: testnet (default, no env vars set)`);
+    console.log(`   💡 Tip: Set NODE_URL or AZTEC_NETWORK to change network`);
     return "testnet";
   }
 

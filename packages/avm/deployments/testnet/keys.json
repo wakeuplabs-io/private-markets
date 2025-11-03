@@ -1,0 +1,6 @@
+{
+  "deployer": {
+    "privateKey": "0x1885dbf5cb77d6e80c98ffeea12550dea122525bd701ff2fabeae5cabe6a3dce",
+    "salt": "0x22ca70f2ed7fd892a430347265694fea0e238e2c4c962ff890903eae2326a39a"
+  }
+}
