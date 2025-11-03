@@ -1,17 +1,18 @@
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
-import { TokenContract } from "../../artifacts/Token.js";
-import { BetVaultContract } from "../../artifacts/BetVault.js";
+import { BetVaultContractArtifact } from "../../artifacts/BetVault.js";
 import { aztecSetup } from "../lib/aztec-setup.js";
+import { ContractDeployer } from "@aztec/aztec.js/deployment";
+import { Fr } from "@aztec/aztec.js/fields";
 
 async function main(): Promise<void> {
+  console.log("🚀 Starting BetVault deployment...\n");
+
   // Get Wormhole address from environment variable
   // const WORMHOLE_ADDRESS = process.env.WORMHOLE_ADDRESS;
   const WORMHOLE_ADDRESS = "0x0e61ae3f9f51ae20042f48674e2bf1c19cde5c916ae3a5ed114d84c873cc9a8f";
 
   // Initialize Aztec setup (Node → PXE → Wallet)
   await aztecSetup.initialize();
-  const network = aztecSetup.getNetwork();
-  console.log(`Deploying to ${network.toUpperCase()} environment`);
 
   // Get or create deployer account
   const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
@@ -19,6 +20,9 @@ async function main(): Promise<void> {
 
   // Get wallet instance
   const wallet = aztecSetup.getWallet();
+
+  // Get network for summary
+  const network = aztecSetup.getNetwork();
 
   const providedTokenAddress = process.argv[2];
   let tokenAddress: string;
@@ -38,35 +42,44 @@ async function main(): Promise<void> {
   }
 
   console.log("\n>> Deploying BetVault contract...");
-  const vaultDeployTxOptions = await aztecSetup.getTxOptions(deployerAddress);
+  const salt = Fr.random();
 
-  const deployTx = BetVaultContract.deploy(
-    wallet,
+  // Get sponsored payment method for fee payment
+  const sponsoredPaymentMethod = await aztecSetup.getSponsoredPaymentMethod();
+
+  const deployer = new ContractDeployer(BetVaultContractArtifact, wallet);
+  const tx = deployer.deploy(
     AztecAddress.fromString(tokenAddress),
     AztecAddress.fromString(WORMHOLE_ADDRESS),
     deployerAddress, // admin address
-  ).send(vaultDeployTxOptions);
+  ).send({
+    contractAddressSalt: salt,
+    from: deployerAddress,
+    ...(sponsoredPaymentMethod ? { fee: { paymentMethod: sponsoredPaymentMethod } } : {}),
+  });
 
-  console.log("   Deployment transaction sent, waiting for confirmation...");
+  console.log("Deployment transaction sent, waiting for confirmation...");
   console.log("   (This may take several minutes on testnet)");
 
-  await deployTx.wait({ timeout: 60 * 60 * 12 });
+  const receiptAfterMined = await tx.wait({ wallet: wallet });
+  const contract = receiptAfterMined.contract;
 
-  const contract = await deployTx.deployed();
-
-  console.log("[OK] Vault deployed at:", contract.address.toString());
+  console.log("\n[OK] BetVault deployed successfully!");
+  console.log("   Address:", contract.address.toString());
 
   aztecSetup.saveContractAddress("vault", contract.address.toString());
 
   console.log("\n=== DEPLOYMENT SUMMARY ===");
-  console.log("  Network:  ", network);
-  console.log("  Token:    ", tokenAddress);
-  console.log("  Wormhole: ", WORMHOLE_ADDRESS);
-  console.log("  Vault:    ", contract.address.toString());
-  console.log("  Saved to:  deploys/contracts.json");
+  console.log("  Network:         ", network);
+  console.log("  Token Contract:  ", tokenAddress);
+  console.log("  Wormhole Address:", WORMHOLE_ADDRESS);
+  console.log("  BetVault Contract:", contract.address.toString());
+  console.log("  Saved to:        ", `deployments/${network}/contracts.json`);
+  console.log("==========================\n");
 }
 
 main().catch((err) => {
-  console.error("Error deploying vault:", err);
+  console.error("\n[ERROR] Error deploying BetVault:");
+  console.error(err);
   process.exit(1);
 });

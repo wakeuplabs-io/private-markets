@@ -1,5 +1,5 @@
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
-import { TokenContract } from "../../artifacts/Token.js";
+import { TokenContract } from "../../artifacts/Token.ts";
 import { aztecSetup } from "../lib/aztec-setup.js";
 
 async function main(): Promise<void> {
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   const txOptions = await aztecSetup.getTxOptions(deployerAddress);
 
   const mintTx = await token.methods
-    .mint_to_private(deployerAddress, executorAddress, amountToMint)
+    .mint_to_private(executorAddress, amountToMint)
     .send(txOptions);
 
   console.log("   Mint transaction sent, waiting for confirmation...");

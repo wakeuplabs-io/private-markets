@@ -13,9 +13,6 @@
     "sandbox:deploy:token": "NODE_URL=http://localhost:8080 npm run deploy:token",
     "sandbox:deploy:vault": "NODE_URL=http://localhost:8080 npm run deploy:vault",
     "sandbox:deploy:all": "NODE_URL=http://localhost:8080 npm run deploy:all",
-    "sandbox:deploy:token:test": "NODE_URL=http://localhost:8080 node --import tsx/esm scripts/deploy/01-deploy-token.test.ts",
-    "sandbox:deploy:vault:test": "NODE_URL=http://localhost:8080 node --import tsx/esm scripts/deploy/02-deploy-vault.test.ts",
-    "sandbox:deploy:all:test": "npm run sandbox:deploy:token:test && npm run sandbox:deploy:vault:test",
     "interact:mint": "node --import tsx/esm scripts/interact/mint-tokens.ts",
     "interact:bet": "node --import tsx/esm scripts/interact/place-bet.ts",
     "interact:check": "node --import tsx/esm scripts/interact/check-accounts.ts",
@@ -34,6 +31,9 @@
     "@aztec/noir-contracts.js": "3.0.0-devnet.2",
     "@aztec/pxe": "3.0.0-devnet.2",
     "@aztec/stdlib": "3.0.0-devnet.2",
+    "@aztec/protocol-contracts": "3.0.0-devnet.2",
+    "@aztec/test-wallet": "3.0.0-devnet.2",
+    "@aztec/test-accounts": "3.0.0-devnet.2",
     "dotenv": "^16.6.1"
   },
   "devDependencies": {

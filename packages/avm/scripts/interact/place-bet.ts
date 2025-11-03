@@ -1,10 +1,8 @@
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
-import { Fr } from "@aztec/foundation/fields";
-import type { IntentAction } from "@aztec/aztec.js/authorization";
-import { TokenContract } from "../../artifacts/Token.js";
-import { BetVaultContract } from "../../artifacts/BetVault.js";
+import { Fr } from "@aztec/aztec.js/fields";
+import { TokenContract } from "../../artifacts/Token.ts";
+import { BetVaultContract } from "../../artifacts/BetVault.ts";
 import { aztecSetup } from "../lib/aztec-setup.js";
-import { WormholeContract } from "../../artifacts/Wormhole.js";
 
 const WORMHOLE_ADDRESS = "0x0e61ae3f9f51ae20042f48674e2bf1c19cde5c916ae3a5ed114d84c873cc9a8f";
 
@@ -46,7 +44,6 @@ async function main(): Promise<void> {
 
   await aztecSetup.registerContract(tokenAddr, TokenContract.artifact);
   await aztecSetup.registerContract(vaultAddr, BetVaultContract.artifact);
-  await aztecSetup.registerContract(AztecAddress.fromString(WORMHOLE_ADDRESS), WormholeContract.artifact);
 
   const token = await TokenContract.at(tokenAddr, wallet);
   const vault = await BetVaultContract.at(vaultAddr, wallet);
@@ -97,12 +94,15 @@ async function main(): Promise<void> {
     authwitNonce,
   );
 
-  const intent: IntentAction = {
-    caller: vault.address,
-    action: transferAction,
-  };
-
-  const witness = await wallet.createAuthWit(intent);
+  // Create auth witness - using the correct pattern for TestWallet
+  // The wallet needs the executor to be the one creating the authwit
+  const witness = await wallet.createAuthWit(
+    executorAddress,  // The account that owns the tokens
+    {
+      caller: vaultAddr,  // The contract that will call the transfer
+      action: transferAction,
+    }
+  );
   console.log("✅ Authorization witness created");
 
   console.log("\n🎲 Placing bet...");
@@ -118,8 +118,7 @@ async function main(): Promise<void> {
       authwitNonce,
       executorAddress,
     )
-    .with({ authWitnesses: [witness] })
-    .send(txOptions);
+    .send({ ...txOptions, authWitnesses: [witness] });
 
   console.log("   Bet transaction sent, waiting for confirmation...");
   console.log("   (This may take several minutes on testnet)");
@@ -141,9 +140,6 @@ async function main(): Promise<void> {
   if (!isProcessedAfter) {
     console.warn("⚠️  Warning: Bet was not marked as processed!");
   }
-
-  console.log("\n🔄 Syncing private state...");
-  await token.methods.sync_private_state().simulate({ from: executorAddress });
 
   console.log("\n💰 Checking token balance after bet...");
   const balanceAfter = await token.methods

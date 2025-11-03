@@ -28,15 +28,13 @@ async function main(): Promise<void> {
 
     const address = AztecAddress.fromString(info.address);
 
-    // Check if account is registered in PXE
+    // Check if account exists in PXE
     try {
-      const registeredAccounts = await pxe.getRegisteredAccounts();
-      const isRegistered = registeredAccounts.some(
-        (acc) => acc.toString() === address.toString()
-      );
+      const contractInstance = await pxe.getContractInstance(address);
+      const isRegistered = contractInstance !== undefined;
       console.log(`   PXE registration: ${isRegistered ? "✅ Registered" : "❌ Not Registered"}`);
     } catch (error) {
-      console.log(`   PXE registration: ❌ Error checking`);
+      console.log(`   PXE registration: ❌ Not found in PXE`);
     }
 
     // Check if contract instance exists on node
@@ -67,14 +65,7 @@ async function main(): Promise<void> {
     try {
       const address = await aztecSetup.getOrCreateAccount(accountName);
       console.log(`   ✅ Account loaded successfully`);
-      console.log(`   Address: ${address.toString()}`);
-
-      // Check if account can interact with contracts
-      try {
-        const nodeInfo = await pxe.getNodeInfo();
-      } catch (error) {
-        console.log(`   Node info: Error getting node information`);
-      }
+      console.log(`   Address: ${address.toString()}`)
     } catch (error) {
       console.log(`   ❌ Failed to load account`);
       console.log(`   Error: ${error instanceof Error ? error.message : String(error)}`);

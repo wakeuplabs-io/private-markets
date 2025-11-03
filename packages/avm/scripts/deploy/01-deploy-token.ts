@@ -1,18 +1,16 @@
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
-import { TokenContract } from "../../artifacts/Token.js";
 import { aztecSetup } from "../lib/aztec-setup.js";
-
+import { ContractDeployer } from "@aztec/aztec.js/deployment";
+import { TokenContractArtifact } from "../../artifacts/Token.js";
+import { Fr } from "@aztec/aztec.js/fields";
 async function main(): Promise<void> {
   console.log("🚀 Starting Token deployment...\n");
 
-  // Initialize Aztec setup (Node → PXE → Wallet)
   await aztecSetup.initialize();
 
-  // Get or create deployer account
   const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
   console.log("Deployer address:", deployerAddress.toString());
 
-  // Get wallet instance
   const wallet = aztecSetup.getWallet();
 
   const minterAddressArg = process.env.MINTER_ADDRESS || process.argv[2];
@@ -23,26 +21,25 @@ async function main(): Promise<void> {
   console.log("Minter address:", minterAddress.toString());
 
   console.log("\n>> Deploying Token contract...");
-  const deployTxOptions = await aztecSetup.getTxOptions(deployerAddress);
+  const salt = Fr.random();
 
-  const deployTx = await TokenContract.deployWithOpts(
-    { wallet: wallet, method: 'constructor_with_minter' },
-    "Aztec USD",
-    "AUSD",
-    18,
-    minterAddress,
-    minterAddress
-  ).send(deployTxOptions);
+  // Get sponsored payment method for fee payment
+  const sponsoredPaymentMethod = await aztecSetup.getSponsoredPaymentMethod();
+
+  const deployer = new ContractDeployer(TokenContractArtifact, wallet, undefined, 'constructor_with_minter');
+  const tx = deployer.deploy('PrivateToken', 'PT', 18, minterAddress, minterAddress).send({
+    contractAddressSalt: salt,
+    from: deployerAddress,
+    ...(sponsoredPaymentMethod ? { fee: { paymentMethod: sponsoredPaymentMethod } } : {}),
+  });
+
+  // const receipt = await tx.getReceipt();
 
   console.log("Deployment transaction sent, waiting for confirmation...");
   console.log("   (This may take several minutes on testnet)");
+  const receiptAfterMined = await tx.wait({ wallet: wallet });
 
-  const receipt = await deployTx.wait({ 
-    timeout: 60 * 60 * 12,   // 12 hours timeout for testnet
-    interval: 1000,          // Check every second
-  });
-
-  const contract = receipt.contract;
+  const contract = receiptAfterMined.contract;
 
   console.log("\n[OK] Token deployed successfully!");
   console.log("   Address:", contract.address.toString());

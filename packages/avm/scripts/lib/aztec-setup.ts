@@ -1,76 +1,21 @@
 import { config } from "dotenv";
 import { createAztecNodeClient, waitForNode, type AztecNode } from "@aztec/aztec.js/node";
-import { createPXE, getPXEConfig, type PXE } from "@aztec/pxe/server";
-import { BaseWallet } from "@aztec/aztec.js/wallet";
+import { getPXEConfig, type PXE } from "@aztec/pxe/server";
+import { createStore } from "@aztec/kv-store/lmdb-v2";
 import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
 import { getContractInstanceFromInstantiationParams, type ContractInstanceWithAddress } from "@aztec/stdlib/contract";
-import type { Account } from "@aztec/aztec.js/account";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { GrumpkinScalar, Fr } from "@aztec/foundation/fields";
 import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
 import { deriveSigningKey } from "@aztec/stdlib/keys";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 import { SPONSORED_FPC_SALT } from "@aztec/constants";
-import { AccountManager } from "@aztec/aztec.js/wallet";
+import { AccountManager, type Wallet } from "@aztec/aztec.js/wallet";
+import { registerInitialSandboxAccountsInWallet, TestWallet } from "@aztec/test-wallet/server";
 import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import { getDeploymentManager, type NetworkType } from "./deployment-manager.js";
+import { AccountKeys, StoredKeys, AccountInfo, DeployedAccounts, ContractAddresses } from "./types.ts";
 config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-/**
- * ScriptWallet - Production wallet implementation for deployment scripts
- *
- * Extends BaseWallet to provide proper Aztec 3.0.0-devnet.2 architecture:
- * - Node → PXE → Wallet → Account chain
- * - Account management with internal storage
- * - Transaction signing and contract registration
- */
-class ScriptWallet extends BaseWallet {
-  private accounts: Map<string, Account> = new Map();
-
-  constructor(pxe: PXE, node: AztecNode) {
-    super(pxe, node);
-  }
-
-  /**
-   * Required by BaseWallet - retrieves account by address
-   */
-  protected async getAccountFromAddress(address: AztecAddress): Promise<Account> {
-    const account = this.accounts.get(address.toString());
-    if (!account) {
-      throw new Error(`Account not found: ${address.toString()}`);
-    }
-    return account;
-  }
-
-  /**
-   * Add an account to the wallet's internal storage
-   */
-  addAccount(address: AztecAddress, account: Account): void {
-    this.accounts.set(address.toString(), account);
-  }
-
-  /**
-   * Get all account addresses managed by this wallet
-   */
-  getAccountAddresses(): AztecAddress[] {
-    return Array.from(this.accounts.keys()).map(addr => AztecAddress.fromString(addr));
-  }
-
-  /**
-   * Required by BaseWallet - returns all accounts with aliases
-   */
-  async getAccounts(): Promise<Array<{ alias: string; item: AztecAddress }>> {
-    return this.getAccountAddresses().map((address, index) => ({
-      alias: `account-${index}`,
-      item: address
-    }));
-  }
-}
 
 /**
  * AztecSetup - Connection and account management for Aztec 3.0.0-devnet.2
@@ -93,32 +38,10 @@ class ScriptWallet extends BaseWallet {
  * Deployment artifacts are stored in: deployments/{network}/
  */
 
-export interface AccountKeys {
-  privateKey: string;
-  salt: string;
-}
-
-export interface AccountInfo {
-  address: string;
-  deployed: boolean;
-}
-
-export interface DeployedAccounts {
-  [accountName: string]: AccountInfo;
-}
-
-export interface StoredKeys {
-  [accountName: string]: AccountKeys;
-}
-
-export interface ContractAddresses {
-  [contractName: string]: string;
-}
-
 export class AztecSetup {
   private node: AztecNode | null = null;
   private pxe: PXE | null = null;
-  private wallet: ScriptWallet | null = null;
+  private wallet: TestWallet | null = null;
   private network: NetworkType;
   private nodeUrl: string;
   private deploymentsDir: string;
@@ -174,20 +97,34 @@ export class AztecSetup {
     await waitForNode(this.node);
     console.log(`✅ Connected to Aztec node`);
 
-    // 2. Create PXE with persistent storage
-    const pxeConfig = Object.assign(getPXEConfig(), {
-      dataDirectory: this.pxeStoreDir,
+    // 2. Create TestWallet with persistent storage
+    // TestWallet.create() creates PXE internally, so we pass config and store options
+    const l1Contracts = await this.node.getL1ContractAddresses();
+    const pxeConfig = {
+      ...getPXEConfig(),
+      l1Contracts,
       proverEnabled: false,
       l2BlockPollingIntervalMS: this.network === 'sandbox' ? 1000 : 5000,
       l2StartingBlock: 1,
-    });
+    };
 
-    this.pxe = await createPXE(this.node, pxeConfig);
+    const pxeOptions = {
+      store: await createStore('pxe', 2, {
+        dataDirectory: this.pxeStoreDir,
+        dataStoreMapSizeKb: 1_000_000 // 1GB
+      })
+    };
+
+    this.wallet = await TestWallet.create(this.node, pxeConfig, pxeOptions);
+    // Get PXE from wallet (it's a protected property in BaseWallet)
+    this.pxe = (this.wallet as any).pxe;
     console.log(`✅ PXE initialized with persistent storage`);
+    console.log(`✅ TestWallet created`);
 
-    // 3. Create Wallet
-    this.wallet = new ScriptWallet(this.pxe, this.node);
-    console.log(`✅ ScriptWallet created`);
+    // 3. For sandbox, ensure SponsoredFPC is deployed
+    if (this.network === 'sandbox') {
+      await this.ensureSponsoredFPCDeployed();
+    }
 
     console.log(`Initialization complete`);
   }
@@ -196,7 +133,7 @@ export class AztecSetup {
    * Get the wallet instance
    * @throws Error if initialize() hasn't been called
    */
-  getWallet(): ScriptWallet {
+  getWallet(): TestWallet {
     if (!this.wallet) {
       throw new Error("Wallet not initialized. Call initialize() first");
     }
@@ -235,6 +172,73 @@ export class AztecSetup {
     return await getContractInstanceFromInstantiationParams(SponsoredFPCContract.artifact, {
       salt: new Fr(SPONSORED_FPC_SALT),
     });
+  }
+  
+  private async getSponsoredFPCAddress() {
+    return (await this.getSponsoredFPCInstance()).address;
+  }
+  
+  private async registerDeployedSponsoredFPCInWalletAndGetAddress(wallet: Wallet) {
+    const fpc = await this.getSponsoredFPCInstance();
+    // The following is no-op if the contract is already registered
+    await wallet.registerContract(fpc, SponsoredFPCContract.artifact);
+    return fpc.address;
+  }
+  
+
+
+  
+  /**
+   * Deploy SponsoredFPC in sandbox if not already deployed
+   * This is required for fee payment in sandbox mode
+   */
+  private async ensureSponsoredFPCDeployed(): Promise<void> {
+    if (!this.wallet || !this.pxe) {
+      throw new Error("Wallet not initialized");
+    }
+    console.log("Checking SponsoredFPC deployment status...");
+    const sponsoredFPCInstance = await this.getSponsoredFPCInstance();
+    const sponsoredFPCAddress = sponsoredFPCInstance.address;
+    try {
+      const instance = await this.pxe.getContractInstance(sponsoredFPCAddress);
+      if (instance) {
+        console.log(`  SponsoredFPC already deployed at ${sponsoredFPCAddress.toString()}`);
+        await this.registerDeployedSponsoredFPCInWalletAndGetAddress(this.wallet);
+        return;
+      }
+    } catch (error) {
+    }
+
+    console.log("  SponsoredFPC not found, deploying...");
+
+    const accounts: AztecAddress[] = await registerInitialSandboxAccountsInWallet(this.wallet!);
+    const deployerAddress = accounts[0];
+    console.log(`Using sandbox account ${deployerAddress.toString()} to deploy SponsoredFPC`);
+    const deployment = SponsoredFPCContract.deploy(this.wallet).send({
+      from: deployerAddress,
+      contractAddressSalt: new Fr(SPONSORED_FPC_SALT),
+      universalDeploy: true,
+    });
+    await deployment.wait();
+    await this.registerDeployedSponsoredFPCInWalletAndGetAddress(this.wallet);
+    console.log('SponsoredFPC registered in wallet');
+  }
+
+  /**
+   * Check if an account contract is deployed on-chain
+   * Uses PXE to query the contract instance
+   */
+  private async isAccountDeployedOnChain(address: AztecAddress): Promise<boolean> {
+    if (!this.pxe) {
+      throw new Error("PXE not initialized");
+    }
+
+    try {
+      const instance = await this.pxe.getContractInstance(address);
+      return instance !== undefined;
+    } catch (error) {
+      return false;
+    }
   }
 
   private saveKeys(accountName: string, keys: AccountKeys): void {
@@ -317,20 +321,23 @@ export class AztecSetup {
 
   /**
    * Deploy an AccountManager to the network
-   * Uses sponsored fee payment method if available
+   *
+   * CRITICAL: Account deployments must use from: AztecAddress.ZERO
+   * because the account doesn't exist yet and can't sign its own deployment.
    */
   private async deployAccountManager(
     accountManager: AccountManager
   ): Promise<void> {
     const deployMethod = await accountManager.getDeployMethod();
 
-    const sponsoredFPC = await this.getSponsoredFPCInstance();
-    const sponsoredPaymentMethod = new SponsoredFeePaymentMethod(sponsoredFPC.address);
-
     try {
+      // Get sponsored payment method for fee payment
+      const sponsoredPaymentMethod = await this.getSponsoredPaymentMethod();
+
+      // Use AztecAddress.ZERO for account deployment (account can't sign its own deployment)
       await deployMethod.send({
-        from: accountManager.address,
-        fee: { paymentMethod: sponsoredPaymentMethod }
+        from: AztecAddress.ZERO,
+        ...(sponsoredPaymentMethod ? { fee: { paymentMethod: sponsoredPaymentMethod } } : {}),
       }).wait({ timeout: 60 * 60 * 12 });
 
       console.log("Schnorr account deployed successfully");
@@ -374,36 +381,87 @@ export class AztecSetup {
 
     const address = accountManager.address;
 
-    // 3. Check if already deployed
-    const accountInfo = this.loadAccountInfo(accountName);
+    // 3. Check if account is actually deployed on-chain
+    // (Don't trust accounts.json - sandbox resets invalidate it)
+    const isDeployedOnChain = await this.isAccountDeployedOnChain(address);
 
-    if (!accountInfo?.deployed) {
+    // For existing accounts, we need to ensure constructor was actually executed
+    // If not, we force a deployment even if metadata exists
+    let forceDeployment = false;
+    if (isDeployedOnChain) {
+      // Account metadata exists, but check if it's actually initialized
+      try {
+        // Try to get the account - this will fail if notes don't exist
+        const testAccount = await accountManager.getAccount();
+        // getCompleteAddress is synchronous, no await needed
+        testAccount.getCompleteAddress();
+        console.log(`   Account is properly initialized`);
+      } catch (error) {
+        console.log(`   Account metadata exists but not initialized, will redeploy`);
+        forceDeployment = true;
+      }
+    }
+
+    if (!isDeployedOnChain || forceDeployment) {
       console.log(`Deploying new account: ${accountName}`);
+
+      // CRITICAL: Register contract with PXE FIRST (registers public keys)
+      const instance = accountManager.getInstance();
+      const accountContract = new SchnorrAccountContract(signingKey);
+      const artifact = await accountContract.getContractArtifact();
+      await this.wallet.registerContract(instance, artifact, privateKeyFr);
+      console.log(`   Registered account contract with PXE`);
+
+      // Get Account and add to wallet BEFORE deployment
+      // CRITICAL: Must add to wallet first so TestWallet can sign the deployment tx
+      const account = await accountManager.getAccount();
+      // TestWallet has protected accounts Map - access it directly
+      (this.wallet as any).accounts.set(address.toString(), account);
+
+      // Deploy the account contract
       await this.deployAccountManager(accountManager);
+
+      // Save deployment info
       this.saveAccountInfo(accountName, {
         address: address.toString(),
         deployed: true,
       });
+
+      console.log(`   Account deployed successfully`);
     } else {
       console.log(`Loading existing deployed account: ${accountName}`);
 
-      // Register the account contract with PXE if it's already deployed
-      // CRITICAL: Must pass secretKey to initialize private state
+      // Account exists on-chain, need to sync its private state with PXE
       const instance = accountManager.getInstance();
       const accountContract = new SchnorrAccountContract(signingKey);
       const artifact = await accountContract.getContractArtifact();
 
+      // Register account with PXE (includes secret key for note decryption)
+      try {
+        await this.pxe!.registerAccount(privateKeyFr, instance.salt);
+        console.log(`   Registered account with PXE`);
+      } catch (error) {
+        // May already be registered
+      }
+
+      // Register contract artifact with PXE
       try {
         await this.wallet.registerContract(instance, artifact, privateKeyFr);
-        console.log(`   Registered account contract with PXE (with secret key)`);
+        console.log(`   Registered contract artifact with PXE`);
       } catch (error) {
-        // May already be registered, ignore error
+        // May already be registered
       }
+
+      // CRITICAL: Wait for PXE to sync account notes from blockchain
+      console.log(`   Waiting for note synchronization...`);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+      console.log(`   Sync complete`);
     }
 
-    // 4. Get Account object and add to wallet
+    // 4. Get Account and add to wallet (for BOTH new and existing accounts)
     const account = await accountManager.getAccount();
-    this.wallet.addAccount(address, account);
+    // TestWallet has protected accounts Map - access it directly
+    (this.wallet as any).accounts.set(address.toString(), account);
 
     console.log(`✅ Account ready: ${address.toString()}`);
     return address;
@@ -447,7 +505,8 @@ export class AztecSetup {
 
     // Get Account object and add to wallet
     const account = await accountManager.getAccount();
-    this.wallet.addAccount(accountAddress, account);
+    // TestWallet has protected accounts Map - access it directly
+    (this.wallet as any).accounts.set(accountAddress.toString(), account);
 
     console.log(`✅ Account loaded successfully: ${accountAddress.toString()}`);
     return accountAddress;
