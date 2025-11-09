@@ -5,16 +5,13 @@ import { aztecSetup } from "../lib/aztec-setup.js";
 async function main(): Promise<void> {
   console.log("🪙 Starting Token Mint Script...\n");
 
-  // Initialize Aztec setup (Node → PXE → Wallet)
   await aztecSetup.initialize();
   const network = aztecSetup.getNetwork();
   console.log(`Network: ${network.toUpperCase()}\n`);
 
-  // Get or create accounts
   const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
   const executorAddress = await aztecSetup.getOrCreateAccount("executor");
 
-  // Get wallet instance
   const wallet = aztecSetup.getWallet();
 
   console.log("✅ Deployer address:", deployerAddress.toString());
@@ -22,7 +19,7 @@ async function main(): Promise<void> {
 
   const tokenAddress = aztecSetup.loadContractAddress("token");
   if (!tokenAddress) {
-    console.error("❌ No token address found. Run 'npm run deploy:token' first.");
+    console.error("No token address found. Run 'npm run deploy:token' first.");
     process.exit(1);
   }
 
@@ -85,6 +82,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("❌ Error minting tokens:", err);
+  console.error("Error minting tokens:", err);
   process.exit(1);
 });

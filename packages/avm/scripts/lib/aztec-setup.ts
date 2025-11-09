@@ -122,9 +122,9 @@ export class AztecSetup {
     console.log(`✅ TestWallet created`);
 
     // 3. For sandbox, ensure SponsoredFPC is deployed
-    if (this.network === 'sandbox') {
+    // if (this.network === 'sandbox') {
       await this.ensureSponsoredFPCDeployed();
-    }
+    // }
 
     console.log(`Initialization complete`);
   }
@@ -196,9 +196,9 @@ export class AztecSetup {
     if (!this.wallet || !this.pxe) {
       throw new Error("Wallet not initialized");
     }
-    console.log("Checking SponsoredFPC deployment status...");
     const sponsoredFPCInstance = await this.getSponsoredFPCInstance();
     const sponsoredFPCAddress = sponsoredFPCInstance.address;
+
     try {
       const instance = await this.pxe.getContractInstance(sponsoredFPCAddress);
       if (instance) {
@@ -207,6 +207,7 @@ export class AztecSetup {
         return;
       }
     } catch (error) {
+      console.error('Error checking SponsoredFPC deployment status:', error);
     }
 
     console.log("  SponsoredFPC not found, deploying...");
@@ -239,6 +240,60 @@ export class AztecSetup {
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * Wait for account notes to synchronize with the PXE
+   * This is critical for testnet where block times are slower (5s vs 1s in sandbox)
+   *
+   * The SchnorrAccount contract has a `signing_public_key` note that must be synced
+   * before the account can sign transactions. This method polls until that note is available.
+   *
+   * @param address - The account address to wait for
+   * @param timeoutMs - Maximum time to wait in milliseconds (default: 60 seconds)
+   * @throws Error if notes don't sync within timeout
+   */
+  private async waitForAccountNotesToSync(
+    address: AztecAddress,
+    timeoutMs: number = 60000
+  ): Promise<void> {
+    if (!this.pxe) {
+      throw new Error("PXE not initialized");
+    }
+
+    const startTime = Date.now();
+    const pollInterval = 2000; // Check every 2 seconds
+    let attemptCount = 0;
+
+    while (Date.now() - startTime < timeoutMs) {
+      attemptCount++;
+
+      try {
+        // Query notes for the account contract address
+        // The SchnorrAccount should have at least one note (signing_public_key)
+        const notes = await this.pxe.getNotes({
+          contractAddress: address,
+        });
+
+        if (notes.length > 0) {
+          console.log(`   ✓ Found ${notes.length} note(s) for account (attempt ${attemptCount})`);
+          return; // Success!
+        }
+
+        console.log(`   ⏳ No notes yet (attempt ${attemptCount}), waiting ${pollInterval}ms...`);
+      } catch (error) {
+        // PXE might still be syncing, continue polling
+        console.log(`   ⏳ PXE still syncing (attempt ${attemptCount}), waiting ${pollInterval}ms...`);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+    throw new Error(
+      `Timeout: Account notes failed to sync after ${elapsedSeconds}s (${attemptCount} attempts). ` +
+      `This may indicate the account wasn't deployed properly or PXE is having connectivity issues.`
+    );
   }
 
   private saveKeys(accountName: string, keys: AccountKeys): void {
@@ -405,65 +460,46 @@ export class AztecSetup {
     if (!isDeployedOnChain || forceDeployment) {
       console.log(`Deploying new account: ${accountName}`);
 
-      // CRITICAL: Register contract with PXE FIRST (registers public keys)
       const instance = accountManager.getInstance();
       const accountContract = new SchnorrAccountContract(signingKey);
       const artifact = await accountContract.getContractArtifact();
       await this.wallet.registerContract(instance, artifact, privateKeyFr);
-      console.log(`   Registered account contract with PXE`);
-
-      // Get Account and add to wallet BEFORE deployment
-      // CRITICAL: Must add to wallet first so TestWallet can sign the deployment tx
       const account = await accountManager.getAccount();
-      // TestWallet has protected accounts Map - access it directly
       (this.wallet as any).accounts.set(address.toString(), account);
 
-      // Deploy the account contract
       await this.deployAccountManager(accountManager);
 
-      // Save deployment info
       this.saveAccountInfo(accountName, {
         address: address.toString(),
         deployed: true,
       });
 
-      console.log(`   Account deployed successfully`);
     } else {
-      console.log(`Loading existing deployed account: ${accountName}`);
 
-      // Account exists on-chain, need to sync its private state with PXE
       const instance = accountManager.getInstance();
       const accountContract = new SchnorrAccountContract(signingKey);
       const artifact = await accountContract.getContractArtifact();
 
-      // Register account with PXE (includes secret key for note decryption)
       try {
         await this.pxe!.registerAccount(privateKeyFr, instance.salt);
-        console.log(`   Registered account with PXE`);
       } catch (error) {
         // May already be registered
       }
 
-      // Register contract artifact with PXE
       try {
         await this.wallet.registerContract(instance, artifact, privateKeyFr);
-        console.log(`   Registered contract artifact with PXE`);
       } catch (error) {
         // May already be registered
       }
 
-      // CRITICAL: Wait for PXE to sync account notes from blockchain
       console.log(`   Waiting for note synchronization...`);
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+      await this.waitForAccountNotesToSync(address, 60000); // 60 second timeout
       console.log(`   Sync complete`);
     }
 
-    // 4. Get Account and add to wallet (for BOTH new and existing accounts)
     const account = await accountManager.getAccount();
-    // TestWallet has protected accounts Map - access it directly
     (this.wallet as any).accounts.set(address.toString(), account);
 
-    console.log(`✅ Account ready: ${address.toString()}`);
     return address;
   }
 

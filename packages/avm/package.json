@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "compile": "docker run --user $(id -u):$(id -g) -v $HOME:$HOME -e HOME=$HOME --workdir=\"$PWD\" --entrypoint=/usr/src/noir/noir-repo/target/release/nargo aztecprotocol/aztec:3.0.0-devnet.2 compile",
+    "compile": "aztec-nargo compile",
     "postprocess": "aztec-postprocess-contract",
     "codegen": "aztec codegen target --outdir artifacts --force",
     "build": "npm run compile && npm run postprocess && npm run codegen",
@@ -33,7 +33,6 @@
     "@aztec/stdlib": "3.0.0-devnet.2",
     "@aztec/protocol-contracts": "3.0.0-devnet.2",
     "@aztec/test-wallet": "3.0.0-devnet.2",
-    "@aztec/test-accounts": "3.0.0-devnet.2",
     "dotenv": "^16.6.1"
   },
   "devDependencies": {

@@ -23,11 +23,11 @@ pub contract BetVault {
         },
         note::note_viewer_options::NoteViewerOptions,
         messages::message_delivery::MessageDelivery,
+        event::event_emission::emit_event_in_private,
     };
-    use dep::aztec::event::event_emission::emit_event_in_private;
     use dep::token::Token;
     use crate::types::bet_note::BetNote;
-    // use dep::wormhole::Wormhole;
+    use dep::wormhole::Wormhole;
 
 
     // Events
@@ -110,6 +110,7 @@ pub contract BetVault {
         from: AztecAddress,
     ) {
         assert(amount > 0, "Amount must be greater than 0");
+
         let admin_address = storage.admin.read();
 
         let _ = Token::at(storage.token_address.read()).transfer_private_to_private(
@@ -119,8 +120,10 @@ pub contract BetVault {
             authwit_nonce
         ).call(&mut context);
 
+        let block_number = context.anchor_block_header.global_variables.block_number;
+
         let mut bet_note = BetNote::new(from, market_id, outcome, amount, bet_id, commitment);
-        bet_note.placed_at = 0; // TODO: Fix timestamp API in 3.0.0
+        bet_note.placed_at_block = block_number;
 
         storage.user_bets.at(from)
           .insert(bet_note)
@@ -130,25 +133,24 @@ pub contract BetVault {
             ._mark_bet_processed(bet_id)
             .enqueue(&mut context);
 
-        // TODO: Fix event emission API in 3.0.0
-        // BetPlaced {
-        //     market_id,
-        //     outcome,
-        //     amount,
-        //     bet_id,
-        //     commitment,
-        // }.emit(from, MessageDelivery.CONSTRAINED_ONCHAIN);
+        emit_event_in_private(
+            BetPlaced { market_id, outcome, amount, bet_id, commitment },
+            &mut context,
+            from,
+            MessageDelivery.UNCONSTRAINED_ONCHAIN,
+        );
 
-        let chunks: [[u8; 31]; 8] = create_bet_payload(market_id, bet_id, outcome, amount);
-        // let _ = Wormhole::at(storage.wormhole_address.read())
-        //     .publish_message_in_private(
-        //         1,
-        //         chunks,
-        //         0,
-        //         2,
-        //         context.msg_sender(),
-        //         authwit_nonce
-        //     ).call(&mut context);
+        let bet_payload = create_bet_payload(market_id, bet_id, outcome, amount);
+
+        let _ = Wormhole::at(storage.wormhole_address.read())
+            .publish_message_in_private(
+                1,
+                bet_payload,
+                0,
+                2,
+                context.msg_sender().unwrap(),
+                authwit_nonce
+            ).call(&mut context);
     }
 
     #[external("private")]
@@ -178,31 +180,30 @@ pub contract BetVault {
             ._mark_claim_processed(commitment, nullifier)
             .enqueue(&mut context);
 
-        // TODO: Fix event emission API in 3.0.0
-        // ClaimAuthorized {
-        //     market_id,
-        //     nullifier,
-        //     amount,
-        //     recipient: recipient_field,
-        // }.emit(from, MessageDelivery.CONSTRAINED_ONCHAIN);
+        emit_event_in_private(
+            ClaimAuthorized { market_id, nullifier, amount, recipient: recipient_field },
+            &mut context,
+            from,
+            MessageDelivery.UNCONSTRAINED_ONCHAIN,
+        );
 
         // Create Wormhole payload
-        let chunks = create_claim_payload(
+        let claim_payload = create_claim_payload(
             market_id,
             nullifier,
             amount,
             recipient,
         );
 
-        // let _ = Wormhole::at(storage.wormhole_address.read())
-        //     .publish_message_in_private(
-        //         1,                // consistency level
-        //         chunks,        // payload: [Field; 5]
-        //         0,          // nonce
-        //         2,          // emitter_chain
-        //         from,
-        //         authwit_nonce
-        //     ).call(&mut context);
+        let _ = Wormhole::at(storage.wormhole_address.read())
+            .publish_message_in_private(
+                1,                // consistency level
+                claim_payload, // payload: [[u8; 31]; 8]
+                0,          // message_fee
+                2,          // emitter_chain
+                from,
+                authwit_nonce
+            ).call(&mut context);
     }
 
     // Public functions
@@ -251,38 +252,38 @@ pub contract BetVault {
         outcome: u8,
         amount: u128,
     ) -> [[u8; 31]; 8] {
-        let mut payload = [0u8; 98];
-        // Message type: BET
-        payload[0] = 0x01;
+        // let mut payload = [0u8; 98];
+        // // Message type: BET
+        // payload[0] = 0x01;
 
-        let market_id_bytes = market_id.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[1 + i] = market_id_bytes[i];
-        }
+        // let market_id_bytes = market_id.to_le_bytes::<32>();
+        // for i in 0..32 {
+        //     payload[1 + i] = market_id_bytes[i];
+        // }
 
-        let bet_id_bytes = bet_id.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[33 + i] = bet_id_bytes[i];
-        }
+        // let bet_id_bytes = bet_id.to_le_bytes::<32>();
+        // for i in 0..32 {
+        //     payload[33 + i] = bet_id_bytes[i];
+        // }
 
-        payload[65] = outcome;
+        // payload[65] = outcome;
 
-        let amount_field = amount.to_field();
-        let amount_bytes = amount_field.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[66 + i] = amount_bytes[i];
-        }
+        // let amount_field = amount.to_field();
+        // let amount_bytes = amount_field.to_le_bytes::<32>();
+        // for i in 0..32 {
+        //     payload[66 + i] = amount_bytes[i];
+        // }
 
         let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
-        let mut idx = 0;
-        for c in 0..8 {
-            for j in 0..31 {
-                if idx < 98 {
-                    chunks[c][j] = payload[idx];
-                    idx += 1;
-                }
-            }
-        }
+        // let mut idx = 0;
+        // for c in 0..8 {
+        //     for j in 0..31 {
+        //         if idx < 98 {
+        //             chunks[c][j] = payload[idx];
+        //             idx += 1;
+        //         }
+        //     }
+        // }
 
         chunks
     }

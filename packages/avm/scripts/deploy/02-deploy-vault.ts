@@ -9,7 +9,7 @@ async function main(): Promise<void> {
 
   // Get Wormhole address from environment variable
   // const WORMHOLE_ADDRESS = process.env.WORMHOLE_ADDRESS;
-  const WORMHOLE_ADDRESS = "0x0e61ae3f9f51ae20042f48674e2bf1c19cde5c916ae3a5ed114d84c873cc9a8f";
+  const WORMHOLE_ADDRESS = "0x2f56338d0bf01e37b89edea0ee8e96474c89575aa5e6f35012789738a06ed0ac";
 
   // Initialize Aztec setup (Node → PXE → Wallet)
   await aztecSetup.initialize();

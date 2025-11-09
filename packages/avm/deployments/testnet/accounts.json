@@ -1,6 +1,10 @@
 {
   "deployer": {
-    "address": "0x1b1291b520147cf7230b8cb60b01455f6f7dfce7953a2ab24c11316ac2b324f3",
+    "address": "0x11e6377dc59da6ae817d25cf006564a4d64a7b98bb068026ceec9a162c03417f",
+    "deployed": true
+  },
+  "executor": {
+    "address": "0x156de881487ba2716f7e12b294e4aae8f374f089224f0cc840b4d039a6921acd",
     "deployed": true
   }
 }

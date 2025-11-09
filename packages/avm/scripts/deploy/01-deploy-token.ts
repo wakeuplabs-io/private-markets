@@ -3,8 +3,10 @@ import { aztecSetup } from "../lib/aztec-setup.js";
 import { ContractDeployer } from "@aztec/aztec.js/deployment";
 import { TokenContractArtifact } from "../../artifacts/Token.js";
 import { Fr } from "@aztec/aztec.js/fields";
+
 async function main(): Promise<void> {
   console.log("🚀 Starting Token deployment...\n");
+  const network = aztecSetup.getNetwork();
 
   await aztecSetup.initialize();
 
@@ -49,7 +51,7 @@ async function main(): Promise<void> {
   console.log("\n=== DEPLOYMENT SUMMARY ===");
   console.log("  Token Contract: ", contract.address.toString());
   console.log("  Minter Address: ", minterAddress.toString());
-  console.log("  Saved to:       deploys/contracts.json");
+  console.log("  Saved to:        ", `deployments/${network}/contracts.json`);
   console.log("==========================\n");
 }
 
