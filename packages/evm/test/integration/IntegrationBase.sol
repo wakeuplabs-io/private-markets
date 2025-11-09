@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {PredictionMarketCore} from "../../src/core/PredictionMarketCore.sol";
-import {Treasury} from "../../src/tokens/Treasury.sol";
-import {WormholeReceiver} from "../../src/wormhole/WormholeReceiver.sol";
-import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {Treasury} from "../../src/Treasury.sol";
+import {WormholeReceiver} from "../../src/WormholeReceiver.sol";
+import {MockERC20} from "../../src/MockERC20.sol";
 
 import {IWormhole} from "wormhole-foundation/ethereum/contracts/interfaces/IWormhole.sol";
 

@@ -2,8 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IWormhole} from "wormhole-foundation/ethereum/contracts/interfaces/IWormhole.sol";
-import {PredictionMarketGetters} from "../core/PredictionMarketGetters.sol";
-import {IPredictionMarket} from "../interfaces/IPredictionMarket.sol";
+import {IPredictionMarket} from "./core/PredictionMarketCore.sol";
 
 /**
  * @title WormholeReceiver
@@ -12,10 +11,14 @@ import {IPredictionMarket} from "../interfaces/IPredictionMarket.sol";
  *
  * IMPORTANT: Uses manual VAA verification pattern (not automatic Wormhole Relayer)
  * because Aztec is not an EVM chain and automatic relayer only supports EVM chains.
+ *
+ * This contract is independent and does not inherit prediction market state.
+ * It only forwards validated messages to PredictionMarketCore.
  */
-contract WormholeReceiver is PredictionMarketGetters {
+contract WormholeReceiver {
 
     // Custom Errors
+    error ZeroWormholeAddress();
     error ZeroPredictionMarketAddress();
     error ChainIdMismatch();
     error PayloadTooShort(uint256 provided, uint256 required);
@@ -76,6 +79,15 @@ contract WormholeReceiver is PredictionMarketGetters {
         uint256 betAmount
     );
 
+    // Wormhole Core Contract address (for VAA verification)
+    address public immutable WORMHOLE_CORE;
+
+    // Wormhole Chain ID for this receiver (10003 = Arbitrum Sepolia)
+    uint16 public immutable CHAIN_ID;
+
+    // Native EVM Chain ID (421614 = Arbitrum Sepolia)
+    uint256 public immutable EVM_CHAIN_ID;
+
     // Reference to the prediction market core contract
     IPredictionMarket public immutable PREDICTION_MARKET;
 
@@ -90,29 +102,42 @@ contract WormholeReceiver is PredictionMarketGetters {
     mapping(bytes32 => bool) public processedVAAs;
 
     /**
-     * @dev Constructor initializes parent PredictionMarketGetters and sets core contract
+     * @dev Constructor initializes WormholeReceiver with necessary addresses
      * @param wormholeCoreAddr Address of the Wormhole Core contract (for VAA verification)
      * @param chainId_ Wormhole Chain ID for this receiver (10003 = Arbitrum Sepolia)
      * @param evmChainId_ Native EVM Chain ID (421614 = Arbitrum Sepolia)
-     * @param finality_ Number of confirmations required for finality
-     * @param treasuryContractAddr Address of the treasury contract
      * @param predictionMarketAddr Address of the PredictionMarketCore contract
      */
     constructor(
         address payable wormholeCoreAddr,
         uint16 chainId_,
         uint256 evmChainId_,
-        uint8 finality_,
-        address treasuryContractAddr,
         address predictionMarketAddr
-    ) PredictionMarketGetters(chainId_, evmChainId_, finality_, treasuryContractAddr) {
+    ) {
+        if (wormholeCoreAddr == address(0)) revert ZeroWormholeAddress();
         if (predictionMarketAddr == address(0)) revert ZeroPredictionMarketAddress();
 
-        // Store Wormhole Core reference in state (inherited from PredictionMarketState)
-        _state.wormholeAddr = wormholeCoreAddr;
-
+        WORMHOLE_CORE = wormholeCoreAddr;
+        CHAIN_ID = chainId_;
+        EVM_CHAIN_ID = evmChainId_;
         PREDICTION_MARKET = IPredictionMarket(predictionMarketAddr);
         registrationOwner = msg.sender;
+    }
+
+    /**
+     * @notice Get the Wormhole Core contract interface
+     * @return IWormhole interface to the Wormhole Core contract
+     */
+    function wormhole() public view returns (IWormhole) {
+        return IWormhole(WORMHOLE_CORE);
+    }
+
+    /**
+     * @notice Check if contract is running on a fork
+     * @return bool True if EVM_CHAIN_ID doesn't match block.chainid
+     */
+    function isFork() public view returns (bool) {
+        return EVM_CHAIN_ID != block.chainid;
     }
 
     /**

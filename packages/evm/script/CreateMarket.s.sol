@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {PredictionMarketCore} from "../src/core/PredictionMarketCore.sol";
-import {MockERC20} from "../src/mocks/MockERC20.sol";
+import {MockERC20} from "../src/MockERC20.sol";
 
 /**
  * @title CreateMarket
