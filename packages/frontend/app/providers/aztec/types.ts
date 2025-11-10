@@ -1,9 +1,7 @@
-import type {
-  AztecAddress,
-  Fr,
-  ContractArtifact,
-  ContractFunctionInteraction
-} from "@aztec/aztec.js";
+import type { AztecAddress } from "@aztec/stdlib/aztec-address";
+import type { Fr } from "@aztec/foundation/fields";
+import type { ContractArtifact } from "@aztec/aztec.js/abi";
+import type { ContractFunctionInteraction } from "@aztec/aztec.js/contracts";
 
 export interface AztecWalletConfig {
   nodeUrl?: string;

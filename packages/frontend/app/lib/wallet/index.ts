@@ -1,6 +1,6 @@
 // Core wallet management exports
-export { WalletRegistry, walletRegistry } from "./WalletRegistry";
-export { WalletConnectionManager, walletConnectionManager } from "./WalletConnectionManager";
+export { WalletRegistry, walletRegistry } from "./walletRegistry";
+export { WalletConnectionManager, walletConnectionManager } from "./walletConnectionManager";
 
 // Types
 export type {
@@ -13,7 +13,7 @@ export type {
 
 // Wallet connection utility
 export async function ensureWalletConnected() {
-  const { walletConnectionManager } = await import("./WalletConnectionManager");
+  const { walletConnectionManager } = await import("./walletConnectionManager");
   if (!walletConnectionManager.isConnected()) {
     throw new Error("Wallet not connected. Please connect a wallet first.");
   }

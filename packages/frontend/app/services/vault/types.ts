@@ -39,7 +39,6 @@ export interface SimpleClaimParams {
  * - VaultProvider: Full access (READ + WRITE)
  */
 export interface IVaultProvider {
-  getContract(): Promise<unknown>;
   placeBet?(params: BetParams): Promise<string>;
   authorizeClaim?(params: ClaimParams): Promise<string>;
   isProcessed(betId: string): Promise<boolean>;

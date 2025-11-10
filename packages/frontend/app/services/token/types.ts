@@ -1,4 +1,4 @@
-import { AztecAddress } from "@aztec/aztec.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 export interface TokenInfo {
   name: string;
@@ -14,7 +14,6 @@ export interface TokenInfo {
  * - PublicTokenProvider: Read-only (throws on write ops)
  */
 export interface ITokenProvider {
-  getContract(address: string): Promise<unknown>;
   getTokenName(address: string): Promise<unknown>;
   getTokenSymbol(address: string): Promise<unknown>;
   getTokenDecimals(address: string): Promise<number>;

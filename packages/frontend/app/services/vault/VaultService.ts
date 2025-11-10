@@ -1,6 +1,6 @@
 import { Bet } from "@/types";
 import { walletService } from "../walletService";
-import { VaultProvider } from "./VaultProvider";
+import { VaultProvider } from "./vaultProvider";
 import type { IVaultService, IVaultProvider, SimpleBetParams, BetParams, SimpleClaimParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { generateCommitment, generateSecret, generateBetId, generateAuthwitNonce } from "@/utils/idGenerator";

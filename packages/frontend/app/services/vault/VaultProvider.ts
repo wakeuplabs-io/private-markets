@@ -1,18 +1,14 @@
-import { AztecAddress, Fr, Contract } from "@aztec/aztec.js";
-import { CopyCatAccountWallet } from '@aztec/accounts/copy-cat/lazy';
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { Fr } from "@aztec/foundation/fields";
 import { TokenContract } from "@/lib/contracts/Token";
 import { ensureWalletConnected } from "@/lib/wallet";
-import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
+import { walletConnectionManager } from "@/lib/wallet/walletConnectionManager";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
-import { pxeService } from "@/services/pxeService";
 import { pxeQueueService } from "@/services/pxeQueueService";
 import type { IVaultProvider, BetParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
 import { normalizeHex64 } from "@/lib/utils";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyAccount = any;
 
 /**
  * Blockchain bet structure (as returned from Aztec contract)
@@ -26,19 +22,11 @@ interface BlockchainBet {
   bet_id: bigint;
   commitment: bigint;
   randomness: bigint;
-  placed_at: bigint;
+  placed_at_block: bigint;
   // Optional fields that might be added by the contract
   marketId?: string;
 }
 
-/**
- * Wallet account interface
- */
-interface WalletAccount {
-  getAddress(): { toString(): string };
-  setPublicAuthWit(messageHashOrIntent: unknown, authorized: boolean, options?: unknown): Promise<unknown>;
-  aztecNode: unknown;
-}
 
 /**
  * Vault Provider
@@ -53,36 +41,11 @@ interface WalletAccount {
  * Use case: Production environment with real user wallets
  */
 export class VaultProvider implements IVaultProvider {
-  private contract: Contract | null = null;
-
   constructor(private contractAddress: string) {}
 
   /**
-   * Get or create vault contract instance with connected wallet
-   */
-  async getContract(): Promise<Contract> {
-    try {
-      // Return cached contract if available
-      if (this.contract) {
-        return this.contract;
-      }
-
-      // Get connected wallet account
-      const account = await ensureWalletConnected();
-      const address = AztecAddress.fromString(this.contractAddress);
-
-      // Create contract instance with user's wallet
-      this.contract = await Contract.at(address, BetVaultContract.artifact, account as AnyAccount);
-
-      return this.contract;
-    } catch (error) {
-      console.error('[VAULT:PRIVATE] Failed to get vault contract:', error);
-      throw new Error(`Failed to get vault contract: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
    * Place a bet on a market using connected wallet
+   * v3.0.0: Direct contract call with wallet
    *
    * This operation:
    * 1. Creates authorization witness for token transfer
@@ -94,25 +57,31 @@ export class VaultProvider implements IVaultProvider {
    */
   async placeBet(params: BetParams): Promise<string> {
     try {
-      const vaultContract = await this.getContract();
-      const account = await ensureWalletConnected() as WalletAccount;
+      // Get connected wallet and account
+      const wallet = await ensureWalletConnected();
+      const account = walletConnectionManager.getAccount();
+      const fromAddress = account.getAddress();
 
-      const fromAddress = AztecAddress.fromString(account.getAddress().toString());
+      // v3.0.0: Create vault contract instance with wallet (no caching)
+      const aztecAddress = AztecAddress.fromString(this.contractAddress);
+      const vaultContract = await BetVaultContract.at(aztecAddress, wallet);
 
       // Convert amount to e18 (wei equivalent for 18 decimals)
       const amountInE18 = BigInt(params.amount) * BigInt(10 ** 18);
 
       // Get admin address from vault contract (must match what the contract will use)
-      const adminAddress = await vaultContract.methods.get_admin().simulate({ from: fromAddress });
+      const adminAddress = await vaultContract.methods.get_admin().simulate({
+        from: fromAddress,
+        skipFeeEnforcement: true
+      });
 
       console.log('[VAULT:PRIVATE] Creating token authorization witness...');
       console.log('[VAULT:PRIVATE] Amount:', params.amount, '→', amountInE18.toString(), '(e18)');
 
-      // Create token contract instance for authorization
-      const tokenContract = await Contract.at(
+      // v3.0.0: Create token contract instance with wallet
+      const tokenContract = await TokenContract.at(
         AztecAddress.fromString(params.tokenAddress),
-        TokenContract.artifact,
-        account as AnyAccount
+        wallet
       );
 
       // Create authorization action for token transfer (using e18 amount)
@@ -123,11 +92,16 @@ export class VaultProvider implements IVaultProvider {
         Fr.fromString(params.authwitNonce)
       );
 
-      // Create authorization witness - vault contract will call the transfer
-      const authwit = await (account as AnyAccount).createAuthWit({
-        caller: AztecAddress.fromString(this.contractAddress),
-        action: transferAction
-      });
+      // v3.0.0: Create authorization witness with new signature
+      // First param: authorizer (fromAddress)
+      // Second param: { caller, action }
+      const authwit = await wallet.createAuthWit(
+        fromAddress,
+        {
+          caller: AztecAddress.fromString(this.contractAddress),
+          action: transferAction
+        }
+      );
 
       console.log('[VAULT:PRIVATE] Submitting bet transaction...');
 
@@ -156,7 +130,7 @@ export class VaultProvider implements IVaultProvider {
 
   /**
    * Check if a bet has been processed
-   * Uses CopyCatAccountWallet for proper simulation context
+   * v3.0.0: Direct contract call with wallet
    *
    * @param betId - Bet ID to check
    * @returns true if bet has been processed, false otherwise
@@ -164,18 +138,18 @@ export class VaultProvider implements IVaultProvider {
   async isProcessed(betId: string): Promise<boolean> {
     return pxeQueueService.enqueue(async () => {
       try {
-        const account = await ensureWalletConnected();
-        const pxe = pxeService.getPXE();
-
-        // Create CopyCat wallet for simulation
-        const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+        const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(this.contractAddress);
-        const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
+        const contract = await BetVaultContract.at(aztecAddress, wallet);
+
+        // v3.0.0: Always include 'from' parameter
+        const account = walletConnectionManager.getAccount();
+        const from = account.getAddress();
 
         const result = await contract.methods
           .is_processed(Fr.fromString(betId))
           .simulate({
-            from: account.getAddress(),
+            from,
             skipFeeEnforcement: true
           });
 
@@ -196,25 +170,25 @@ export class VaultProvider implements IVaultProvider {
 
   /**
    * Get the token address associated with the vault
-   * Uses CopyCatAccountWallet for proper simulation context
+   * v3.0.0: Direct contract call with wallet
    *
    * @returns Token contract address
    */
   async getTokenAddress(): Promise<string> {
     return pxeQueueService.enqueue(async () => {
       try {
-        const account = await ensureWalletConnected();
-        const pxe = pxeService.getPXE();
-
-        // Create CopyCat wallet for simulation
-        const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+        const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(this.contractAddress);
-        const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
+        const contract = await BetVaultContract.at(aztecAddress, wallet);
+
+        // v3.0.0: Always include 'from' parameter
+        const account = walletConnectionManager.getAccount();
+        const from = account.getAddress();
 
         const result = await contract.methods
           .get_token_address()
           .simulate({
-            from: account.getAddress(),
+            from,
             skipFeeEnforcement: true
           });
 
@@ -235,19 +209,18 @@ export class VaultProvider implements IVaultProvider {
 
   /**
    * Get user bets
-   * Uses CopyCatAccountWallet for proper simulation context
+   * v3.0.0: Direct contract call with wallet
    */
   async getUserBets(): Promise<Bet[]> {
     return pxeQueueService.enqueue(async () => {
-      const account = await ensureWalletConnected();
-      const pxe = pxeService.getPXE();
-
-      // Create CopyCat wallet for simulation
-      const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+      const wallet = await ensureWalletConnected();
       const aztecAddress = AztecAddress.fromString(this.contractAddress);
-      const contract = await Contract.at(aztecAddress, BetVaultContract.artifact, copyCatWallet);
+      const contract = await BetVaultContract.at(aztecAddress, wallet);
 
+      // v3.0.0: Always include 'from' parameter
+      const account = walletConnectionManager.getAccount();
       const from = account.getAddress();
+
       const result: { storage: BlockchainBet[], len: bigint } = await contract.methods
         .get_user_bets(from, 0, 10)
         .simulate({
@@ -272,7 +245,7 @@ export class VaultProvider implements IVaultProvider {
         option: blockchainBet.outcome === BigInt(1) ? 'yes' : 'no',
         amount: Number(blockchainBet.amount) / 1e18,
         status: claimedStatuses[index] ? 'claimed' as const : 'confirmed' as const,
-        placedAt: blockchainBet.placed_at > 0 ? new Date(Number(blockchainBet.placed_at) * 1000) : new Date(),
+        placedAt: blockchainBet.placed_at_block > 0 ? new Date(Number(blockchainBet.placed_at_block) * 1000) : new Date(),
         userAddress: normalizeHex64(blockchainBet.owner),
         commitment: normalizeHex64(blockchainBet.commitment),
         randomness: normalizeHex64(blockchainBet.randomness),
@@ -284,6 +257,7 @@ export class VaultProvider implements IVaultProvider {
 
   /**
    * Authorize a claim for a bet using connected wallet
+   * v3.0.0: Direct contract call with wallet
    *
    * This operation:
    * 1. Verifies the commitment matches the secret
@@ -297,9 +271,13 @@ export class VaultProvider implements IVaultProvider {
    */
   async authorizeClaim(params: ClaimParams): Promise<string> {
     try {
-      const vaultContract = await this.getContract();
-      const account = await ensureWalletConnected() as WalletAccount;
-      const fromAddress = AztecAddress.fromString(account.getAddress().toString());
+      const wallet = await ensureWalletConnected();
+      const account = walletConnectionManager.getAccount();
+      const fromAddress = account.getAddress();
+
+      // v3.0.0: Create vault contract instance with wallet (no caching)
+      const aztecAddress = AztecAddress.fromString(this.contractAddress);
+      const vaultContract = await BetVaultContract.at(aztecAddress, wallet);
 
       console.log('[VAULT:PRIVATE] Authorizing claim...');
       console.log('[VAULT:PRIVATE] Market ID:', params.marketId);
@@ -343,8 +321,9 @@ export class VaultProvider implements IVaultProvider {
 
   /**
    * Clear cached contract
+   * v3.0.0: No caching - contracts created fresh each time
    */
   clearCache(): void {
-    this.contract = null;
+    // No caching in v3.0.0
   }
 }

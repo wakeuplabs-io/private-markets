@@ -1,4 +1,4 @@
-import type { PXE } from '@aztec/aztec.js';
+import type { PXE } from '@aztec/pxe/client/lazy';
 
 /**
  * PXE Service Singleton

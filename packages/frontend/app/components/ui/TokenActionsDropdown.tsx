@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { AztecAddress } from "@aztec/aztec.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { useTokenActions } from "@/hooks/useTokenActions";

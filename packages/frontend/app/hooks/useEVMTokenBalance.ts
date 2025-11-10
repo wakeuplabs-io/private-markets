@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAccount } from 'wagmi'
-import { evmTokenService, type EVMTokenInfo } from '@/services/token/EVMTokenService'
+import { evmTokenService, type EVMTokenInfo } from '@/services/token/evmTokenService'
 
 /**
  * Hook result interface
@@ -32,8 +32,9 @@ export function useEVMTokenBalance(tokenAddress?: `0x${string}`): UseEVMTokenBal
 
   /**
    * Fetch token info and balance
+   * Memoized with useCallback to prevent unnecessary re-renders
    */
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     // Reset state if not connected or no token address
     if (!isConnected || !userAddress || !tokenAddress) {
       setTokenInfo(undefined)
@@ -63,28 +64,21 @@ export function useEVMTokenBalance(tokenAddress?: `0x${string}`): UseEVMTokenBal
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [userAddress, isConnected, tokenAddress])
 
   /**
    * Fetch data on mount and when dependencies change
    */
   useEffect(() => {
     fetchData()
-  }, [userAddress, isConnected, tokenAddress])
-
-  /**
-   * Manual refetch function
-   */
-  const refetch = async () => {
-    await fetchData()
-  }
+  }, [fetchData])
 
   return {
     tokenInfo,
     balance,
     isLoading,
     error,
-    refetch
+    refetch: fetchData
   }
 }
 

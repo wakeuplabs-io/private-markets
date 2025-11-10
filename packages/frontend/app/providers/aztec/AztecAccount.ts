@@ -1,18 +1,22 @@
 import type { IWalletAccount } from "@/types/wallet";
-import type { AccountWallet } from '@aztec/aztec.js';
+import type { Wallet } from '@aztec/aztec.js/wallet';
+import type { AztecAddress } from '@aztec/stdlib/aztec-address';
 
 export class AztecAccount implements IWalletAccount {
-  constructor(private accountWallet: AccountWallet) {}
+  constructor(
+    private accountWallet: Wallet,
+    private address: AztecAddress
+  ) {}
 
-  getAddress(): { toString(): string } {
-    return this.accountWallet.getAddress();
+  getAddress(): AztecAddress {
+    return this.address;
   }
 
-  getAccountWallet(): AccountWallet {
+  getAccountWallet(): Wallet {
     return this.accountWallet;
   }
 
   toString(): string {
-    return this.accountWallet.getAddress().toString();
+    return this.address.toString();
   }
 }

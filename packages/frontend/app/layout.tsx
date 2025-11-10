@@ -4,7 +4,7 @@ import "./globals.css";
 import { WalletProvider } from "./context";
 import { WagmiProviderWrapper } from "./providers/wagmiProvider";
 import { WalletProvidersInitializer } from "./components/providers/WalletProvidersInitializer";
-import { PXELoadingProvider } from "./providers/PXELoadingProvider";
+import { PXELoadingProvider } from "./providers/pxeLoadingProvider";
 import { Layout } from "./components/layout";
 
 const dmSans = DM_Sans({

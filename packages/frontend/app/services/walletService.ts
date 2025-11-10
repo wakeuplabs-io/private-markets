@@ -1,5 +1,5 @@
 import { walletConnectionManager, type WalletConnector } from "@/lib/wallet"
-import { walletRegistry } from "@/lib/wallet/WalletRegistry";
+import { walletRegistry } from "@/lib/wallet/walletRegistry";
 // Import to ensure providers are initialized before any wallet operations
 import "@/lib/wallet/providers";
 

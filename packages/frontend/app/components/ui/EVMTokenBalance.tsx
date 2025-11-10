@@ -3,7 +3,7 @@
 import React from "react"
 import { cn } from "@/lib/utils"
 import { AlertTriangle } from "lucide-react"
-import type { EVMTokenInfo } from "@/services/token/EVMTokenService"
+import type { EVMTokenInfo } from "@/services/token/evmTokenService"
 
 /**
  * EVM Token Balance Display Props

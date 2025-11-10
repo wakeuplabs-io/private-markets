@@ -19,7 +19,7 @@ export type { ContractMarket, MarketStats }
 import { BlockchainStatusService } from './blockchainStatusService'
 import { parseUnits } from 'viem'
 import { vaultService } from './vault'
-import { evmTokenService } from './token/EVMTokenService'
+import { evmTokenService } from './token/evmTokenService'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
 const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` // Arbitrum Sepolia USDC

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useRef } from "react";
-import { AztecAddress } from "@aztec/aztec.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { TokenInfoState } from "@/types/token";
 import { tokenService } from "@/services/token";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";

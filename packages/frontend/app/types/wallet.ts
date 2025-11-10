@@ -1,8 +1,10 @@
-import type { PXE, AuthWitness, AztecAddress } from "@aztec/aztec.js";
+import type { PXE } from "@aztec/pxe/client/lazy";
+import type { AuthWitness } from "@aztec/stdlib/auth-witness";
+import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 // Core wallet interfaces
 export interface IWalletAccount {
-  getAddress(): { toString(): string };
+  getAddress(): AztecAddress;
 }
 
 export interface IWalletProvider {

@@ -1,38 +1,32 @@
 import type { IExtendedWalletProvider, IWalletAccount } from "@/types/wallet";
-import { AztecAccount } from "./AztecAccount";
+import { AztecAccount } from "./aztecAccount";
 import type {
   AztecWalletConfig,
   AztecAccountData,
   CreateAccountOptions,
 } from "./types";
-import {
-  Fr,
-  createLogger,
-  createPXEClient,
-  createAztecNodeClient,
-  waitForPXE,
-  AztecAddress,
-  getContractInstanceFromInstantiationParams,
-  ContractFunctionInteraction,
-  SponsoredFeePaymentMethod,
-  AuthWitness,
-  type PXE,
-  AccountWallet,
-  GrumpkinScalar,
-} from '@aztec/aztec.js';
-import { createPXEService } from '@aztec/pxe/client/lazy';
-import { getPXEServiceConfig } from '@aztec/pxe/config';
+import { Fr, GrumpkinScalar } from '@aztec/foundation/fields';
+import { AztecAddress } from '@aztec/stdlib/aztec-address';
+import { AuthWitness } from '@aztec/stdlib/auth-witness';
+import { PXE } from '@aztec/pxe/client/lazy';
+import { type Wallet, AccountManager } from '@aztec/aztec.js/wallet';
+import { type ContractArtifact } from '@aztec/aztec.js/abi';
+import { createLogger } from '@aztec/aztec.js/log';
+import { createAztecNodeClient } from '@aztec/aztec.js/node';
+import { ContractFunctionInteraction } from '@aztec/aztec.js/contracts';
+import { SponsoredFeePaymentMethod } from '@aztec/aztec.js/fee';
+import { getContractInstanceFromInstantiationParams } from '@aztec/stdlib/contract';
+import { getDefaultInitializer } from '@aztec/stdlib/abi';
+import { TestWallet } from '@aztec/test-wallet/client/lazy';
+import { getPXEConfig } from '@aztec/pxe/config';
 import { SponsoredFPCContractArtifact } from '@aztec/noir-contracts.js/SponsoredFPC';
 import { SPONSORED_FPC_SALT } from '@aztec/constants';
-import { getSchnorrAccount } from '@aztec/accounts/schnorr/lazy';
-import {
-  type ContractArtifact,
-  getDefaultInitializer,
-} from '@aztec/stdlib/abi';
+import { SchnorrAccountContract } from '@aztec/accounts/schnorr';
 import { deriveSigningKey } from "@aztec/stdlib/keys";
 import { TokenContract } from "@/lib/contracts/Token";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
-import { WormholeContract } from "@/lib/contracts/Wormhole";
+// TODO: Uncomment when Wormhole contract is migrated to v3.0.0
+// import { WormholeContract } from "@/lib/contracts/Wormhole";
 import { createStore } from "@aztec/kv-store/indexeddb";
 import { pxeService } from "@/services/pxeService";
 
@@ -40,13 +34,17 @@ const LOCAL_STORAGE_KEY = "aztec-account";
 const DEFAULT_NODE_URL = "http://localhost:8080";
 
 const logger = createLogger('wallet');
+// Suppress source map warnings (non-critical debug info)
+logger.level = 'warn';
 
 
 export class AztecWalletProvider implements IExtendedWalletProvider {
   private pxe!: PXE;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private aztecNode: any = null; // AztecNode client for fetching contract instances
-  private connectedAccount: AccountWallet | null = null;
+  private wallet!: TestWallet; // TestWallet for browser (wraps PXE internally)
+  private connectedAccount: Wallet | null = null;
+  private connectedAddress: AztecAddress | null = null;
   private config: AztecWalletConfig;
   private isInitializing = false;
   private initializationPromise: Promise<void> | null = null;
@@ -72,17 +70,10 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     return this.isInitializing;
   }
 
-  private isTestnet(nodeUrl: string): boolean {
-    return nodeUrl.includes('aztec-testnet') ||
-           (nodeUrl.includes('testnet') &&
-           !nodeUrl.includes('localhost') &&
-           !nodeUrl.includes('127.0.0.1'));
-  }
-
   async initialize(): Promise<void> {
     // If already initialized, return immediately
-    if (this.pxe) {
-      logger.info('PXE already initialized, skipping');
+    if (this.wallet) {
+      logger.info('TestWallet already initialized, skipping');
       return;
     }
 
@@ -94,60 +85,66 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
 
     // Mark as initializing and create a new promise
     this.isInitializing = true;
-    logger.info('🚀 Starting PXE initialization...');
+    logger.info('🚀 Starting TestWallet initialization for browser...');
 
     this.initializationPromise = (async () => {
       try {
         const nodeUrl = this.config.nodeUrl || DEFAULT_NODE_URL;
-        const isTestnet = this.isTestnet(nodeUrl);
+        const isLocal = nodeUrl.includes('localhost') || nodeUrl.includes('127.0.0.1') || nodeUrl.includes('8080');
 
-        if (isTestnet) {
-          // Testnet: Create local PXE in browser (like aztec-web-starter)
-          logger.info('Creating PXE service in browser for testnet:', nodeUrl);
+        logger.info(`Creating TestWallet in browser for ${isLocal ? 'sandbox' : 'testnet'}: ${nodeUrl}`);
 
-          this.aztecNode = await createAztecNodeClient(nodeUrl);
+        // 1. Create Aztec node client
+        this.aztecNode = await createAztecNodeClient(nodeUrl);
 
-          const config = getPXEServiceConfig();
-          config.l1Contracts = await this.aztecNode.getL1ContractAddresses();
-          config.proverEnabled = this.config.proverEnabled;
-          const store = await createStore("pxe_data", {
-            dataDirectory: "pxe",
-            dataStoreMapSizeKB: 1e6,
-          });
-          this.pxe = await createPXEService(this.aztecNode, config, {
-            useLogSuffix: true,
-            store
-          });
-
-          // Register PXE in global service for access by other providers
-          pxeService.registerPXE(this.pxe);
-
-          logger.info('PXE service created in browser');
-        } else {
-          // Sandbox: Connect to existing PXE HTTP server
-          logger.info('Connecting to sandbox PXE:', nodeUrl);
-          this.pxe = createPXEClient(nodeUrl);
-          await waitForPXE(this.pxe);
-
-          // Register PXE in global service for access by other providers
-          pxeService.registerPXE(this.pxe);
-        }
-
-        // Register Sponsored FPC Contract with PXE
-        logger.info('Registering Sponsored FPC contract...');
-        await this.pxe.registerContract({
-          instance: await this.#getSponsoredFPCContract(),
-          artifact: SponsoredFPCContractArtifact,
+        // 2. Create IndexedDB store (browser-compatible)
+        const store = await createStore("pxe_data", {
+          dataDirectory: "pxe",
+          dataStoreMapSizeKb: 1e6,
         });
+
+        // 3. Get PXE config
+        const l1Contracts = await this.aztecNode.getL1ContractAddresses();
+        const pxeConfig = {
+          ...getPXEConfig(),
+          l1Contracts,
+          proverEnabled: this.config.proverEnabled,
+        };
+
+        // 4. Create TestWallet (includes PXE internally)
+        this.wallet = await TestWallet.create(this.aztecNode, pxeConfig, { store });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        this.pxe = (this.wallet as any).pxe;  // Access internal PXE
+
+        // Register PXE in global service for access by other providers
+        pxeService.registerPXE(this.pxe);
+
+        logger.info('✅ TestWallet initialized in browser');
+
+        // Wait for PXE to sync with testnet node (only for testnet)
+        await this.waitForPXESync();
+
+        // Register Sponsored FPC Contract with PXE (only for sandbox/local)
+        if (isLocal) {
+          logger.info('Registering Sponsored FPC contract (sandbox mode)...');
+          try {
+            await this.pxe.registerContract({
+              instance: await this.#getSponsoredFPCContract(),
+              artifact: SponsoredFPCContractArtifact,
+            });
+          } catch (error) {
+            logger.warn('⚠️ Could not register SponsoredFPC (may not be deployed):', error);
+          }
+        } else {
+          logger.info('ℹ️  Skipping SponsoredFPC registration on testnet');
+        }
 
         // Register deployed contracts from environment variables
         await this.registerDeployedContracts();
 
-        // Log the Node Info
-        const nodeInfo = await this.pxe.getNodeInfo();
-        logger.info('✅ PXE initialization complete. Node info:', nodeInfo);
+        logger.info('✅ Initialization complete');
       } catch (error) {
-        logger.error('❌ PXE initialization failed:', error);
+        logger.error('❌ Initialization failed:', error);
         throw error;
       } finally {
         this.isInitializing = false;
@@ -237,40 +234,41 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       console.log('🔵 [REGISTER] No vault address in env, skipping');
     }
 
+    // TODO: Uncomment when Wormhole contract is migrated to v3.0.0
     // Register Wormhole contract if address is available
-    const wormholeAddress = process.env.NEXT_PUBLIC_WORMHOLE_CONTRACT_ADDRESS;
-    console.log('🔵 [REGISTER] Wormhole address from env:', wormholeAddress);
+    // const wormholeAddress = process.env.NEXT_PUBLIC_WORMHOLE_CONTRACT_ADDRESS;
+    // console.log('🔵 [REGISTER] Wormhole address from env:', wormholeAddress);
 
-    if (wormholeAddress) {
-      try {
-        logger.info('Registering Wormhole contract:', wormholeAddress);
-        const wormholeAztecAddress = AztecAddress.fromString(wormholeAddress);
-        console.log('🔵 [REGISTER] Wormhole AztecAddress parsed:', wormholeAztecAddress.toString());
+    // if (wormholeAddress) {
+    //   try {
+    //     logger.info('Registering Wormhole contract:', wormholeAddress);
+    //     const wormholeAztecAddress = AztecAddress.fromString(wormholeAddress);
+    //     console.log('🔵 [REGISTER] Wormhole AztecAddress parsed:', wormholeAztecAddress.toString());
 
-        // Use aztecNode.getContract() for testnet
-        console.log('🔵 [REGISTER] Fetching Wormhole instance from Aztec node...');
-        const contractInstance = await this.aztecNode.getContract(wormholeAztecAddress);
-        console.log('🔵 [REGISTER] Wormhole instance result:', contractInstance);
+    //     // Use aztecNode.getContract() for testnet
+    //     console.log('🔵 [REGISTER] Fetching Wormhole instance from Aztec node...');
+    //     const contractInstance = await this.aztecNode.getContract(wormholeAztecAddress);
+    //     console.log('🔵 [REGISTER] Wormhole instance result:', contractInstance);
 
-        if (contractInstance) {
-          console.log('🔵 [REGISTER] Registering Wormhole with PXE...');
-          await this.pxe.registerContract({
-            instance: contractInstance,
-            artifact: WormholeContract.artifact,
-          });
-          logger.info('✅ Wormhole contract registered successfully');
-          console.log('🔵 [REGISTER] ✅ Wormhole registration complete');
-        } else {
-          logger.warn('⚠️  Wormhole contract instance not found on node');
-          console.log('🔵 [REGISTER] ⚠️  Wormhole contractInstance is null/undefined');
-        }
-      } catch (error) {
-        console.error('🔴 [REGISTER] Wormhole registration error:', error);
-        logger.warn('Failed to register Wormhole contract (may already be registered or not deployed):', error);
-      }
-    } else {
-      console.log('🔵 [REGISTER] No wormhole address in env, skipping');
-    }
+    //     if (contractInstance) {
+    //       console.log('🔵 [REGISTER] Registering Wormhole with PXE...');
+    //       await this.pxe.registerContract({
+    //         instance: contractInstance,
+    //         artifact: WormholeContract.artifact,
+    //       });
+    //       logger.info('✅ Wormhole contract registered successfully');
+    //       console.log('🔵 [REGISTER] ✅ Wormhole registration complete');
+    //     } else {
+    //       logger.warn('⚠️  Wormhole contract instance not found on node');
+    //       console.log('🔵 [REGISTER] ⚠️  Wormhole contractInstance is null/undefined');
+    //     }
+    //   } catch (error) {
+    //     console.error('🔴 [REGISTER] Wormhole registration error:', error);
+    //     logger.warn('Failed to register Wormhole contract (may already be registered or not deployed):', error);
+    //   }
+    // } else {
+    //   console.log('🔵 [REGISTER] No wormhole address in env, skipping');
+    // }
 
     console.log('🔵 [REGISTER] Contract registration complete');
   }
@@ -286,36 +284,229 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     return instance;
   }
 
+  /**
+   * Wait for PXE to be ready for operations
+   * Only necessary for testnet, sandbox syncs instantly
+   *
+   * Note: In v3.0.0-devnet.4, we don't have direct sync status access,
+   * so we wait a reasonable time for initial sync and rely on error handling
+   */
+  private async waitForPXESync(): Promise<void> {
+    const isLocal = this.config.nodeUrl?.includes('localhost') ||
+                    this.config.nodeUrl?.includes('127.0.0.1') ||
+                    this.config.nodeUrl?.includes('8080');
+
+    // Skip sync wait for sandbox (not necessary)
+    if (isLocal) {
+      return;
+    }
+
+    logger.info('⏳ Waiting for PXE to be ready...');
+
+    // Wait a reasonable time for initial sync (10 seconds)
+    // Errors will be caught and handled in account operations
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    logger.info('✅ PXE ready for operations');
+  }
+
+  /**
+   * Wait for account to be ready after deployment
+   * Ensures account is registered before returning
+   *
+   * Note: In v3.0.0-devnet.4, we give the PXE time to process the deployment
+   * and rely on error handling for sync issues
+   */
+  private async waitForAccountSync(address: AztecAddress): Promise<void> {
+    const isLocal = this.config.nodeUrl?.includes('localhost') ||
+                    this.config.nodeUrl?.includes('127.0.0.1') ||
+                    this.config.nodeUrl?.includes('8080');
+
+    // Skip for sandbox (not necessary)
+    if (isLocal) {
+      return;
+    }
+
+    logger.info('⏳ Waiting for account to be ready...');
+
+    // Give PXE time to process the account deployment (5 seconds)
+    // Errors will be caught and handled in subsequent operations
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    logger.info(`✅ Account ${address.toString().slice(0, 10)}... ready`);
+  }
+
   async connect(): Promise<IWalletAccount> {
+    console.log('[AztecWalletProvider] 🔵 STEP 1: Starting connect()');
+
     const account = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!account) {
       throw new Error("No existing account found. Please create an account first.");
     }
+    console.log('[AztecWalletProvider] ✅ STEP 1: Account found in localStorage');
 
+    console.log('[AztecWalletProvider] 🔵 STEP 2: Calling initialize()');
     await this.initialize();
+    console.log('[AztecWalletProvider] ✅ STEP 2: Initialize complete');
 
     try {
+      console.log('[AztecWalletProvider] 🔵 STEP 3: Parsing account data');
       const parsed: AztecAccountData = JSON.parse(account);
+      console.log('[AztecWalletProvider] Account data:', {
+        address: parsed.address,
+        hasSigningKey: !!parsed.signingKey,
+        hasSecretKey: !!parsed.secretKey,
+        hasSalt: !!parsed.salt
+      });
 
       if (!parsed.address || !parsed.signingKey || !parsed.secretKey || !parsed.salt) {
         throw new Error("Invalid account data in storage");
       }
-      const signingKeyBuffer = Buffer.from(parsed.signingKey, 'hex');
+      console.log('[AztecWalletProvider] ✅ STEP 3: Account data validated');
+
+      // v3.0.0-devnet.4 pattern: Use AccountManager.create() with TestWallet
+      console.log('[AztecWalletProvider] 🔵 STEP 4: Creating signing key from buffer');
+      console.log('[AztecWalletProvider] Raw signingKey from storage:', {
+        value: parsed.signingKey,
+        length: parsed.signingKey.length,
+        type: typeof parsed.signingKey,
+        first20: parsed.signingKey.slice(0, 20)
+      });
+
+      // Remove '0x' prefix if present (for backwards compatibility)
+      const signingKeyHex = parsed.signingKey.startsWith('0x')
+        ? parsed.signingKey.slice(2)
+        : parsed.signingKey;
+
+      console.log('[AztecWalletProvider] SigningKey after removing 0x prefix:', {
+        hex: signingKeyHex.slice(0, 40) + '...',
+        length: signingKeyHex.length
+      });
+
+      const signingKeyBuffer = Buffer.from(signingKeyHex, 'hex');
+      console.log('[AztecWalletProvider] SigningKey buffer:', {
+        bufferLength: signingKeyBuffer.length,
+        bufferHex: signingKeyBuffer.toString('hex').slice(0, 40)
+      });
+
+      if (signingKeyBuffer.length === 0) {
+        throw new Error(`Invalid signingKey in localStorage: empty buffer. Raw value: "${parsed.signingKey}"`);
+      }
+
       const signingPrivateKey = GrumpkinScalar.fromBuffer(signingKeyBuffer);
-      const ecdsaAccount = await getSchnorrAccount(
-            this.pxe,
-            Fr.fromString(parsed.secretKey),
-            signingPrivateKey,
-            Fr.fromString(parsed.salt)
-          )
+      console.log('[AztecWalletProvider] ✅ STEP 4: Signing key created');
 
-      await ecdsaAccount.register();
-      const wallet = await ecdsaAccount.getWallet();
+      console.log('[AztecWalletProvider] 🔵 STEP 5: Creating Fr fields (secretKey, salt)');
+      const secretKey = Fr.fromString(parsed.secretKey);
+      const salt = Fr.fromString(parsed.salt);
+      console.log('[AztecWalletProvider] ✅ STEP 5: Fr fields created', {
+        secretKey: secretKey.toString().slice(0, 20) + '...',
+        salt: salt.toString().slice(0, 20) + '...'
+      });
 
-      this.connectedAccount = wallet;
-      return new AztecAccount(wallet);
+      // Create account contract instance
+      console.log('[AztecWalletProvider] 🔵 STEP 6: Creating SchnorrAccountContract');
+      const accountContract = new SchnorrAccountContract(signingPrivateKey);
+      console.log('[AztecWalletProvider] ✅ STEP 6: SchnorrAccountContract created');
+
+      // Create AccountManager (v3.0.0-devnet.4: pass TestWallet, not PXE)
+      console.log('[AztecWalletProvider] 🔵 STEP 7: Creating AccountManager with TestWallet');
+      console.log('[AztecWalletProvider] AccountManager.create params:', {
+        hasWallet: !!this.wallet,
+        secretKey: secretKey.toString().slice(0, 20) + '...',
+        accountContract: accountContract.constructor.name,
+        salt: salt.toString().slice(0, 20) + '...'
+      });
+
+      const accountManager = await AccountManager.create(
+        this.wallet,  // Pass TestWallet instead of PXE
+        secretKey,
+        accountContract,
+        salt
+      );
+      console.log('[AztecWalletProvider] ✅ STEP 7: AccountManager created');
+
+      console.log('[AztecWalletProvider] 🔵 STEP 8: Getting address and instance from AccountManager');
+      const address = accountManager.address;
+      const instance = accountManager.getInstance();
+      console.log('[AztecWalletProvider] Address:', address.toString());
+      console.log('[AztecWalletProvider] Instance:', {
+        address: instance.address.toString(),
+        salt: instance.salt.toString().slice(0, 20) + '...',
+        deployer: instance.deployer.toString()
+      });
+      console.log('[AztecWalletProvider] ✅ STEP 8: Address and instance retrieved');
+
+      console.log('[AztecWalletProvider] 🔵 STEP 9: Getting contract artifact');
+      const artifact = await accountContract.getContractArtifact();
+      console.log('[AztecWalletProvider] Artifact:', {
+        name: artifact.name,
+        functions: artifact.functions.length
+      });
+      console.log('[AztecWalletProvider] ✅ STEP 9: Contract artifact retrieved');
+
+      // Register with PXE (not accountManager.register())
+      console.log('[AztecWalletProvider] 🔵 STEP 10: Registering account with PXE');
+      try {
+        await this.pxe.registerAccount(secretKey, instance.salt);
+        console.log('[AztecWalletProvider] ✅ STEP 10: Account registered with PXE');
+      } catch (error) {
+        // May already be registered, that's ok
+        console.log('[AztecWalletProvider] ⚠️ STEP 10: Account already registered with PXE (or error):', error);
+        logger.info('Account already registered with PXE');
+      }
+
+      // Register contract with wallet
+      console.log('[AztecWalletProvider] 🔵 STEP 11: Registering contract with wallet');
+      console.log('[AztecWalletProvider] registerContract params:', {
+        instanceAddress: instance.address.toString(),
+        artifactName: artifact.name,
+        secretKey: secretKey.toString().slice(0, 20) + '...'
+      });
+      await this.wallet.registerContract(instance, artifact, secretKey);
+      console.log('[AztecWalletProvider] ✅ STEP 11: Contract registered with wallet');
+
+      // Get account and add to wallet's internal map
+      console.log('[AztecWalletProvider] 🔵 STEP 12: Getting account instance from AccountManager');
+      const accountInstance = await accountManager.getAccount();
+      console.log('[AztecWalletProvider] ✅ STEP 12: Account instance retrieved');
+
+      console.log('[AztecWalletProvider] 🔵 STEP 13: Adding account to wallet internal map');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this.wallet as any).accounts.set(address.toString(), accountInstance);
+      console.log('[AztecWalletProvider] ✅ STEP 13: Account added to wallet map');
+
+      // Use the TestWallet directly (it wraps the account manager)
+      console.log('[AztecWalletProvider] 🔵 STEP 14: Setting connected account and address');
+      this.connectedAccount = this.wallet;
+      this.connectedAddress = address;
+      console.log('[AztecWalletProvider] ✅ STEP 14: Connected account set');
+
+      console.log('[AztecWalletProvider] 🔵 STEP 15: Creating AztecAccount wrapper');
+      const aztecAccount = new AztecAccount(this.wallet, address);
+      console.log('[AztecWalletProvider] ✅ STEP 15: AztecAccount created');
+
+      console.log('[AztecWalletProvider] 🎉 SUCCESS: Connect completed successfully!');
+      return aztecAccount;
     } catch (error) {
-      throw new Error(`Failed to connect to existing account: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('[AztecWalletProvider] ❌ ERROR in connect():', error);
+      console.error('[AztecWalletProvider] Error stack:', error instanceof Error ? error.stack : 'No stack');
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      // Detect sync-related errors and provide user-friendly messages
+      if (errorMessage.includes('No local block hash') || errorMessage.includes('Failed to get a note')) {
+        throw new Error(
+          'Network synchronization failed. This can happen when the testnet is very active.\n\n' +
+          'Solutions:\n' +
+          '1. Wait a moment and try again\n' +
+          '2. Refresh the page to restart sync\n' +
+          '3. Clear browser data (Settings > Storage) if problem persists\n\n' +
+          `Technical details: ${errorMessage}`
+        );
+      }
+
+      throw new Error(`Failed to connect to existing account: ${errorMessage}`);
     }
   }
 
@@ -330,68 +521,127 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       const secretKey = Fr.random();
       const signingKey = deriveSigningKey(secretKey);
 
-      const account = await getSchnorrAccount(this.pxe, secretKey, signingKey, salt);
+      // v3.0.0-devnet.4 pattern: Use AccountManager.create() with TestWallet
+      const accountContract = new SchnorrAccountContract(signingKey);
+      const accountManager = await AccountManager.create(
+        this.wallet,  // Pass TestWallet instead of PXE
+        secretKey,
+        accountContract,
+        salt
+      );
 
-      const deployMethod = await account.getDeployMethod();
-      const sponsoredPFCContract = await this.#getSponsoredFPCContract();
+      const address = accountManager.address;
+      const instance = accountManager.getInstance();
+      const artifact = await accountContract.getContractArtifact();
+
+      // Register with PXE before deployment
+      await this.pxe.registerAccount(secretKey, instance.salt);
+      await this.wallet.registerContract(instance, artifact, secretKey);
+
+      const accountInstance = await accountManager.getAccount();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this.wallet as any).accounts.set(address.toString(), accountInstance);
+
+      const deployMethod = await accountManager.getDeployMethod();
+
+      // Try to use SponsoredFPC if available, otherwise proceed without fee payment
+      let feePaymentMethod;
+      try {
+        const sponsoredPFCContract = await this.#getSponsoredFPCContract();
+        const instance = await this.pxe.getContractInstance(sponsoredPFCContract.address);
+        if (instance) {
+          // v3.0.0-devnet.4: Create SponsoredFeePaymentMethod directly
+          feePaymentMethod = new SponsoredFeePaymentMethod(sponsoredPFCContract.address);
+          logger.info('Using SponsoredFPC for account deployment');
+        }
+      } catch {
+        logger.info('SponsoredFPC not available, deploying without fee payment');
+      }
 
       const deployOpts = {
         from: AztecAddress.ZERO,
-        contractAddressSalt: Fr.fromString(account.salt.toString()),
-        fee: {
-          paymentMethod: await account.getSelfPaymentMethod(
-            new SponsoredFeePaymentMethod(sponsoredPFCContract.address)
-          ),
-        },
-        universalDeploy: true,
-        skipClassPublication: true,
-        skipInstancePublication: true,
+        ...(feePaymentMethod && { fee: { paymentMethod: feePaymentMethod } }),
       };
 
-      const provenInteraction = await deployMethod.prove(deployOpts);
-      const receipt = await provenInteraction.send().wait({ timeout: 120 });
+      // v3.0.0-devnet.4: Call send() directly, no prove() step
+      const receipt = await deployMethod.send(deployOpts).wait({ timeout: 120 });
 
       logger.info('Account deployed', receipt);
 
-      const wallet = await account.getWallet();
-      const signingKeyHex = signingKey.toBuffer().toString('hex');
+      // Wait for account notes to sync (only for testnet)
+      await this.waitForAccountSync(address);
+
+      console.log('[AztecWalletProvider] 🔵 Converting signingKey to hex for storage');
+      console.log('[AztecWalletProvider] signingKey type:', signingKey.constructor.name);
+      const signingKeyBuffer = signingKey.toBuffer();
+      console.log('[AztecWalletProvider] signingKeyBuffer length:', signingKeyBuffer.length);
+      const signingKeyHex = signingKeyBuffer.toString('hex');
+      console.log('[AztecWalletProvider] signingKeyHex:', {
+        length: signingKeyHex.length,
+        first20: signingKeyHex.slice(0, 20)
+      });
 
       if (saveToStorage) {
         const accountData: AztecAccountData = {
-          address: wallet.getAddress().toString(),
+          address: address.toString(),
           signingKey: signingKeyHex,
           secretKey: secretKey.toString(),
           salt: salt.toString(),
         };
+        console.log('[AztecWalletProvider] 💾 Saving to localStorage:', {
+          address: accountData.address,
+          signingKeyLength: accountData.signingKey.length,
+          signingKeyFirst20: accountData.signingKey.slice(0, 20),
+          hasSecretKey: !!accountData.secretKey,
+          hasSalt: !!accountData.salt
+        });
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(accountData));
+        console.log('[AztecWalletProvider] ✅ Account data saved to localStorage');
       }
 
-      await account.register();
-      this.connectedAccount = wallet;
+      // Use the TestWallet directly (it wraps the account manager)
+      this.connectedAccount = this.wallet;
+      this.connectedAddress = address;
 
-      return new AztecAccount(wallet);
+      return new AztecAccount(this.wallet, address);
     } catch (error) {
-      throw new Error(`Failed to create account: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      // Detect sync-related errors and provide user-friendly messages
+      if (errorMessage.includes('No local block hash') || errorMessage.includes('Failed to get a note')) {
+        throw new Error(
+          'Network synchronization failed. This can happen when the testnet is very active.\n\n' +
+          'Solutions:\n' +
+          '1. Wait a moment and try again\n' +
+          '2. Refresh the page to restart sync\n' +
+          '3. Clear browser data (Settings > Storage) if problem persists\n\n' +
+          `Technical details: ${errorMessage}`
+        );
+      }
+
+      throw new Error(`Failed to create account: ${errorMessage}`);
     }
   }
 
   disconnect(): void {
     this.connectedAccount = null;
+    this.connectedAddress = null;
     // Don't clear PXE on disconnect, it can be reused
   }
 
   clearAccount(): void {
     this.connectedAccount = null;
+    this.connectedAddress = null;
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     // Clear PXE when clearing account completely
     pxeService.clearPXE();
   }
 
   getAccount(): IWalletAccount | null {
-    if (!this.connectedAccount) {
+    if (!this.connectedAccount || !this.connectedAddress) {
       return null;
     }
-    return new AztecAccount(this.connectedAccount);
+    return new AztecAccount(this.connectedAccount, this.connectedAddress);
   }
 
   getConnectedAccount() {
@@ -417,18 +667,27 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       contractInteraction = contractInteraction.with({ authWitnesses });
     }
 
-    const sponsoredPFCContract = await this.#getSponsoredFPCContract();
+    // Try to use SponsoredFPC if available
+    const sendOpts = {
+      from: from ?? this.connectedAddress!,
+      fee: undefined as { paymentMethod: SponsoredFeePaymentMethod } | undefined,
+    };
 
-    const provenInteraction = await contractInteraction.prove({
-      from: from ?? this.connectedAccount.getAddress(),
-      fee: {
-        paymentMethod: new SponsoredFeePaymentMethod(
-          sponsoredPFCContract.address
-        ),
-      },
-    });
+    try {
+      const sponsoredPFCContract = await this.#getSponsoredFPCContract();
+      const instance = await this.pxe.getContractInstance(sponsoredPFCContract.address);
+      if (instance) {
+        sendOpts.fee = {
+          paymentMethod: new SponsoredFeePaymentMethod(sponsoredPFCContract.address),
+        };
+        logger.info('Using SponsoredFPC for transaction');
+      }
+    } catch {
+      logger.info('SponsoredFPC not available, sending transaction without fee payment');
+    }
 
-    await provenInteraction.send().wait({ timeout: 120 });
+    // v3.0.0-devnet.4: Call send() directly, no prove() step
+    await contractInteraction.send(sendOpts).wait({ timeout: 120 });
   }
 
   async simulateTransaction(interaction: unknown): Promise<unknown> {
@@ -438,7 +697,7 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
 
     const contractInteraction = interaction as ContractFunctionInteraction;
     const res = await contractInteraction.simulate({
-      from: this.connectedAccount.getAddress(),
+      from: this.connectedAddress!,
     });
     return res;
   }

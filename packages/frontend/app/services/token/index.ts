@@ -22,14 +22,14 @@
  */
 
 // Main service exports
-export { TokenService, tokenService } from './TokenService';
+export { TokenService, tokenService } from './tokenService';
 
 // Provider exports (for testing or advanced usage)
-export { TokenProvider } from './TokenProvider';
+export { TokenProvider } from './tokenProvider';
 
 // Type exports
 export type { ITokenService, ITokenProvider, TokenInfo } from './types';
 export { FALLBACK_VALUES } from './types';
 
 // Default export
-export { tokenService as default } from './TokenService';
+export { tokenService as default } from './tokenService';
