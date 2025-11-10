@@ -39,17 +39,11 @@ export class TokenProvider implements ITokenProvider {
         const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);
         const contract = await TokenContract.at(aztecAddress, wallet);
-
-        // v3.0.0: Always include 'from' parameter
         const account = walletConnectionManager.getAccount();
         const from = account.getAddress();
-
-        const name = await contract.methods.name().simulate({
+        return await contract.methods.name().simulate({
           from,
-          skipFeeEnforcement: true
         });
-
-        return name;
       } catch (error) {
         console.error('[TOKEN:PRIVATE] Failed to get token name:', error);
         return FALLBACK_VALUES.TOKEN_NAME;
@@ -59,7 +53,6 @@ export class TokenProvider implements ITokenProvider {
 
   /**
    * Get token symbol using connected wallet
-   * v3.0.0: Direct contract call with wallet
    */
   async getTokenSymbol(address: string): Promise<unknown> {
     return pxeQueueService.enqueue(async () => {
@@ -68,17 +61,13 @@ export class TokenProvider implements ITokenProvider {
         const aztecAddress = AztecAddress.fromString(address);
         const contract = await TokenContract.at(aztecAddress, wallet);
 
-        // v3.0.0: Always include 'from' parameter
         const account = walletConnectionManager.getAccount();
         const from = account.getAddress();
 
-        const symbol = await contract.methods.symbol().simulate({
+        return await contract.methods.symbol().simulate({
           from,
-          skipFeeEnforcement: true
         });
-
-        return symbol;
-      } catch (error) {
+s      } catch (error) {
         console.error('[TOKEN:PRIVATE] Failed to get token symbol:', error);
         return FALLBACK_VALUES.TOKEN_SYMBOL;
       }
@@ -87,7 +76,6 @@ export class TokenProvider implements ITokenProvider {
 
   /**
    * Get token decimals using connected wallet
-   * v3.0.0: Direct contract call with wallet
    */
   async getTokenDecimals(address: string): Promise<number> {
     return pxeQueueService.enqueue(async () => {
@@ -96,13 +84,11 @@ export class TokenProvider implements ITokenProvider {
         const aztecAddress = AztecAddress.fromString(address);
         const contract = await TokenContract.at(aztecAddress, wallet);
 
-        // v3.0.0: Always include 'from' parameter
         const account = walletConnectionManager.getAccount();
         const from = account.getAddress();
 
         const decimals = await contract.methods.decimals().simulate({
           from,
-          skipFeeEnforcement: true
         });
         return Number(decimals);
       } catch (error) {
@@ -114,7 +100,6 @@ export class TokenProvider implements ITokenProvider {
 
   /**
    * Get private balance for an owner using connected wallet
-   * v3.0.0: Direct contract call with wallet
    * Uses timeout to prevent hanging on long operations
    */
   async getPrivateBalance(address: string, owner: AztecAddress): Promise<bigint> {
@@ -124,7 +109,6 @@ export class TokenProvider implements ITokenProvider {
         const aztecAddress = AztecAddress.fromString(address);
         const contract = await TokenContract.at(aztecAddress, wallet);
 
-        // v3.0.0: Always include 'from' parameter
         const account = walletConnectionManager.getAccount();
         const from = account.getAddress();
 

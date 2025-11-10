@@ -33,7 +33,7 @@ export class PXEService {
    *
    * @param pxe - The PXE instance to register
    */
-  registerPXE(pxe: PXE): void {
+  async registerPXE(pxe: PXE): Promise<void> {
     this.pxe = pxe;
     console.log('[PXEService] PXE registered successfully');
   }

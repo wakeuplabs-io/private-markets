@@ -131,6 +131,7 @@ export class VaultProvider implements IVaultProvider {
   /**
    * Check if a bet has been processed
    * v3.0.0: Direct contract call with wallet
+   * Wrapped with automatic retry on PXE sync errors
    *
    * @param betId - Bet ID to check
    * @returns true if bet has been processed, false otherwise
@@ -171,6 +172,7 @@ export class VaultProvider implements IVaultProvider {
   /**
    * Get the token address associated with the vault
    * v3.0.0: Direct contract call with wallet
+   * Wrapped with automatic retry on PXE sync errors
    *
    * @returns Token contract address
    */
@@ -210,6 +212,7 @@ export class VaultProvider implements IVaultProvider {
   /**
    * Get user bets
    * v3.0.0: Direct contract call with wallet
+   * Wrapped with automatic retry on PXE sync errors
    */
   async getUserBets(): Promise<Bet[]> {
     return pxeQueueService.enqueue(async () => {

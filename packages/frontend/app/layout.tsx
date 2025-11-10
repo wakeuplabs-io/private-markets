@@ -6,6 +6,8 @@ import { WagmiProviderWrapper } from "./providers/wagmiProvider";
 import { WalletProvidersInitializer } from "./components/providers/WalletProvidersInitializer";
 import { PXELoadingProvider } from "./providers/pxeLoadingProvider";
 import { Layout } from "./components/layout";
+import { PXEManagerProvider } from "./providers/pxe/PXEManagerProvider";
+import { PXEStatusIndicator } from "./components/pxe/PXEStatusIndicator";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -30,10 +32,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WalletProvidersInitializer>
           <WagmiProviderWrapper>
             <WalletProvider>
+              {/* Keep old provider for backward compatibility */}
               <PXELoadingProvider>
-                <Layout>
-                  {children}
-                </Layout>
+                {/* Simplified PXE Queue Manager */}
+                <PXEManagerProvider>
+                  <Layout>
+                    {children}
+                  </Layout>
+                  <PXEStatusIndicator />
+                </PXEManagerProvider>
               </PXELoadingProvider>
             </WalletProvider>
           </WagmiProviderWrapper>
