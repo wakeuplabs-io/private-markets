@@ -26,6 +26,8 @@ import type {
   QueueStatus,
   QueuedOperation,
 } from './types';
+import { operationEventBus } from '@/lib/utils/operationEventBus';
+import { operationHistoryManager } from '@/services/operations';
 
 export class PXEManager {
   private static instance: PXEManager | null = null;
@@ -69,14 +71,89 @@ export class PXEManager {
     description?: string
   ): Promise<T> {
     const operationDesc = description || 'Processing operation';
+    console.log('[PXEManager] Enqueue requested:', operationDesc);
+
+    // 1. Create operation in history
+    const operationId = operationHistoryManager.addOperation(
+      operationDesc,
+      { type: this.inferOperationType(operationDesc) }
+    );
+
+    // 2. Emit START event
+    operationEventBus.emit({
+      type: 'START',
+      operationId,
+      timestamp: new Date(),
+    });
 
     try {
+      // 3. Update to in-progress before executing
+      operationHistoryManager.updateOperation(operationId, {
+        status: 'in-progress'
+      });
+
+      // 4. Execute operation
       const result = await this.operationQueue.enqueue(operation, operationDesc);
+
+      // 5. Emit SUCCESS event
+      operationEventBus.emit({
+        type: 'SUCCESS',
+        operationId,
+        timestamp: new Date(),
+        data: result,
+      });
+
+      // 6. Update history to success
+      operationHistoryManager.updateOperation(operationId, {
+        status: 'success',
+        endTime: new Date(),
+      });
+
+      console.log('[PXEManager] Operation completed successfully');
       return result;
     } catch (error) {
+      // 7. Emit ERROR event
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      operationEventBus.emit({
+        type: 'ERROR',
+        operationId,
+        timestamp: new Date(),
+        data: { error: errorMessage },
+      });
+
+      // 8. Update history to error
+      operationHistoryManager.updateOperation(operationId, {
+        status: 'error',
+        endTime: new Date(),
+        error: errorMessage,
+      });
+
       console.error('[PXEManager] Operation failed:', error);
       throw error;
+    } finally {
+      // 9. Emit COMPLETE event
+      operationEventBus.emit({
+        type: 'COMPLETE',
+        operationId,
+        timestamp: new Date(),
+      });
     }
+  }
+
+  /**
+   * Infer operation type from description
+   * @param description - Operation description
+   * @returns Operation type or undefined
+   */
+  private inferOperationType(description: string): 'bet' | 'claim' | 'mint' | 'transfer' | 'query' | undefined {
+    const lower = description.toLowerCase();
+    if (lower.includes('bet') || lower.includes('apuesta')) return 'bet';
+    if (lower.includes('claim') || lower.includes('reclaim') || lower.includes('authori')) return 'claim';
+    if (lower.includes('mint') || lower.includes('acu')) return 'mint';
+    if (lower.includes('transfer')) return 'transfer';
+    if (lower.includes('loading') || lower.includes('loading') || lower.includes('checking')) return 'query';
+    return undefined;
   }
 
   /**
@@ -100,6 +177,8 @@ export class PXEManager {
    * Handle queue status updates from OperationQueue
    */
   private handleQueueUpdate(queueStatus: QueueStatus): void {
+    console.log('[PXEManager] Queue update received:', queueStatus);
+
     this.state.queue = queueStatus;
     this.updateBusyAndMessage();
     this.notifyListeners();
@@ -147,8 +226,11 @@ export class PXEManager {
    * Reset manager (for testing or cleanup)
    */
   public reset(): void {
+    console.log('[PXEManager] Resetting...');
+
     this.operationQueue.clear();
     this.listeners.clear();
+
     this.state = {
       queue: {
         length: 0,

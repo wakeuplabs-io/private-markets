@@ -8,6 +8,8 @@ import { PXELoadingProvider } from "./providers/pxeLoadingProvider";
 import { Layout } from "./components/layout";
 import { PXEManagerProvider } from "./providers/pxe/PXEManagerProvider";
 import { PXEStatusIndicator } from "./components/pxe/PXEStatusIndicator";
+import { OperationHistoryProvider } from "./providers/OperationHistoryProvider";
+import { OperationHistoryPanel } from "./components/operations";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -29,22 +31,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body className={`${dmSans.variable} ${lato.variable} font-sans antialiased`}>
-        <WalletProvidersInitializer>
-          <WagmiProviderWrapper>
-            <WalletProvider>
-              {/* Keep old provider for backward compatibility */}
-              <PXELoadingProvider>
-                {/* Simplified PXE Queue Manager */}
-                <PXEManagerProvider>
-                  <Layout>
-                    {children}
-                  </Layout>
-                  <PXEStatusIndicator />
-                </PXEManagerProvider>
-              </PXELoadingProvider>
-            </WalletProvider>
-          </WagmiProviderWrapper>
-        </WalletProvidersInitializer>
+        <OperationHistoryProvider>
+          <WalletProvidersInitializer>
+            <WagmiProviderWrapper>
+              <WalletProvider>
+                {/* Keep old provider for backward compatibility */}
+                <PXELoadingProvider>
+                  {/* Simplified PXE Queue Manager */}
+                  <PXEManagerProvider>
+                    <Layout>
+                      {children}
+                    </Layout>
+                    <PXEStatusIndicator />
+                    <OperationHistoryPanel />
+                  </PXEManagerProvider>
+                </PXELoadingProvider>
+              </WalletProvider>
+            </WagmiProviderWrapper>
+          </WalletProvidersInitializer>
+        </OperationHistoryProvider>
       </body>
     </html>
   );

@@ -48,7 +48,7 @@ export class TokenProvider implements ITokenProvider {
         console.error('[TOKEN:PRIVATE] Failed to get token name:', error);
         return FALLBACK_VALUES.TOKEN_NAME;
       }
-    });
+    }, 'Loading token name');
   }
 
   /**
@@ -71,7 +71,7 @@ export class TokenProvider implements ITokenProvider {
         console.error('[TOKEN:PRIVATE] Failed to get token symbol:', error);
         return FALLBACK_VALUES.TOKEN_SYMBOL;
       }
-    });
+    }, 'Loading token symbol');
   }
 
   /**
@@ -95,7 +95,7 @@ export class TokenProvider implements ITokenProvider {
         console.error('[TOKEN:PRIVATE] Failed to get token decimals:', error);
         return FALLBACK_VALUES.TOKEN_DECIMALS;
       }
-    });
+    }, 'Loading token decimals');
   }
 
   /**
@@ -125,7 +125,7 @@ export class TokenProvider implements ITokenProvider {
         console.error('[TOKEN:PRIVATE] Failed to get private balance:', error);
         return FALLBACK_VALUES.BALANCE;
       }
-    });
+    }, 'Loading private balance');
   }
 
   /**
@@ -135,22 +135,24 @@ export class TokenProvider implements ITokenProvider {
    * This is a write operation that requires user approval
    */
   async mintToPrivate(address: string, recipient: AztecAddress, amount: bigint): Promise<string> {
-    try {
-      const wallet = await ensureWalletConnected();
-      const aztecAddress = AztecAddress.fromString(address);
-      const contract = await TokenContract.at(aztecAddress, wallet);
+    return pxeManager.enqueue(async () => {
+      try {
+        const wallet = await ensureWalletConnected();
+        const aztecAddress = AztecAddress.fromString(address);
+        const contract = await TokenContract.at(aztecAddress, wallet);
 
-      // v3.0.0: mint_to_private takes only 2 params (recipient, amount)
-      const account = walletConnectionManager.getAccount();
-      const from = account.getAddress();
+        // v3.0.0: mint_to_private takes only 2 params (recipient, amount)
+        const account = walletConnectionManager.getAccount();
+        const from = account.getAddress();
 
-      const interaction = contract.methods.mint_to_private(recipient, amount);
-      await walletConnectionManager.sendTransaction(interaction, undefined, from);
-      return 'Transaction sent successfully';
-    } catch (error) {
-      console.error('[TOKEN:PRIVATE] Failed to mint to private:', error);
-      throw new Error(`Failed to mint to private: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+        const interaction = contract.methods.mint_to_private(recipient, amount);
+        await walletConnectionManager.sendTransaction(interaction, undefined, from);
+        return 'Transaction sent successfully';
+      } catch (error) {
+        console.error('[TOKEN:PRIVATE] Failed to mint to private:', error);
+        throw new Error(`Failed to mint to private: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }, 'Minting tokens');
   }
 
   /**

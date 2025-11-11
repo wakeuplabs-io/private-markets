@@ -1,7 +1,7 @@
 'use client';
 
 import React, { ReactNode } from 'react';
-import { PXELoadingContextProvider, usePXELoading } from '@/context/PXELoadingContext';
+import { PXELoadingContextProvider } from '@/context/PXELoadingContext';
 import { PXELoadingModal } from '@/components/ui/PXELoadingModal';
 import { useWallet } from '@/context';
 
@@ -10,18 +10,13 @@ interface PXELoadingProviderProps {
 }
 
 function PXELoadingModalWrapper() {
-  const pxeState = usePXELoading();
   const { isInitializingProvider } = useWallet();
 
-  // Extract state from PXEManagerState
-  const isPXEBusy = pxeState.busy;
-  const queueLength = pxeState.queue.length;
-  const currentOperation = pxeState.queue.currentOperation;
+  // Only show modal when PXE is initializing (not for regular operations)
+  // Regular operations are now handled by OperationHistoryPanel (non-blocking)
+  const isLoading = isInitializingProvider;
 
-  // Show modal when PXE is initializing or busy
-  const isLoading = isInitializingProvider || isPXEBusy;
-
-  // Different messages based on state
+  // Loading info only for initialization
   const getLoadingInfo = () => {
     if (isInitializingProvider) {
       return {
@@ -31,22 +26,6 @@ function PXELoadingModalWrapper() {
           { label: 'Creating PXE service in browser' },
           { label: 'Registering contracts', delay: 'delay-75' },
           { label: 'Connecting to Aztec network', delay: 'delay-150' },
-        ],
-      };
-    }
-
-    if (isPXEBusy) {
-      // Use currentOperation if available, otherwise use queue count
-      const description = currentOperation
-        ? currentOperation
-        : `Processing ${queueLength > 0 ? `${queueLength} operation${queueLength > 1 ? 's' : ''}` : 'blockchain data'}...`;
-
-      return {
-        title: 'Loading Data',
-        description,
-        steps: [
-          { label: 'Querying private state' },
-          { label: 'Fetching contract data', delay: 'delay-75' },
         ],
       };
     }

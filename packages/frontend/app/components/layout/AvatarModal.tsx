@@ -9,6 +9,7 @@ import { useDefaultTokenInfo } from '@/hooks/useTokenInfo'
 import { useUSDCBalance } from '@/hooks/useEVMTokenBalance'
 import { useWallet } from '@/context'
 import { AztecConnectionBadge } from '@/components/AztecConnectionStatus'
+import { usePXEManager } from '@/hooks/pxe/usePXEManager'
 import dynamic from 'next/dynamic'
 import { useAccount } from 'wagmi'
 
@@ -132,6 +133,7 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
   const { status: walletStatus, isConnected, disconnectWallet } = useWallet()
   const tokenInfoResult = useDefaultTokenInfo()
   const evmTokenResult = useUSDCBalance()
+  const pxeState = usePXEManager()
   const connectionKey = `${walletStatus}-${isConnected}`
   const { tokenInfo, isLoading, error } = tokenInfoResult
 
@@ -164,8 +166,8 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
         }}
       />
       
-      <div 
-        className="fixed top-20 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-50 bg-card border border-border rounded-lg shadow-lg p-4 space-y-4"
+      <div
+        className="fixed top-20 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 min-h-[400px] z-50 bg-card border border-border rounded-lg shadow-lg p-4 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -206,6 +208,27 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
             <AztecConnectionBadge />
           </div>
         </div>
+
+        {pxeState.busy && (
+          <div className="space-y-3">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Operation Status
+            </div>
+            <div className="px-4 py-3 bg-primary/10 border border-primary/30 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                <span className="text-sm text-foreground font-medium">
+                  {pxeState.message}
+                </span>
+              </div>
+              {pxeState.queue.length > 0 && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {pxeState.queue.length} operation{pxeState.queue.length > 1 ? 's' : ''} queued
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-3">
           <div className="text-sm font-medium text-muted-foreground">Token Information (Aztec)</div>
