@@ -160,6 +160,20 @@ export class EmbeddedWallet extends BaseWallet {
     return this.connectedAccount;
   }
 
+  /**
+   * Get PXE instance (public accessor for protected property)
+   */
+  getPXE() {
+    return this.pxe;
+  }
+
+  /**
+   * Get Aztec Node instance (public accessor for protected property)
+   */
+  getAztecNode() {
+    return this.aztecNode;
+  }
+
   private async registerAccount(accountManager: AccountManager) {
     const instance = await accountManager.getInstance();
     const artifact = await accountManager

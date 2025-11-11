@@ -8,7 +8,7 @@
 'use client';
 
 import { usePXEManagerContext } from '@/providers/pxe/PXEManagerProvider';
-import type { PXEManagerState } from '@/services/pxeManager';
+import type { PXEManagerState } from '@/services/pxe';
 
 /**
  * Hook to access complete PXE Manager state

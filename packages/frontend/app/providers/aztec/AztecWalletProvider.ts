@@ -10,12 +10,10 @@ import { AztecAddress } from '@aztec/stdlib/aztec-address';
 import { AuthWitness } from '@aztec/stdlib/auth-witness';
 import { PXE } from '@aztec/pxe/client/lazy';
 import { type Wallet, AccountManager } from '@aztec/aztec.js/wallet';
-import { type ContractArtifact } from '@aztec/aztec.js/abi';
 import { createLogger } from '@aztec/aztec.js/log';
 import { ContractFunctionInteraction } from '@aztec/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec/aztec.js/fee';
 import { getContractInstanceFromInstantiationParams } from '@aztec/stdlib/contract';
-import { getDefaultInitializer } from '@aztec/stdlib/abi';
 import { EmbeddedWallet } from './embedded-wallet';
 import { SponsoredFPCContractArtifact } from '@aztec/noir-contracts.js/SponsoredFPC';
 import { SPONSORED_FPC_SALT } from '@aztec/constants';
@@ -25,8 +23,8 @@ import { TokenContract } from "@/lib/contracts/Token";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
 // TODO: Uncomment when Wormhole contract is migrated to v3.0.0
 // import { WormholeContract } from "@/lib/contracts/Wormhole";
-import { pxeService } from "@/services/pxeService";
 import { inspectPXEIndexedDB, cleanPXEIndexedDB } from "@/lib/debug/inspectIndexedDB";
+import { pxeService } from "@/services/pxe/pxeService";
 
 const LOCAL_STORAGE_KEY = "aztec-account";
 const DEFAULT_NODE_URL = "http://localhost:8080";
@@ -53,7 +51,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       proverEnabled: config.proverEnabled ?? true,
       accountType: config.accountType || "schnorr",
     };
-    console.log('config', this.config);
   }
 
   getProviderName(): string {
@@ -108,9 +105,9 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
         // EmbeddedWallet.initialize() creates node client, PXE, and registers SponsoredFPC
         this.wallet = await EmbeddedWallet.initialize(nodeUrl);
 
-        // Access PXE from wallet (EmbeddedWallet extends BaseWallet which has public pxe property)
-        this.pxe = this.wallet.pxe;
-        this.aztecNode = this.wallet.aztecNode;
+        // Access PXE and AztecNode from wallet via public getters
+        this.pxe = this.wallet.getPXE();
+        this.aztecNode = this.wallet.getAztecNode();
 
         // Register PXE in global service for access by other providers
         await pxeService.registerPXE(this.pxe);
@@ -152,17 +149,11 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
         console.error('🔴 [REGISTER] Token registration error:', error);
         logger.warn('Failed to register Token contract (may already be registered or not deployed):', error);
       }
-    } else {
-      console.log('🔵 [REGISTER] No token address in env, skipping');
-    }
-
-    // Register BetVault contract if address is available
+    } 
     const vaultAddress = process.env.NEXT_PUBLIC_VAULT_CONTRACT_ADDRESS;
-
     if (vaultAddress) {
       try {
         const vaultAztecAddress = AztecAddress.fromString(vaultAddress);
-        // Use aztecNode.getContract() for testnet
         const contractInstance = await this.aztecNode.getContract(vaultAztecAddress);
 
         if (contractInstance) {
@@ -238,8 +229,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
   }
 
   async connect(): Promise<IWalletAccount> {
-    console.log('[AztecWalletProvider] 🔵 STEP 1: Starting connect()');
-
     const account = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!account) {
       throw new Error("No existing account found. Please create an account first.");
@@ -532,5 +521,25 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     }
 
     return 'none';
+  }
+
+  /**
+   * Register a contract with the PXE
+   * @param artifact - Contract artifact
+   * @param deployer - Deployer address
+   * @param salt - Deployment salt
+   * @param args - Constructor arguments
+   */
+  async registerContract(artifact: unknown, deployer: unknown, salt: unknown, args: unknown[]): Promise<void> {
+    await this.initialize();
+
+    // TODO: Implement contract registration logic
+    // This is a stub implementation to satisfy the interface
+    void artifact;
+    void deployer;
+    void salt;
+    void args;
+
+    logger.warn('registerContract() called but not fully implemented');
   }
 }

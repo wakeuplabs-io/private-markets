@@ -8,7 +8,7 @@
 'use client';
 
 import { usePXEManagerContext } from '@/providers/pxe/PXEManagerProvider';
-import type { QueueStatus } from '@/services/pxeManager';
+import type { QueueStatus } from '@/services/pxe';
 
 /**
  * Hook to access operation queue status

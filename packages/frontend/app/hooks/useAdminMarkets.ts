@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import useSWR from "swr";
 import { useAccount } from "wagmi";
-import { MarketService } from "@/services/marketService";
+import { MarketService } from "@/services/market";
 import {
     Market,
     CreateMarketFormData,

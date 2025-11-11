@@ -8,7 +8,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { pxeManager, type PXEManagerState } from '@/services/pxeManager';
+import { pxeManager, type PXEManagerState } from '@/services/pxe';
 
 /**
  * Context value type
@@ -21,15 +21,6 @@ interface PXEManagerContextValue {
  * Default context value
  */
 const defaultState: PXEManagerState = {
-  sync: {
-    synced: false,
-    syncing: false,
-    currentBlock: 0,
-    targetBlock: 0,
-    progress: 0,
-    lastError: null,
-    lastSyncTime: 0,
-  },
   queue: {
     length: 0,
     currentOperation: null,
@@ -62,17 +53,10 @@ export function PXEManagerProvider({ children }: PXEManagerProviderProps) {
   const [state, setState] = useState<PXEManagerState>(() => pxeManager.getState());
 
   useEffect(() => {
-    console.log('[PXEManagerProvider] Subscribing to state changes');
-
-    // Subscribe to manager state changes
     const unsubscribe = pxeManager.onStateChange((newState) => {
-      console.log('[PXEManagerProvider] State update received:', newState);
       setState(newState);
     });
-
-    // Cleanup on unmount
     return () => {
-      console.log('[PXEManagerProvider] Unsubscribing from state changes');
       unsubscribe();
     };
   }, []);
@@ -86,7 +70,7 @@ export function PXEManagerProvider({ children }: PXEManagerProviderProps) {
 
 /**
  * Hook to access PXE Manager context
- * Use specialized hooks (usePXEManager, usePXESync, usePXEQueue) instead of this directly
+ * Use specialized hooks (usePXEManager, usePXEQueue) instead of this directly
  */
 export function usePXEManagerContext(): PXEManagerContextValue {
   const context = useContext(PXEManagerContext);

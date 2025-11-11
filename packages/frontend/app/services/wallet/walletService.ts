@@ -134,10 +134,6 @@ export class WalletService {
     return walletConnectionManager.simulateTransaction(interaction);
   }
 
-  async registerContract(artifact: unknown, deployer: unknown, salt: unknown, args: unknown[]): Promise<void> {
-    return walletConnectionManager.registerContract(artifact, deployer, salt, args);
-  }
-
   /**
    * Check if a wallet provider has an existing account
    * @param connector - The wallet provider identifier

@@ -1,10 +1,10 @@
 import { Bet } from "@/types";
-import { walletService } from "../walletService";
+import { walletService } from "../wallet/walletService";
 import { VaultProvider } from "./vaultProvider";
 import type { IVaultService, IVaultProvider, SimpleBetParams, BetParams, SimpleClaimParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { generateCommitment, generateSecret, generateBetId, generateAuthwitNonce } from "@/utils/idGenerator";
-import { betStorageService, type StoredBet } from "../betStorageService";
+import { betStorageService, type StoredBet } from "../storage/betStorageService";
 
 /**
  * Vault Service (Facade Pattern)

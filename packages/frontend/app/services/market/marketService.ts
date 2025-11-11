@@ -16,10 +16,9 @@ import {
 
 // Re-export types for external use
 export type { ContractMarket, MarketStats }
-import { BlockchainStatusService } from './blockchainStatusService'
+import { BlockchainStatusService } from '../blockchain/blockchainStatusService'
 import { parseUnits } from 'viem'
-import { vaultService } from './vault'
-import { evmTokenService } from './token/evmTokenService'
+import { evmTokenService } from '../token/evmTokenService'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
 const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` // Arbitrum Sepolia USDC
@@ -366,48 +365,5 @@ export class MarketService {
   static async getConnectionStatus(): Promise<BlockchainConnectionStatus> {
     const status = await BlockchainStatusService.getStatus()
     return status.evm
-  }
-
-
-  /**
-   * Claim reward for a winning bet
-   *
-   * This will:
-   * 1. Call vaultService to authorize claim on Aztec
-   * 2. Aztec verifies the secret matches the commitment
-   * 3. Aztec generates nullifier and sends Wormhole message
-   * 4. Wormhole relays to Arbitrum
-   * 5. Arbitrum calculates payout and transfers USDC
-   */
-  static async claimReward(betId: string, marketId: string, recipientAddress: string): Promise<void> {
-    try {
-      console.log(`Claiming reward for bet ${betId} in market ${marketId}`);
-      console.log(`Recipient (Aztec address): ${recipientAddress}`);
-
-      // Call vaultService to authorize claim on Aztec
-      // This will:
-      // - Retrieve commitment and secret from localStorage
-      // - Call BetVault.authorizeClaim() on Aztec
-      // - Send Wormhole message to Arbitrum
-      const txHash = await vaultService.authorizeClaim({
-        marketId: marketId,
-        betId: betId,
-        recipient: recipientAddress, // Aztec address for claim authorization
-      });
-
-      console.log(`Claim authorization transaction sent: ${txHash}`);
-      console.log('Transaction will be processed by Wormhole → Arbitrum automatically');
-      console.log('Payout will be sent to the recipient address on Arbitrum');
-
-      // Note: The actual payout happens asynchronously via Wormhole
-      // The user will receive USDC on Arbitrum after:
-      // 1. Wormhole guardians sign the VAA (~1-2 minutes)
-      // 2. Relayer delivers message to Arbitrum
-      // 3. PredictionMarketCore calculates payout
-      // 4. Treasury transfers USDC to recipient
-    } catch (error) {
-      console.error('Error claiming reward:', error);
-      throw new Error(`Failed to claim reward: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
   }
 }

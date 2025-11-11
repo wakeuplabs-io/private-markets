@@ -4,15 +4,15 @@ import React, { useEffect } from "react";
 import { useUserActivity } from "@/hooks/useUserActivity";
 import { ActivityGrid } from "@/components/activity/ActivityGrid";
 import { ErrorState } from "../ui/Fallbacks";
-import { pxeQueueService } from "@/services/pxeQueueService";
+import { pxeManager } from "@/services/pxe";
 
 export function ActivityPage() {
     const { activityData, isLoading, error, refreshActivity, claimReward } =
         useUserActivity();
     useEffect(() => {
         return () => {
-            pxeQueueService.clear();
-            console.log('[ActivityPage] Cleared PXE queue on unmount');
+            pxeManager.reset();
+            console.log('[ActivityPage] Reset PXE manager on unmount');
         };
     }, []);
 

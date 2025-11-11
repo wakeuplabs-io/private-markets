@@ -69,11 +69,9 @@ export class PXEManager {
     description?: string
   ): Promise<T> {
     const operationDesc = description || 'Processing operation';
-    console.log('[PXEManager] Enqueue requested:', operationDesc);
 
     try {
       const result = await this.operationQueue.enqueue(operation, operationDesc);
-      console.log('[PXEManager] Operation completed successfully');
       return result;
     } catch (error) {
       console.error('[PXEManager] Operation failed:', error);
@@ -102,8 +100,6 @@ export class PXEManager {
    * Handle queue status updates from OperationQueue
    */
   private handleQueueUpdate(queueStatus: QueueStatus): void {
-    console.log('[PXEManager] Queue update received:', queueStatus);
-
     this.state.queue = queueStatus;
     this.updateBusyAndMessage();
     this.notifyListeners();
@@ -120,13 +116,16 @@ export class PXEManager {
 
     // Update adaptive message (priority order)
     if (queue.isProcessing && queue.currentOperation) {
-      // Priority 1: Currently processing operation
+      // Priority 1: Currently processing operation with name
       this.state.message = queue.currentOperation;
+    } else if (queue.isProcessing) {
+      // Priority 2: Processing but no operation name (transitional state)
+      this.state.message = 'Processing...';
     } else if (queue.length > 0) {
-      // Priority 2: Operations queued
+      // Priority 3: Operations queued
       this.state.message = `${queue.length} operation(s) queued`;
     } else {
-      // Priority 3: Ready
+      // Priority 4: Ready
       this.state.message = 'Ready';
     }
   }
@@ -148,11 +147,8 @@ export class PXEManager {
    * Reset manager (for testing or cleanup)
    */
   public reset(): void {
-    console.log('[PXEManager] Resetting...');
-
     this.operationQueue.clear();
     this.listeners.clear();
-
     this.state = {
       queue: {
         length: 0,

@@ -4,7 +4,7 @@ import { TokenContract } from "@/lib/contracts/Token";
 import { ensureWalletConnected } from "@/lib/wallet";
 import { walletConnectionManager } from "@/lib/wallet/walletConnectionManager";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
-import { pxeQueueService } from "@/services/pxeQueueService";
+import { pxeManager } from "@/services/pxe";
 import type { IVaultProvider, BetParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
@@ -137,7 +137,7 @@ export class VaultProvider implements IVaultProvider {
    * @returns true if bet has been processed, false otherwise
    */
   async isProcessed(betId: string): Promise<boolean> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
         const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(this.contractAddress);
@@ -177,7 +177,7 @@ export class VaultProvider implements IVaultProvider {
    * @returns Token contract address
    */
   async getTokenAddress(): Promise<string> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
         const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(this.contractAddress);
@@ -215,7 +215,7 @@ export class VaultProvider implements IVaultProvider {
    * Wrapped with automatic retry on PXE sync errors
    */
   async getUserBets(): Promise<Bet[]> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       const wallet = await ensureWalletConnected();
       const aztecAddress = AztecAddress.fromString(this.contractAddress);
       const contract = await BetVaultContract.at(aztecAddress, wallet);

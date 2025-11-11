@@ -10,8 +10,13 @@ interface PXELoadingProviderProps {
 }
 
 function PXELoadingModalWrapper() {
-  const { isPXEBusy, queueLength } = usePXELoading();
+  const pxeState = usePXELoading();
   const { isInitializingProvider } = useWallet();
+
+  // Extract state from PXEManagerState
+  const isPXEBusy = pxeState.busy;
+  const queueLength = pxeState.queue.length;
+  const currentOperation = pxeState.queue.currentOperation;
 
   // Show modal when PXE is initializing or busy
   const isLoading = isInitializingProvider || isPXEBusy;
@@ -31,9 +36,14 @@ function PXELoadingModalWrapper() {
     }
 
     if (isPXEBusy) {
+      // Use currentOperation if available, otherwise use queue count
+      const description = currentOperation
+        ? currentOperation
+        : `Processing ${queueLength > 0 ? `${queueLength} operation${queueLength > 1 ? 's' : ''}` : 'blockchain data'}...`;
+
       return {
         title: 'Loading Data',
-        description: `Processing ${queueLength > 0 ? `${queueLength} operation${queueLength > 1 ? 's' : ''}` : 'blockchain data'}...`,
+        description,
         steps: [
           { label: 'Querying private state' },
           { label: 'Fetching contract data', delay: 'delay-75' },

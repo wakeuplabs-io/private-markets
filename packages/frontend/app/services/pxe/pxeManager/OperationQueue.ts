@@ -75,12 +75,13 @@ export class OperationQueue {
           console.error('[OperationQueue] Operation failed:', error);
           // Continue processing even if one operation fails
         }
+        // Clear current operation before notifying
+        this.currentOperation = null;
         this.notifyListeners();
       }
     }
 
     this.isProcessing = false;
-    this.currentOperation = null;
     this.notifyListeners();
   }
 

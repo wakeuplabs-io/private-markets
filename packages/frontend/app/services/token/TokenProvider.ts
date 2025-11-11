@@ -2,9 +2,9 @@ import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { ensureWalletConnected } from "@/lib/wallet";
 import { walletConnectionManager } from "@/lib/wallet/walletConnectionManager";
 import { TokenContract } from "@/lib/contracts/Token";
-import { pxeQueueService } from "@/services/pxeQueueService";
 import type { ITokenProvider } from "./types";
 import { FALLBACK_VALUES } from "./types";
+import { pxeManager } from "../pxe";
 
 /**
  * Token Provider
@@ -34,7 +34,7 @@ export class TokenProvider implements ITokenProvider {
    * v3.0.0: Direct contract call with wallet
    */
   async getTokenName(address: string): Promise<unknown> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
         const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);
@@ -55,7 +55,7 @@ export class TokenProvider implements ITokenProvider {
    * Get token symbol using connected wallet
    */
   async getTokenSymbol(address: string): Promise<unknown> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
         const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);
@@ -67,7 +67,7 @@ export class TokenProvider implements ITokenProvider {
         return await contract.methods.symbol().simulate({
           from,
         });
-s      } catch (error) {
+      } catch (error) {
         console.error('[TOKEN:PRIVATE] Failed to get token symbol:', error);
         return FALLBACK_VALUES.TOKEN_SYMBOL;
       }
@@ -78,7 +78,7 @@ s      } catch (error) {
    * Get token decimals using connected wallet
    */
   async getTokenDecimals(address: string): Promise<number> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
         const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);
@@ -103,7 +103,7 @@ s      } catch (error) {
    * Uses timeout to prevent hanging on long operations
    */
   async getPrivateBalance(address: string, owner: AztecAddress): Promise<bigint> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
         const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);

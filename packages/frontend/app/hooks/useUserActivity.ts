@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
 import { useAccount } from 'wagmi'
-import { MarketService, type ContractMarket } from '@/services/marketService'
+import { MarketService, type ContractMarket } from '@/services/market'
 import { UserBet, UserActivityData, BlockchainConnectionStatus, MarketStatus, MarketOption } from '@/types'
 import { vaultService } from '@/services/vault'
 
@@ -194,7 +194,16 @@ export function useUserActivity(): UseUserActivityReturn {
 
   const claimReward = useCallback(async (betId: string, marketId: string, recipientAddress: string) => {
     try {
-      await MarketService.claimReward(betId, marketId, recipientAddress)
+      // Call vaultService.authorizeClaim() directly (no need for marketService layer)
+      // This will:
+      // 1. Retrieve commitment and secret from localStorage
+      // 2. Call BetVault.authorizeClaim() on Aztec
+      // 3. Send Wormhole message to Arbitrum for payout
+      await vaultService.authorizeClaim({
+        marketId,
+        betId,
+        recipient: recipientAddress,
+      })
       // Refresh data after successful claim
       await mutate()
     } catch (err) {
