@@ -206,7 +206,7 @@ contract DeployPredictionMarket is Script {
             wormholeCoreAddress = vm.envOr("WORMHOLE_CORE_ADDRESS", address(0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35));
             wormholeChainId = uint16(vm.envOr("WORMHOLE_CHAIN_ID", uint256(10003)));
             finality = uint8(vm.envOr("FINALITY", uint256(2)));
-            aztecEmitter = vm.envOr("AZTEC_EMITTER_ADDRESS", bytes32(0x179084c04e858ebffa57ee6fc1b7f0e186e246e6ebde881f25b0be09580166bd));
+            aztecEmitter = vm.envOr("AZTEC_EMITTER_ADDRESS", bytes32(0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493));
         } else {
             revert(string.concat("Unsupported chain ID: ", vm.toString(block.chainid), " (only local and testnet supported)"));
         }

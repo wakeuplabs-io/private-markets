@@ -161,7 +161,10 @@ contract WormholeReceiver {
         bytes memory payload = vm.payload;
 
         if (payload.length == 0) revert EmptyPayload();
-        uint8 messageType = uint8(payload[0]);
+
+        // Skip first 32 bytes (txHash added by Wormhole guardians/agents)
+        // Payload structure: txHash(32) | messageType(1) | ...
+        uint8 messageType = uint8(payload[32]);
 
         emit MessageReceived(vm.emitterChainId, vm.emitterAddress, vaaHash, messageType, payload.length);
 
@@ -189,15 +192,17 @@ contract WormholeReceiver {
 
     /**
      * @dev Processes bet payload from Aztec (V3)
-     * Payload structure (98 bytes): [type(1) | marketId(32) | betId(32) | outcome(1) | amount(32)]
+     * Payload structure (130 bytes): [txHash(32) | type(1) | marketId(32) | betId(32) | outcome(1) | amount(32)]
+     * Note: Wormhole guardians/agents prepend txHash (32 bytes) to the payload
      */
     function _processBetPayload(bytes memory payload) internal {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // BET message: exactly 98 bytes
-        if (payload.length != 98) revert PayloadTooShort(payload.length, 98);
-        if (uint8(payload[0]) != 0x01) revert UnknownMessageType(uint8(payload[0]));
+        // BET message: 32 bytes txHash + 98 bytes original payload = 130 bytes minimum
+        // Note: payload may be longer due to chunk padding from Aztec (8 chunks × 31 bytes)
+        if (payload.length < 130) revert PayloadTooShort(payload.length, 130);
+        if (uint8(payload[32]) != 0x01) revert UnknownMessageType(uint8(payload[32]));
 
         uint256 marketId;
         bytes32 betId;
@@ -205,15 +210,16 @@ contract WormholeReceiver {
         uint256 amount;
 
         assembly {
-            // payload structure: [type(1) | marketId(32) | betId(32) | outcome(1) | amount(32)]
+            // payload structure: [txHash(32) | type(1) | marketId(32) | betId(32) | outcome(1) | amount(32)]
             // mload reads 32 bytes starting at given position
             // payload pointer points to length, so add 32 to get to data
+            // All offsets are +32 compared to original to skip txHash
 
-            marketId := mload(add(payload, 33))    // Skip 1 byte type + 32 offset
-            betId := mload(add(payload, 65))       // Skip type + marketId + 32 offset
-            let outcomeRaw := byte(0, mload(add(payload, 97)))  // Skip type + marketId + betId + 32 offset
+            marketId := mload(add(payload, 65))    // 32 (length) + 32 (txHash) + 1 (type) = 65
+            betId := mload(add(payload, 97))       // 65 + 32 (marketId) = 97
+            let outcomeRaw := byte(0, mload(add(payload, 129)))  // 97 + 32 (betId) = 129
             outcome := gt(outcomeRaw, 0)           // Convert to bool (0x00=false, 0x01=true)
-            amount := mload(add(payload, 98))      // Skip type + marketId + betId + outcome + 32 offset
+            amount := mload(add(payload, 130))     // 129 + 1 (outcome) = 130
         }
 
         if (betId == bytes32(0)) revert InvalidBetId();
@@ -226,16 +232,18 @@ contract WormholeReceiver {
 
     /**
      * @dev Processes claim authorization payload from Aztec (V3)
-     * Payload structure (129 bytes): [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipientField(32)]
+     * Payload structure (161 bytes): [txHash(32) | type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipientField(32)]
+     * Note: Wormhole guardians/agents prepend txHash (32 bytes) to the payload
      * Note: recipientField is a 32-byte Field from Aztec that contains the EVM address in the last 20 bytes
      */
     function _processClaimAuthPayload(bytes memory payload) internal {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // CLAIM_AUTHORIZATION message: exactly 129 bytes
-        if (payload.length != 129) revert PayloadTooShort(payload.length, 129);
-        if (uint8(payload[0]) != 0x02) revert UnknownMessageType(uint8(payload[0]));
+        // CLAIM_AUTHORIZATION message: 32 bytes txHash + 129 bytes original payload = 161 bytes minimum
+        // Note: payload may be longer due to chunk padding from Aztec (8 chunks × 31 bytes)
+        if (payload.length < 161) revert PayloadTooShort(payload.length, 161);
+        if (uint8(payload[32]) != 0x02) revert UnknownMessageType(uint8(payload[32]));
 
         uint256 marketId;
         bytes32 nullifier;
@@ -243,27 +251,29 @@ contract WormholeReceiver {
         address recipient;
 
         assembly {
-            // payload structure: [type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipientField(32)]
-            // Total: 129 bytes
+            // payload structure: [txHash(32) | type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipientField(32)]
+            // Total: 161 bytes
             // mload reads 32 bytes starting at given position
             // payload pointer points to length, so add 32 to get to data
+            // All offsets are +32 compared to original to skip txHash
             //
             // Memory layout:
-            // [0-31]:   length
-            // [32]:     type (0x02)
-            // [33-64]:  marketId (bytes 1-32 of payload)
-            // [65-96]:  nullifier (bytes 33-64)
-            // [97-128]: betAmount (bytes 65-96)
-            // [129-160]: recipientField (bytes 97-128) - 32 bytes Field containing address in last 20 bytes
+            // [0-31]:    length
+            // [32-63]:   txHash (added by Wormhole)
+            // [64]:      type (0x02)
+            // [65-96]:   marketId (bytes 33-64 of payload)
+            // [97-128]:  nullifier (bytes 65-96)
+            // [129-160]: betAmount (bytes 97-128)
+            // [161-192]: recipientField (bytes 129-160) - 32 bytes Field containing address in last 20 bytes
 
-            marketId := mload(add(payload, 33))        // Bytes 1-32
-            nullifier := mload(add(payload, 65))       // Bytes 33-64
-            betAmount := mload(add(payload, 97))       // Bytes 65-96
+            marketId := mload(add(payload, 65))        // 32 (length) + 32 (txHash) + 1 (type) = 65
+            nullifier := mload(add(payload, 97))       // 65 + 32 (marketId) = 97
+            betAmount := mload(add(payload, 129))      // 97 + 32 (nullifier) = 129
 
-            // For recipientField (32 bytes at payload[97-128]):
+            // For recipientField (32 bytes at payload[129-160]):
             // The Field is big-endian and contains the address in the last 20 bytes
             // Extract the last 20 bytes by masking
-            let recipientField := mload(add(payload, 129))  // Read full 32 bytes
+            let recipientField := mload(add(payload, 161))  // 129 + 32 (betAmount) = 161
             recipient := and(recipientField, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)  // Mask to get last 20 bytes
         }
 

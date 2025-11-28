@@ -88,7 +88,18 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
         if (totalPool == 0) revert ZeroTotalPool();
         if (expiresAt <= block.timestamp) revert InvalidExpiresAt();
 
-        marketId = _state.nextMarketId++;
+        // Generate marketId using keccak256 to ensure non-zero bytes distribution
+        // This prevents Wormhole payload compression issues when marketId has many leading zeros
+        uint256 nonce = _state.nextMarketId++;
+        marketId = uint256(keccak256(abi.encodePacked(
+            msg.sender,
+            block.timestamp,
+            question,
+            nonce
+        )));
+
+        // Verify marketId doesn't already exist (virtually impossible with keccak256)
+        if (_state.markets[marketId].owner != address(0)) revert MarketAlreadyExists(marketId);
 
         _state.markets[marketId] = Market({
             owner: msg.sender,

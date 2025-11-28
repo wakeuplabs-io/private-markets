@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {Treasury} from "../../src/tokens/Treasury.sol";
-import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {Treasury} from "../../src/Treasury.sol";
+import {MockERC20} from "../../src/MockERC20.sol";
 
 contract TreasuryTest is Test {
     Treasury public treasury;

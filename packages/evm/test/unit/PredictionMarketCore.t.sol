@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {PredictionMarketCore} from "../../src/core/PredictionMarketCore.sol";
-import {Treasury} from "../../src/tokens/Treasury.sol";
-import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {Treasury} from "../../src/Treasury.sol";
+import {MockERC20} from "../../src/MockERC20.sol";
 
 /**
  * @title PredictionMarketCoreTest
@@ -59,23 +59,20 @@ contract PredictionMarketCoreTest is Test {
     }
 
     /// @dev Helper: Setup market with bets (150 YES, 100 NO)
-    function _setupMarketWithBets(uint256 /* unused */) internal returns (uint256 totalPool, uint256 expiresAt) {
+    /// @return marketId The created market ID
+    /// @return totalPool The total pool
+    /// @return expiresAt The expiration timestamp
+    function _setupMarketWithBets() internal returns (uint256 marketId, uint256 totalPool, uint256 expiresAt) {
         totalPool = 1000 * 10**6;
         expiresAt = block.timestamp + 1 days;
-        uint256 marketId = _createMarket(0, totalPool, expiresAt);
+        marketId = _createMarket(0, totalPool, expiresAt);
 
         vm.startPrank(wormholeReceiver);
         predictionMarket.processBet(marketId, keccak256("bet1"), true, 150 * 10**6);
         predictionMarket.processBet(marketId, keccak256("bet2"), false, 100 * 10**6);
         vm.stopPrank();
-        
-        return (totalPool, expiresAt);
-    }
-    
-    /// @dev Helper: Get the last created market ID
-    function _getLastMarketId() internal view returns (uint256) {
-        uint256 count = predictionMarket.getAllMarketsCount();
-        return count > 0 ? count - 1 : 0;
+
+        return (marketId, totalPool, expiresAt);
     }
 
     /// @dev Helper: Resolve market after expiry
@@ -218,8 +215,7 @@ contract PredictionMarketCoreTest is Test {
     // ============================================
 
     function test_resolveMarket_setsYesWins() public {
-        (uint256 totalPool, uint256 expiresAt) = _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , uint256 expiresAt) = _setupMarketWithBets();
 
         // Warp past expiry and resolve
         vm.warp(expiresAt + 1);
@@ -232,8 +228,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_resolveMarket_revertsIfNotExpired() public {
-        (uint256 totalPool, uint256 expiresAt) = _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
 
         // Don't warp
         vm.prank(wormholeReceiver);
@@ -247,8 +242,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_resolveMarket_revertsIfAlreadyResolved() public {
-        (uint256 totalPool, uint256 expiresAt) = _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
 
         _resolveMarket(marketId, true);
 
@@ -268,8 +262,7 @@ contract PredictionMarketCoreTest is Test {
     // ============================================
 
     function test_claim_calculatesParimutuelCorrectly() public {
-        (uint256 totalPool, ) = _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, uint256 totalPool, ) = _setupMarketWithBets();
         _resolveMarket(marketId, true); // YES wins
 
         // Winner bet: 150 USDC on YES
@@ -293,8 +286,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_claim_transfersUSDCToWinner() public {
-        _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
         _resolveMarket(marketId, false); // NO wins
 
         // Winner bet: 100 USDC on NO
@@ -316,8 +308,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_claim_revertsIfNullifierUsed() public {
-        _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
         _resolveMarket(marketId, true);
 
         bytes32 nullifier = keccak256("nullifier1");
@@ -347,8 +338,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_claim_revertsIfMarketNotResolved() public {
-        _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
         // Don't resolve
 
         bytes32 nullifier = keccak256("nullifier1");
@@ -394,9 +384,10 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_getMarketsByOwner_returnsPaginatedResults() public {
-        // Create 5 markets
+        // Create 5 markets and store their IDs
+        uint256[] memory createdIds = new uint256[](5);
         for (uint256 i = 0; i < 5; i++) {
-            _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
+            createdIds[i] = _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
         }
 
         // Get first 3 markets (offset=0, limit=3)
@@ -404,15 +395,17 @@ contract PredictionMarketCoreTest is Test {
 
         assertEq(total, 5);
         assertEq(ids.length, 3);
-        assertEq(ids[0], 0);
-        assertEq(ids[1], 1);
-        assertEq(ids[2], 2);
+        // With keccak256, IDs are hashes, not sequential - just verify they match our created IDs
+        assertEq(ids[0], createdIds[0]);
+        assertEq(ids[1], createdIds[1]);
+        assertEq(ids[2], createdIds[2]);
     }
 
     function test_getMarketsByOwner_returnsRemainingItems() public {
-        // Create 5 markets
+        // Create 5 markets and store their IDs
+        uint256[] memory createdIds = new uint256[](5);
         for (uint256 i = 0; i < 5; i++) {
-            _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
+            createdIds[i] = _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
         }
 
         // Get last 2 markets (offset=3, limit=10)
@@ -420,8 +413,8 @@ contract PredictionMarketCoreTest is Test {
 
         assertEq(total, 5);
         assertEq(ids.length, 2); // Only 2 remaining
-        assertEq(ids[0], 3);
-        assertEq(ids[1], 4);
+        assertEq(ids[0], createdIds[3]);
+        assertEq(ids[1], createdIds[4]);
     }
 
     function test_getMarketsByOwner_returnsEmptyIfOffsetTooHigh() public {

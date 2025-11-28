@@ -14,9 +14,9 @@ import {console} from "forge-std/console.sol";
  */
 contract MintTokens is Script {
 
-    address constant TOKEN = 0x5D5f6Da77D444005B31A35374024C5e7098774FB;  // MockERC20 (USDC) en Arbitrum Sepolia
-    address constant RECIPIENT = 0xD245710638f66A16386df955D45e65d13B0C0E3e; 
-    uint256 constant AMOUNT = 100000;  // 10,000 USDC 
+    address constant TOKEN = 0xdEd316ebaA76E86478ebFAd4F2e42122d97907Eb;  // MockERC20 (USDC) en Arbitrum Sepolia
+    address constant RECIPIENT = 0x3e24adA7AcD59223147b2bbc7BE2fB4cA03303F9; 
+    uint256 constant AMOUNT = 10000000000000;  // 10,000 USDC 
 
     function run() external {
         MockERC20 usdc = MockERC20(TOKEN);

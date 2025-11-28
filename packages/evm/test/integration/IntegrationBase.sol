@@ -65,8 +65,6 @@ contract IntegrationBase is Test {
             payable(address(mockWormhole)),
             WORMHOLE_CHAIN_ID,
             EVM_CHAIN_ID,
-            FINALITY,
-            address(treasury),
             address(predictionMarket)
         );
 
@@ -86,6 +84,9 @@ contract IntegrationBase is Test {
     
     function createMockVaa(bytes memory payload) internal returns (bytes memory) {
         mockSequence++;
-        return abi.encode(payload, mockSequence);
+        // Prepend dummy txHash (32 bytes) to simulate Wormhole guardian behavior
+        bytes32 dummyTxHash = keccak256(abi.encodePacked(mockSequence, block.timestamp));
+        bytes memory payloadWithTxHash = abi.encodePacked(dummyTxHash, payload);
+        return abi.encode(payloadWithTxHash, mockSequence);
     }
 }
