@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	vaaLib "github.com/wormhole-foundation/wormhole/sdk/vaa"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -35,10 +36,114 @@ import (
 // Global logger for initial setup
 var logger *zap.Logger
 
+// ANSI color codes
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorBlue   = "\033[34m"
+	colorCyan   = "\033[36m"
+	colorGray   = "\033[90m"
+)
+
+// UX symbols
+const (
+	symbolSuccess = "✓"
+	symbolError   = "✗"
+	symbolInfo    = "⬢"
+	symbolArrowR  = "→"
+	symbolArrowL  = "←"
+)
+
+// logVAA prints a formatted VAA log line with colors
+func logVAA(level, direction, message string, sequence uint64, txHash string, err error) {
+	timestamp := time.Now().Format("15:04:05")
+
+	var symbol, color string
+	switch level {
+	case "success":
+		symbol, color = symbolSuccess, colorGreen
+	case "error":
+		symbol, color = symbolError, colorRed
+	case "info":
+		symbol, color = symbolArrowR, colorCyan
+		if direction == "Arb→Aztec" {
+			symbol = symbolArrowL
+		}
+	case "warn":
+		symbol, color = symbolInfo, colorYellow
+	}
+
+	dirColor := colorCyan
+	if direction == "Arb→Aztec" {
+		dirColor = colorBlue
+	}
+
+	fmt.Fprintf(os.Stderr, "%s%s%s  %s%s%s [%s%s%s] VAA #%d %s",
+		colorGray, timestamp, colorReset,
+		color, symbol, colorReset,
+		dirColor, direction, colorReset,
+		sequence, message)
+
+	if txHash != "" {
+		fmt.Fprintf(os.Stderr, "  tx:%s%s%s", colorYellow, txHash, colorReset)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, ": %s%v%s", colorRed, err, colorReset)
+	}
+	fmt.Fprintln(os.Stderr)
+}
+
+// logStartBanner prints a startup banner with config info
+func logStartBanner(aztecWallet, arbAddress, verificationURL string) {
+	fmt.Fprintln(os.Stderr, "┌─────────────────────────────────────────────────────────")
+	fmt.Fprintf(os.Stderr, "│ %s  %s%s%s Relayer started\n",
+		time.Now().Format("15:04:05"), colorGreen, symbolInfo, colorReset)
+	fmt.Fprintf(os.Stderr, "│           Aztec wallet: %s%s%s\n",
+		colorCyan, aztecWallet, colorReset)
+	fmt.Fprintf(os.Stderr, "│           Arbitrum:     %s%s%s\n",
+		colorBlue, arbAddress, colorReset)
+	fmt.Fprintf(os.Stderr, "│           Verification: %s%s%s\n",
+		colorYellow, verificationURL, colorReset)
+	fmt.Fprintln(os.Stderr, "└─────────────────────────────────────────────────────────")
+}
+
 // Initialize global logger
 func initLogger() {
 	var err error
-	logger, err = zap.NewProduction()
+
+	// Check for LOG_LEVEL environment variable
+	logLevel := os.Getenv("LOG_LEVEL")
+
+	// Configurar encoder con colores
+	encoderConfig := zap.NewDevelopmentEncoderConfig()
+	encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
+
+	config := zap.Config{
+		Level:            zap.NewAtomicLevelAt(zap.InfoLevel),
+		Development:      true,
+		Encoding:         "console",
+		EncoderConfig:    encoderConfig,
+		OutputPaths:      []string{"stderr"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+
+	// Ajustar nivel segun variable de entorno
+	switch logLevel {
+	case "debug":
+		config.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	case "info":
+		config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	case "warn":
+		config.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+	case "error":
+		config.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
+	}
+
+	logger, err = config.Build()
 	if err != nil {
 		// Fallback to standard logger if zap fails
 		fmt.Printf("Failed to initialize zap logger: %v\n", err)
@@ -174,13 +279,13 @@ func NewConfigFromEnv() Config {
 		SpyRPCHost:       getEnvOrDefault("SPY_RPC_HOST", "localhost:7073"),
 		SourceChainID:    uint16(getEnvIntOrDefault("SOURCE_CHAIN_ID", 56)),  // Aztec
 		DestChainID:      uint16(getEnvIntOrDefault("DEST_CHAIN_ID", 10003)), // Arbitrum Sepolia (TODO: verify this works)
-		WormholeContract: getEnvOrDefault("WORMHOLE_CONTRACT", "0x0848d2af89dfd7c0e171238f9216399e61e908cd31b0222a920f1bf621a16ed6"),
-		EmitterAddress:   getEnvOrDefault("EMITTER_ADDRESS", "0x0848d2af89dfd7c0e171238f9216399e61e908cd31b0222a920f1bf621a16ed6"),
+		WormholeContract: getEnvOrDefault("WORMHOLE_CONTRACT", "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493"),
+		EmitterAddress:   getEnvOrDefault("EMITTER_ADDRESS", "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493"),
 		// Needed when sending to Arbitrum
 		AztecWalletAddress:     getEnvOrDefault("AZTEC_WALLET_ADDRESS", "0x1f3933ca4d66e948ace5f8339e5da687993b76ee57bcf65e82596e0fc10a8859"),
 		ArbitrumRPCURL:         getEnvOrDefault("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc"),
-		PrivateKey:             getEnvOrDefault("PRIVATE_KEY", "0x0ff5c4c050588f4614255a5a4f800215b473e442ae9984347b3a727c3bb7ca55"),
-		ArbitrumTargetContract: getEnvOrDefault("ARBITRUM_TARGET_CONTRACT", "0x248EC2E5595480fF371031698ae3a4099b8dC229"),
+		PrivateKey:             getEnvOrDefault("PRIVATE_KEY", "0x32ff94d6063f1477539ce3b8df4793adecc371cf12d4a10472938feee6c003f4"),
+		ArbitrumTargetContract: getEnvOrDefault("ARBITRUM_TARGET_CONTRACT", "0xc135dAa8f070fa67E9679440C8d2204a4f2e759a"),
 		// Needed when sending to Aztec
 		AztecPXEURL:            getEnvOrDefault("AZTEC_PXE_URL", "http://localhost:8090"),
 		AztecTargetContract:    getEnvOrDefault("AZTEC_TARGET_CONTRACT", "0x0848d2af89dfd7c0e171238f9216399e61e908cd31b0222a920f1bf621a16ed6"),
@@ -422,6 +527,7 @@ type EVMClient struct {
 	privateKey *ecdsa.PrivateKey
 	address    common.Address
 	logger     *zap.Logger
+	nonceMutex sync.Mutex
 }
 
 // NewEVMClient creates a new client for EVM-compatible blockchains
@@ -466,6 +572,9 @@ func (c *EVMClient) GetAddress() common.Address {
 func (c *EVMClient) SendVerifyTransaction(ctx context.Context, targetContract string, vaaBytes []byte) (string, error) {
 	c.logger.Debug("Sending verify transaction to EVM", zap.Int("vaaLength", len(vaaBytes)))
 
+	c.nonceMutex.Lock()
+	defer c.nonceMutex.Unlock()
+
 	// Contract ABI for the verify function
 	const abiJSON = `[{
         "inputs": [
@@ -494,11 +603,21 @@ func (c *EVMClient) SendVerifyTransaction(ctx context.Context, targetContract st
 		return "", fmt.Errorf("failed to get nonce: %v", err)
 	}
 
-	// Get the current gas price
+	c.logger.Debug("Using nonce for transaction", zap.Uint64("nonce", nonce))
+
+	// Get the current gas price and add 20% buffer to avoid "max fee per gas less than block base fee"
 	gasPrice, err := c.client.SuggestGasPrice(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get gas price: %v", err)
 	}
+
+	// Add 20% buffer to gas price to account for base fee fluctuations
+	gasPriceWithBuffer := new(big.Int).Mul(gasPrice, big.NewInt(120))
+	gasPriceWithBuffer.Div(gasPriceWithBuffer, big.NewInt(100))
+
+	c.logger.Debug("Gas price",
+		zap.String("suggested", gasPrice.String()),
+		zap.String("withBuffer", gasPriceWithBuffer.String()))
 
 	// Create the transaction
 	targetAddr := common.HexToAddress(targetContract)
@@ -507,7 +626,7 @@ func (c *EVMClient) SendVerifyTransaction(ctx context.Context, targetContract st
 		targetAddr,
 		big.NewInt(0), // No ETH being sent
 		3000000,       // Gas limit - adjust as needed
-		gasPrice,
+		gasPriceWithBuffer,
 		data,
 	)
 
@@ -526,8 +645,19 @@ func (c *EVMClient) SendVerifyTransaction(ctx context.Context, targetContract st
 	// Send the transaction
 	err = c.client.SendTransaction(ctx, signedTx)
 	if err != nil {
+		if strings.Contains(err.Error(), "nonce too low") {
+			c.logger.Warn("Nonce too low error - transaction may have already been mined",
+				zap.Uint64("attemptedNonce", nonce),
+				zap.String("txHash", signedTx.Hash().Hex()))
+
+			return signedTx.Hash().Hex(), nil
+		}
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
+
+	c.logger.Debug("Transaction sent successfully",
+		zap.String("txHash", signedTx.Hash().Hex()),
+		zap.Uint64("nonce", nonce))
 
 	return signedTx.Hash().Hex(), nil
 }
@@ -541,6 +671,8 @@ type Relayer struct {
 	config             Config
 	vaaProcessor       func(*Relayer, *VAAData) error
 	logger             *zap.Logger
+	// Deduplication: track processed VAAs by chain+sequence
+	processedVAAs sync.Map // key: "chainID:sequence" -> bool
 }
 
 // NewRelayer creates a new relayer instance
@@ -608,12 +740,12 @@ func (r *Relayer) Close() {
 
 // Start begins listening for VAAs and processing them
 func (r *Relayer) Start(ctx context.Context) error {
-	r.logger.Info("Starting bidirectional Aztec-Arbitrum relayer",
-		zap.String("aztecWallet", r.aztecClient.GetWalletAddress()),
-		zap.String("arbitrumAddress", r.evmClient.GetAddress().Hex()),
-		zap.Uint16("aztecChain", r.config.SourceChainID),
-		zap.Uint16("arbitrumChain", r.config.DestChainID),
-		zap.String("verificationServiceURL", r.config.VerificationServiceURL)) // ADD
+	// Print startup banner with UX formatting
+	logStartBanner(
+		r.aztecClient.GetWalletAddress(),
+		r.evmClient.GetAddress().Hex(),
+		r.config.VerificationServiceURL,
+	)
 
 	// Create a wait group to track goroutines
 	var wg sync.WaitGroup
@@ -636,9 +768,9 @@ func (r *Relayer) Start(ctx context.Context) error {
 		return fmt.Errorf("subscribe to VAA stream: %v", err)
 	}
 
-	r.logger.Info("🎯 USING SPY-LEVEL FILTERING with Aztec",
-		zap.Uint16("aztecChain", r.config.SourceChainID),
-		zap.String("aztecEmitter", strings.TrimPrefix(r.config.EmitterAddress, "0x")))
+	fmt.Fprintf(os.Stderr, "%s%s%s  %s%s%s Listening for VAAs...\n",
+		colorGray, time.Now().Format("15:04:05"), colorReset,
+		colorGreen, symbolInfo, colorReset)
 
 	// Create a separate context for graceful shutdown
 	processingCtx, cancelProcessing := context.WithCancel(context.Background())
@@ -699,6 +831,15 @@ func (r *Relayer) processVAA(ctx context.Context, vaaBytes []byte) {
 		return
 	}
 
+	// Deduplicate: check if we've already processed this VAA
+	vaaKey := fmt.Sprintf("%d:%d", wormholeVAA.EmitterChain, wormholeVAA.Sequence)
+	if _, alreadyProcessed := r.processedVAAs.LoadOrStore(vaaKey, true); alreadyProcessed {
+		r.logger.Debug("Skipping duplicate VAA",
+			zap.Uint16("chain", uint16(wormholeVAA.EmitterChain)),
+			zap.Uint64("sequence", wormholeVAA.Sequence))
+		return
+	}
+
 	// Extract the txID from the payload (first 32 bytes)
 	txID := ""
 	if len(wormholeVAA.Payload) >= 32 {
@@ -738,75 +879,68 @@ func (r *Relayer) processVAA(ctx context.Context, vaaBytes []byte) {
 	}
 }
 
-// MODIFY: defaultVAAProcessor to use verification service for Arbitrum->Aztec
+// defaultVAAProcessor processes VAAs and routes them to the appropriate chain
 func defaultVAAProcessor(r *Relayer, vaaData *VAAData) error {
 	// Create a context with timeout for processing operations
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second) // Increased timeout for HTTP calls
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Log essential VAA information
-	r.logger.Info("VAA Details",
+	// ALWAYS log VAAs from Aztec (chainId 56) regardless of config
+	if vaaData.ChainID == 56 {
+		logVAA("info", "Aztec", "detected", vaaData.Sequence, "", nil)
+		r.logger.Debug("Aztec VAA details",
+			zap.String("emitter", vaaData.EmitterHex),
+			zap.String("payload", fmt.Sprintf("%x", vaaData.VAA.Payload[:min(64, len(vaaData.VAA.Payload))])))
+	}
+
+	// Log debug info
+	r.logger.Debug("VAA Details",
 		zap.Uint16("emitterChain", vaaData.ChainID),
 		zap.String("emitterAddress", vaaData.EmitterHex),
-		zap.Uint64("sequence", vaaData.Sequence),
-		zap.Time("timestamp", vaaData.VAA.Timestamp),
-		zap.Int("payloadLength", len(vaaData.VAA.Payload)),
-		zap.String("sourceTxID", vaaData.TxID))
-
-	// Extract and log key payload information at debug level
-	r.logger.Debug("VAA Payload", zap.String("payloadHex", fmt.Sprintf("%x", vaaData.VAA.Payload)))
-
-	// Parse payload structure at debug level
-	if len(vaaData.VAA.Payload) >= 32 {
-		r.parseAndLogPayload(vaaData.VAA.Payload)
-	}
+		zap.Uint64("sequence", vaaData.Sequence))
 
 	var txHash string
 	var err error
 	var direction string
 
-	// Process Aztec VAAs (spy-level filtering should only send us Aztec VAAs)
-	// Since spy-level filtering is working, we should only receive Aztec VAAs
-	if vaaData.ChainID == r.config.SourceChainID { // Aztec
-		direction = "Aztec->Arbitrum (SPY FILTERED)"
-
-		r.logger.Info("🎯 PROCESSING AZTEC VAA! (Spy-level filtering successful)",
-			zap.Uint64("sequence", vaaData.Sequence),
-			zap.String("sourceTxID", vaaData.TxID),
-			zap.String("emitter", vaaData.EmitterHex))
+	// Check if this is a VAA from Aztec (source chain) -> send to Arbitrum
+	if vaaData.ChainID == r.config.SourceChainID {
+		direction = "Aztec→Arb"
+		logVAA("info", direction, "received", vaaData.Sequence, "", nil)
 
 		// Send to Arbitrum using EVM client
 		txHash, err = r.evmClient.SendVerifyTransaction(ctx, r.config.ArbitrumTargetContract, vaaData.RawBytes)
 
+		// Check if this is a VAA from Arbitrum (dest chain) -> send to Aztec
+	} else if vaaData.ChainID == r.config.DestChainID {
+		direction = "Arb→Aztec"
+		logVAA("info", direction, "received", vaaData.Sequence, "", nil)
+
+		// Try verification service first, fallback to direct PXE
+		txHash, err = r.verificationClient.VerifyVAA(ctx, vaaData.RawBytes)
+		if err != nil {
+			logVAA("warn", direction, "verification service failed, trying PXE", vaaData.Sequence, "", nil)
+			txHash, err = r.aztecClient.SendVerifyTransaction(ctx, r.config.AztecTargetContract, vaaData.RawBytes)
+		}
+
 	} else {
-		// This should not happen with spy-level filtering, but log it for debugging
-		r.logger.Warn("Unexpected VAA received (not Aztec)",
-			zap.Uint16("chain", vaaData.ChainID),
-			zap.Uint64("sequence", vaaData.Sequence))
+		// Skip VAAs not from our configured chains (but we already logged Aztec ones above)
+		r.logger.Debug("Skipping VAA (not from configured chains)",
+			zap.Uint64("sequence", vaaData.Sequence),
+			zap.Uint16("chain", vaaData.ChainID))
 		return nil
 	}
 
 	if err != nil {
-		// Check if the context was cancelled or timed out
 		if ctx.Err() != nil {
-			r.logger.Warn("Transaction sending cancelled or timed out", zap.Error(ctx.Err()))
+			logVAA("error", direction, "timeout", vaaData.Sequence, "", ctx.Err())
 			return fmt.Errorf("transaction interrupted: %v", ctx.Err())
 		}
-
-		r.logger.Error("Failed to send verify transaction",
-			zap.String("direction", direction),
-			zap.Uint64("sequence", vaaData.Sequence),
-			zap.String("sourceTxID", vaaData.TxID),
-			zap.Error(err))
+		logVAA("error", direction, "failed", vaaData.Sequence, "", err)
 		return fmt.Errorf("transaction failed: %v", err)
 	}
 
-	r.logger.Info("VAA verification completed",
-		zap.String("direction", direction),
-		zap.Uint64("sequence", vaaData.Sequence),
-		zap.String("txHash", txHash),
-		zap.String("sourceTxID", vaaData.TxID))
-
+	logVAA("success", direction, "verified", vaaData.Sequence, txHash, nil)
 	return nil
 }
 
