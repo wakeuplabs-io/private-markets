@@ -28,16 +28,19 @@ export const formatTime = (date: Date | null | undefined) => {
 
 /**
  * Normalize hex string to 64 characters (32 bytes) with leading zeros
- * @param hex - Hex string or BigInt to normalize
+ * @param hex - Hex string, BigInt, or object with toString() (like AztecAddress, Fr)
  * @returns Normalized hex string with 0x prefix and 64 characters
  */
-export function normalizeHex64(hex: string | bigint): string {
+export function normalizeHex64(hex: string | bigint | { toString(): string }): string {
   let hexStr: string;
-  
+
   if (typeof hex === 'bigint') {
     hexStr = hex.toString(16);
-  } else {
+  } else if (typeof hex === 'string') {
     hexStr = hex.startsWith('0x') ? hex.slice(2) : hex;
+  } else {
+    const str = hex.toString();
+    hexStr = str.startsWith('0x') ? str.slice(2) : str;
   }
   const paddedHex = hexStr.padStart(64, '0');
   return '0x' + paddedHex;

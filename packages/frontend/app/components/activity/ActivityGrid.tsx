@@ -98,7 +98,7 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
             return bTime - aTime;
         });
     }, [bets]);
-
+    console.log(sortedBets);
     if (!isLoading && sortedBets.length === 0) {
         return (
             <EmptyState
@@ -318,9 +318,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                                 {bet.marketQuestion}
                             </h3>
                             <div className={cn("flex space-x-4 text-sm", textColor)}>
-                                <span>
-                                    {formatDate(bet.placedAt, "Placed")}
-                                </span>
                                 {bet.marketResolvedAt && (
                                     <span>
                                         {formatDate(bet.marketResolvedAt, "Resolved")}
@@ -332,13 +329,13 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                 </div>
                 <div className="col-span-2">
                     <div className={cn("text-lg font-semibold", textColor)}>
-                        {bet.amount} ETH
+                        {bet.amount} USDC
                     </div>
-                    {bet.potentialReward && bet.potentialReward > 0 && (
+                    {/* {bet.potentialReward && bet.potentialReward > 0 && (
                         <div className="text-sm text-green-400">
-                            +{bet.potentialReward} ETH
+                            +{bet.potentialReward} USDC
                         </div>
-                    )}
+                    )} */}
                 </div>
 
                 <div className="col-span-2">

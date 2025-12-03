@@ -28,6 +28,7 @@ import type {
 } from './types';
 import { operationEventBus } from '@/lib/utils/operationEventBus';
 import { operationHistoryManager } from '@/services/operations';
+import { handlePXEIndexedDBError } from '@/lib/aztec/pxeErrorHandler';
 
 export class PXEManager {
   private static instance: PXEManager | null = null;
@@ -73,13 +74,11 @@ export class PXEManager {
     const operationDesc = description || 'Processing operation';
     console.log('[PXEManager] Enqueue requested:', operationDesc);
 
-    // 1. Create operation in history
     const operationId = operationHistoryManager.addOperation(
       operationDesc,
       { type: this.inferOperationType(operationDesc) }
     );
 
-    // 2. Emit START event
     operationEventBus.emit({
       type: 'START',
       operationId,
@@ -87,15 +86,12 @@ export class PXEManager {
     });
 
     try {
-      // 3. Update to in-progress before executing
       operationHistoryManager.updateOperation(operationId, {
         status: 'in-progress'
       });
 
-      // 4. Execute operation
       const result = await this.operationQueue.enqueue(operation, operationDesc);
 
-      // 5. Emit SUCCESS event
       operationEventBus.emit({
         type: 'SUCCESS',
         operationId,
@@ -103,7 +99,6 @@ export class PXEManager {
         data: result,
       });
 
-      // 6. Update history to success
       operationHistoryManager.updateOperation(operationId, {
         status: 'success',
         endTime: new Date(),
@@ -112,7 +107,6 @@ export class PXEManager {
       console.log('[PXEManager] Operation completed successfully');
       return result;
     } catch (error) {
-      // 7. Emit ERROR event
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
       operationEventBus.emit({
@@ -122,17 +116,43 @@ export class PXEManager {
         data: { error: errorMessage },
       });
 
-      // 8. Update history to error
       operationHistoryManager.updateOperation(operationId, {
         status: 'error',
         endTime: new Date(),
         error: errorMessage,
       });
 
-      console.error('[PXEManager] Operation failed:', error);
+      const errorContext = {
+        operationId,
+        description: operationDesc,
+        errorType: error instanceof Error ? error.name : 'Unknown',
+        errorMessage,
+        queueLength: this.state.queue.length,
+        queueProcessing: this.state.queue.isProcessing,
+        timestamp: new Date().toISOString(),
+      };
+
+      if (errorMessage.includes('TransactionInactiveError') ||
+          errorMessage.includes('transaction has finished') ||
+          errorMessage.includes('IDBCursor')) {
+        console.error('[PXEManager] IndexedDB transaction error detected:', errorContext);
+        console.warn('[PXEManager] Possible causes: long sync operation, browser throttling, or database timeout');
+
+        // Trigger user-friendly error recovery
+        // This will show a notification and offer to clean IndexedDB + reload
+        handlePXEIndexedDBError(error as Error, {
+          operation: operationDesc,
+          operationId,
+          queueLength: this.state.queue.length,
+        }).catch(recoveryError => {
+          console.error('[PXEManager] Error recovery failed:', recoveryError);
+        });
+      } else {
+        console.error('[PXEManager] Operation failed:', errorContext);
+      }
+
       throw error;
     } finally {
-      // 9. Emit COMPLETE event
       operationEventBus.emit({
         type: 'COMPLETE',
         operationId,

@@ -246,7 +246,7 @@ export class VaultProvider implements IVaultProvider {
 
       const bets: Bet[] = blockchainBets.map((blockchainBet, index) => ({
         id: normalizeHex64(blockchainBet.bet_id),
-        marketId: blockchainBet.market_id.toString(),
+        marketId: normalizeHex64(blockchainBet.market_id.toString()),
         option: blockchainBet.outcome === BigInt(1) ? 'yes' : 'no',
         amount: Number(blockchainBet.amount) / 1e18,
         status: claimedStatuses[index] ? 'claimed' as const : 'confirmed' as const,

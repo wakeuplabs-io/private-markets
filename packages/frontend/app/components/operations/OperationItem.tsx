@@ -68,6 +68,7 @@ export function OperationItem({ operation }: OperationItemProps) {
       icon: Clock,
       color: 'text-muted-foreground',
       bgColor: 'bg-muted/10',
+      animate: false,
     },
     'in-progress': {
       icon: Loader2,
@@ -79,11 +80,13 @@ export function OperationItem({ operation }: OperationItemProps) {
       icon: CheckCircle2,
       color: 'text-success',
       bgColor: 'bg-success/10',
+      animate: false,
     },
     'error': {
       icon: XCircle,
       color: 'text-destructive',
       bgColor: 'bg-destructive/10',
+      animate: false,
     },
   };
 

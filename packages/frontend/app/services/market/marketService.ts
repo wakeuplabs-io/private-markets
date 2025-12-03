@@ -97,8 +97,7 @@ export class MarketService {
 
     try {
       const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
-      const poolAmount = BigInt(totalPool)
-      // USDC has 6 decimals
+      // USDC has 6 decimals - this is what we approve AND pass to the contract
       const usdcAmount = parseUnits(totalPool.toString(), 6)
 
       // Check and approve USDC using EVMTokenService
@@ -117,12 +116,12 @@ export class MarketService {
         console.log('✅ Sufficient allowance already exists')
       }
 
-      // Step 3: Create market (poolAmount is the market size, NOT the USDC amount)
+      // Create market with USDC amount (includes 6 decimals)
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: PREDICTION_MARKET_FUNCTIONS.CREATE_MARKET,
-        args: [question, poolAmount, closingTimestamp],
+        args: [question, usdcAmount, closingTimestamp],
         gas: PREDICTION_MARKET_GAS_LIMITS.CREATE_MARKET,
       })
 

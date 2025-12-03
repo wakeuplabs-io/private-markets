@@ -21,9 +21,8 @@ import { SchnorrAccountContract } from '@aztec/accounts/schnorr';
 import { deriveSigningKey } from "@aztec/stdlib/keys";
 import { TokenContract } from "@/lib/contracts/Token";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
-// TODO: Uncomment when Wormhole contract is migrated to v3.0.0
-// import { WormholeContract } from "@/lib/contracts/Wormhole";
-import { inspectPXEIndexedDB, cleanPXEIndexedDB } from "@/lib/debug/inspectIndexedDB";
+import { WormholeContract } from "@/lib/contracts/Wormhole";
+import { inspectPXEIndexedDB, cleanPXEIndexedDB } from "@/lib/aztec/pxeErrorHandler";
 import { pxeService } from "@/services/pxe/pxeService";
 
 const LOCAL_STORAGE_KEY = "aztec-account";
@@ -153,13 +152,11 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       console.log('🔵 [REGISTER] No token address in env, skipping');
     }
 
-    // Register BetVault contract if address is available
     const vaultAddress = process.env.NEXT_PUBLIC_VAULT_CONTRACT_ADDRESS;
 
     if (vaultAddress) {
       try {
         const vaultAztecAddress = AztecAddress.fromString(vaultAddress);
-        // Use aztecNode.getContract() for testnet
         const contractInstance = await this.aztecNode.getContract(vaultAztecAddress);
 
         if (contractInstance) {
@@ -174,27 +171,24 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
       }
     }
 
-    // TODO: Uncomment when Wormhole contract is migrated to v3.0.0
-    // Register Wormhole contract if address is available
-    // const wormholeAddress = process.env.NEXT_PUBLIC_WORMHOLE_CONTRACT_ADDRESS;
+    const wormholeAddress = process.env.NEXT_PUBLIC_WORMHOLE_CONTRACT_ADDRESS;
 
-    // if (wormholeAddress) {
-    //   try {
-    //     const wormholeAztecAddress = AztecAddress.fromString(wormholeAddress);
+    if (wormholeAddress) {
+      try {
+        const wormholeAztecAddress = AztecAddress.fromString(wormholeAddress);
 
-    //     // Use aztecNode.getContract() for testnet
-    //     const contractInstance = await this.aztecNode.getContract(wormholeAztecAddress);
+        const contractInstance = await this.aztecNode.getContract(wormholeAztecAddress);
 
-    //     if (contractInstance) {
-    //       await this.pxe.registerContract({
-    //         instance: contractInstance,
-    //         artifact: WormholeContract.artifact,
-    //       });
-    //     }
-    //   } catch (error) {
-    //     logger.warn('Failed to register Wormhole contract (may already be registered or not deployed):', error);
-    //   }
-    // }
+        if (contractInstance) {
+          await this.pxe.registerContract({
+            instance: contractInstance,
+            artifact: WormholeContract.artifact,
+          });
+        }
+      } catch (error) {
+        logger.warn('Failed to register Wormhole contract (may already be registered or not deployed):', error);
+      }
+    }
   }
 
   async #getSponsoredFPCContract() {
@@ -529,25 +523,5 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
     }
 
     return 'none';
-  }
-
-  /**
-   * Register a contract with the PXE
-   * @param artifact - Contract artifact
-   * @param deployer - Deployer address
-   * @param salt - Deployment salt
-   * @param args - Constructor arguments
-   */
-  async registerContract(artifact: unknown, deployer: unknown, salt: unknown, args: unknown[]): Promise<void> {
-    await this.initialize();
-
-    // TODO: Implement contract registration logic
-    // This is a stub implementation to satisfy the interface
-    void artifact;
-    void deployer;
-    void salt;
-    void args;
-
-    logger.warn('registerContract() called but not fully implemented');
   }
 }

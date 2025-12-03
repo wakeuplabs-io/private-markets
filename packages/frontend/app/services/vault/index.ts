@@ -27,7 +27,7 @@
  */
 
 // Main service exports
-export { VaultService, vaultService } from './vaultService';
+export { VaultService, vaultService } from './VaultService';
 
 // Provider exports (for testing or advanced usage)
 export { VaultProvider } from './vaultProvider';
@@ -37,4 +37,4 @@ export type { IVaultService, IVaultProvider, BetParams, SimpleBetParams } from '
 export { FALLBACK_VALUES } from './types';
 
 // Default export
-export { vaultService as default } from './vaultService';
+export { vaultService as default } from './VaultService';
