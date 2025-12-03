@@ -2,9 +2,11 @@ import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { Fr } from "@aztec/aztec.js/fields";
 import { TokenContract } from "../../artifacts/Token.ts";
 import { BetVaultContract } from "../../artifacts/BetVault.ts";
+import { WormholeContract } from "../../artifacts/Wormhole.ts";
 import { aztecSetup } from "../lib/aztec-setup.js";
 
-const WORMHOLE_ADDRESS = "0x0e61ae3f9f51ae20042f48674e2bf1c19cde5c916ae3a5ed114d84c873cc9a8f";
+// Wormhole Core contract address on Aztec testnet (must match deployment)
+const WORMHOLE_ADDRESS = "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493";
 
 async function main(): Promise<void> {
   console.log("🎲 Starting Place Bet Script...\n");
@@ -41,14 +43,17 @@ async function main(): Promise<void> {
   console.log("\n📝 Registering contracts with wallet...");
   const tokenAddr = AztecAddress.fromString(tokenAddress);
   const vaultAddr = AztecAddress.fromString(vaultAddress);
+  const wormholeAddr = AztecAddress.fromString(WORMHOLE_ADDRESS);
 
   await aztecSetup.registerContract(tokenAddr, TokenContract.artifact);
   await aztecSetup.registerContract(vaultAddr, BetVaultContract.artifact);
+  await aztecSetup.registerContract(wormholeAddr, WormholeContract.artifact);
+  console.log("✅ Registered Token, BetVault, and Wormhole contracts");
 
   const token = await TokenContract.at(tokenAddr, wallet);
   const vault = await BetVaultContract.at(vaultAddr, wallet);
 
-  const marketId = Fr.random();
+  const marketId = Fr.fromString("0");
   const outcome = 1n; // 1 = YES, 0 = NO
   const amount = 10n * 10n ** 18n; // 10 tokens
   const commitment = Fr.random();

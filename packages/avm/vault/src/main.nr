@@ -252,38 +252,38 @@ pub contract BetVault {
         outcome: u8,
         amount: u128,
     ) -> [[u8; 31]; 8] {
-        // let mut payload = [0u8; 98];
-        // // Message type: BET
-        // payload[0] = 0x01;
+        let mut payload = [0u8; 98];
+        // Message type: BET
+        payload[0] = 0x01;
 
-        // let market_id_bytes = market_id.to_le_bytes::<32>();
-        // for i in 0..32 {
-        //     payload[1 + i] = market_id_bytes[i];
-        // }
+        let market_id_bytes = market_id.to_be_bytes::<32>();
+        for i in 0..32 {
+            payload[1 + i] = market_id_bytes[i];
+        }
 
-        // let bet_id_bytes = bet_id.to_le_bytes::<32>();
-        // for i in 0..32 {
-        //     payload[33 + i] = bet_id_bytes[i];
-        // }
+        let bet_id_bytes = bet_id.to_be_bytes::<32>();
+        for i in 0..32 {
+            payload[33 + i] = bet_id_bytes[i];
+        }
 
-        // payload[65] = outcome;
+        payload[65] = outcome;
 
-        // let amount_field = amount.to_field();
-        // let amount_bytes = amount_field.to_le_bytes::<32>();
-        // for i in 0..32 {
-        //     payload[66 + i] = amount_bytes[i];
-        // }
+        let amount_field = amount.to_field();
+        let amount_bytes = amount_field.to_be_bytes::<32>();
+        for i in 0..32 {
+            payload[66 + i] = amount_bytes[i];
+        }
 
         let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
-        // let mut idx = 0;
-        // for c in 0..8 {
-        //     for j in 0..31 {
-        //         if idx < 98 {
-        //             chunks[c][j] = payload[idx];
-        //             idx += 1;
-        //         }
-        //     }
-        // }
+        let mut idx = 0;
+        for c in 0..8 {
+            for j in 0..31 {
+                if idx < 98 {
+                    chunks[c][j] = payload[idx];
+                    idx += 1;
+                }
+            }
+        }
 
         chunks
     }
