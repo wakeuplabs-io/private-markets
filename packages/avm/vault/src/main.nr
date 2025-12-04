@@ -252,38 +252,32 @@ pub contract BetVault {
         outcome: u8,
         amount: u128,
     ) -> [[u8; 31]; 8] {
-        let mut payload = [0u8; 98];
-        // Message type: BET
-        payload[0] = 0x01;
-
-        let market_id_bytes = market_id.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[1 + i] = market_id_bytes[i];
-        }
-
-        let bet_id_bytes = bet_id.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[33 + i] = bet_id_bytes[i];
-        }
-
-        payload[65] = outcome;
-
-        let amount_field = amount.to_field();
-        let amount_bytes = amount_field.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[66 + i] = amount_bytes[i];
-        }
+        // Wormhole converts each [u8; 31] chunk to Field using from_le_bytes()
+        // Then guardians serialize each Field as 32 bytes big-endian in the VAA
+        //
+        // Format (all IDs must be <= 248 bits / 31 bytes):
+        // Chunk 0: type (byte 0) + outcome (byte 1)
+        // Chunk 1: market_id (31 bytes)
+        // Chunk 2: bet_id (31 bytes)
+        // Chunk 3: amount (31 bytes)
+        // Chunks 4-7: zeros (padding)
 
         let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
-        let mut idx = 0;
-        for c in 0..8 {
-            for j in 0..31 {
-                if idx < 98 {
-                    chunks[c][j] = payload[idx];
-                    idx += 1;
-                }
-            }
-        }
+
+        // Chunk 0: type + outcome concatenated
+        chunks[0][0] = 0x01;  // BET message type
+        chunks[0][1] = outcome;
+
+        // Chunk 1: market_id (must be <= 248 bits)
+        chunks[1] = market_id.to_le_bytes();
+
+        // Chunk 2: bet_id (must be <= 248 bits)
+        chunks[2] = bet_id.to_le_bytes();
+
+        // Chunk 3: amount
+        chunks[3] = (amount as Field).to_le_bytes();
+
+        // Chunks 4-7: zeros (already initialized)
 
         chunks
     }
@@ -296,40 +290,35 @@ pub contract BetVault {
         bet_amount: u128,
         recipient: AztecAddress,
     ) -> [[u8; 31]; 8] {
-        let mut payload = [0u8; 129];
-        // Message type: CLAIM
-        payload[0] = 0x02; 
+        // Wormhole converts each [u8; 31] chunk to Field using from_le_bytes()
+        // Then guardians serialize each Field as 32 bytes big-endian in the VAA
+        //
+        // Format (all IDs must be <= 248 bits / 31 bytes):
+        // Chunk 0: type (byte 0)
+        // Chunk 1: market_id (31 bytes)
+        // Chunk 2: nullifier (31 bytes)
+        // Chunk 3: bet_amount (31 bytes)
+        // Chunk 4: recipient (20 bytes address)
+        // Chunks 5-7: zeros (padding)
 
-        let market_id_bytes = market_id.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[1 + i] = market_id_bytes[i];
-        }
-
-        let nullifier_bytes = nullifier.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[33 + i] = nullifier_bytes[i];
-        }
-
-        let bet_amount_field = bet_amount.to_field();
-        let bet_amount_bytes = bet_amount_field.to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[65 + i] = bet_amount_bytes[i];
-        }
-
-        let recipient_bytes = recipient.to_field().to_be_bytes::<32>();
-        for i in 0..32 {
-            payload[97 + i] = recipient_bytes[i];
-        }
         let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
-        let mut idx = 0;
-        for c in 0..8 {
-            for j in 0..31 {
-                if idx < 129 {
-                    chunks[c][j] = payload[idx];
-                    idx += 1;
-                }
-            }
-        }
+
+        // Chunk 0: Message type CLAIM (0x02)
+        chunks[0][0] = 0x02;
+
+        // Chunk 1: market_id (must be <= 248 bits)
+        chunks[1] = market_id.to_le_bytes();
+
+        // Chunk 2: nullifier (must be <= 248 bits)
+        chunks[2] = nullifier.to_le_bytes();
+
+        // Chunk 3: bet_amount
+        chunks[3] = (bet_amount as Field).to_le_bytes();
+
+        // Chunk 4: recipient (20 bytes address)
+        chunks[4] = recipient.to_field().to_le_bytes();
+
+        // Chunks 5-7: zeros (already initialized)
 
         chunks
     }

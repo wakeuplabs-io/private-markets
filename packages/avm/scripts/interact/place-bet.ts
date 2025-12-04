@@ -8,6 +8,22 @@ import { aztecSetup } from "../lib/aztec-setup.js";
 // Wormhole Core contract address on Aztec testnet (must match deployment)
 const WORMHOLE_ADDRESS = "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493";
 
+// Maximum value for 248 bits (31 bytes) - required for Wormhole payload encoding
+const MAX_248_BITS = (1n << 248n) - 1n;
+
+/**
+ * Generates a random Fr value that fits in 31 bytes (248 bits).
+ * This is required because Wormhole payload encoding uses to_le_bytes::<31>()
+ * which only supports values up to 248 bits.
+ */
+function generateRandom248BitFr(): Fr {
+  const random = Fr.random();
+  const randomBigInt = random.toBigInt();
+  // Mask to 248 bits (clear the top 8 bits)
+  const masked = randomBigInt & MAX_248_BITS;
+  return new Fr(masked);
+}
+
 async function main(): Promise<void> {
   console.log("🎲 Starting Place Bet Script...\n");
 
@@ -53,12 +69,14 @@ async function main(): Promise<void> {
   const token = await TokenContract.at(tokenAddr, wallet);
   const vault = await BetVaultContract.at(vaultAddr, wallet);
 
-  const marketId = Fr.fromString("0");
+  // Use 248-bit values for marketId and betId (required for Wormhole payload encoding)
+  // The marketId should match the one created on EVM side
+  const marketId = generateRandom248BitFr(); // Replace with actual market ID from EVM
   const outcome = 1n; // 1 = YES, 0 = NO
   const amount = 10n * 10n ** 18n; // 10 tokens
-  const commitment = Fr.random();
-  const betId = Fr.random();
-  const authwitNonce = Fr.random();
+  const commitment = generateRandom248BitFr(); // 248-bit for potential cross-chain use
+  const betId = generateRandom248BitFr(); // Must be 248-bit for Wormhole encoding
+  const authwitNonce = Fr.random(); // This one doesn't go cross-chain, can be full 254-bit
 
   console.log("\nBet Parameters:");
   console.log("  Market ID:  ", marketId.toString());
