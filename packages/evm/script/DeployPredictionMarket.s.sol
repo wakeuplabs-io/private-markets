@@ -78,7 +78,7 @@ contract DeployPredictionMarket is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        MockERC20 mockErc20 = new MockERC20("Mock USDC", "USDC", 6, 1_000_000_000 * 10**6);
+        MockERC20 mockErc20 = new MockERC20("Mock Token", "MTK", 18, 1_000_000_000 * 10**18);
         console.log("MockERC20 deployed to:", address(mockErc20));
 
         Treasury treasury = new Treasury(address(mockErc20));
