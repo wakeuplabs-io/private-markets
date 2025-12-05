@@ -145,11 +145,8 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
         logger.info('✅ Token contract registered successfully');
 
       } catch (error) {
-        console.error('🔴 [REGISTER] Token registration error:', error);
         logger.warn('Failed to register Token contract (may already be registered or not deployed):', error);
       }
-    } else {
-      console.log('🔵 [REGISTER] No token address in env, skipping');
     }
 
     const vaultAddress = process.env.NEXT_PUBLIC_VAULT_CONTRACT_ADDRESS;
@@ -229,8 +226,6 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
   }
 
   async connect(): Promise<IWalletAccount> {
-    console.log('[AztecWalletProvider] 🔵 STEP 1: Starting connect()');
-
     const account = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!account) {
       throw new Error("No existing account found. Please create an account first.");

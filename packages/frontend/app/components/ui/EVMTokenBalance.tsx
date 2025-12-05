@@ -20,8 +20,7 @@ export interface EVMTokenBalanceProps {
  * EVMTokenBalance Component
  *
  * Displays ERC20 token balance for EVM chains (Arbitrum).
- * Designed to show USDC balance (6 decimals) in the Avatar Modal.
- * ```
+ * Supports any ERC20 token with dynamic decimals in the Avatar Modal.
  */
 export function EVMTokenBalance({
   tokenInfo,

@@ -16,11 +16,6 @@ function PXELoadingModalWrapper() {
   // Regular operations are now handled by OperationHistoryPanel (non-blocking)
   const isLoading = isInitializingProvider;
 
-  // Debug: Log when the loading modal is shown
-  if (isLoading) {
-    console.log('[PXELoadingModalWrapper] isInitializingProvider:', isInitializingProvider);
-  }
-
   // Loading info only for initialization
   const getLoadingInfo = () => {
     if (isInitializingProvider) {

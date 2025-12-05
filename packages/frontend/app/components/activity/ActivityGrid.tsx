@@ -98,7 +98,7 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
             return bTime - aTime;
         });
     }, [bets]);
-    console.log(sortedBets);
+
     if (!isLoading && sortedBets.length === 0) {
         return (
             <EmptyState

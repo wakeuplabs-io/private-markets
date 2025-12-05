@@ -25,6 +25,7 @@ export function AdminPage() {
     const [createMarketFormData, setCreateMarketFormData] =
         useState<CreateMarketFormData | null>(null);
     const [createdMarket, setCreatedMarket] = useState<Market | null>(null);
+    const [txHash, setTxHash] = useState<string | null>(null);
 
     const isLoading = adminLoading;
 
@@ -56,7 +57,8 @@ export function AdminPage() {
         if (!createMarketFormData) return;
 
         try {
-            await createMarket(createMarketFormData);
+            const hash = await createMarket(createMarketFormData);
+            setTxHash(hash);
             // En un escenario real, obtendríamos el market creado de la respuesta
             const mockCreatedMarket: Market = {
                 id: Date.now().toString(),
@@ -81,6 +83,7 @@ export function AdminPage() {
         setCurrentStep(null);
         setCreateMarketFormData(null);
         setCreatedMarket(null);
+        setTxHash(null);
     };
 
     return (
@@ -129,16 +132,17 @@ export function AdminPage() {
                     isOpen={currentStep === "success"}
                     onClose={handleCloseModal}
                     onViewMarket={() => {
-                        // Navegar al market creado
-                        console.log("Navigate to market:", createdMarket?.id);
+                        // TODO: Navigate to market when routing is implemented
                         handleCloseModal();
                     }}
                     onCreateAnother={() => {
                         setCreateMarketFormData(null);
                         setCreatedMarket(null);
+                        setTxHash(null);
                         setCurrentStep("form");
                     }}
                     createdMarket={createdMarket!}
+                    txHash={txHash}
                 />
             </div>
         </>

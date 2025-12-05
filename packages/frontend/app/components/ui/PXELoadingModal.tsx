@@ -28,10 +28,8 @@ export function PXELoadingModal({
   // Safety timeout: auto-hide after MAX_LOADING_TIME_MS
   useEffect(() => {
     if (isOpen) {
-      console.log('[PXELoadingModal] Modal opened - starting safety timeout');
       setForceHide(false);
       const timeout = setTimeout(() => {
-        console.warn('[PXELoadingModal] Safety timeout reached - force hiding modal');
         setForceHide(true);
       }, MAX_LOADING_TIME_MS);
       return () => clearTimeout(timeout);

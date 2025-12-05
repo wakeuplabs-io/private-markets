@@ -55,15 +55,13 @@ const Header: React.FC<HeaderProps> = ({
               My Activity
             </Link>
 
-            {true && (
-              <Link
-                href="/admin"
-                className="flex items-center space-x-2 px-3 py-2 text-xs bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-md transition-colors"
-              >
-                <Settings className="w-4 h-4" />
-                <span>Admin</span>
-              </Link>
-            )}
+            <Link
+              href="/admin"
+              className="flex items-center space-x-2 px-3 py-2 text-xs bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-md transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Admin</span>
+            </Link>
           </nav>
         </div>
 

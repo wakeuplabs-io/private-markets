@@ -162,7 +162,7 @@ export interface ContractMarket {
   /** Market question (e.g., "Will ETH reach $5000 by 2025?") */
   question: string;
 
-  /** Total USDC pool deposited by market owner (in wei, 6 decimals for USDC) */
+  /** Total token pool deposited by market owner (in wei, 18 decimals for MockERC20) */
   totalPool: bigint;
 
   /** Total amount bet on YES outcome (in wei) */

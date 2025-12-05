@@ -15,7 +15,7 @@ interface UseAdminMarketsReturn {
     isLoading: boolean;
     error: string | null;
     connectionStatus: BlockchainConnectionStatus;
-    createMarket: (formData: CreateMarketFormData) => Promise<void>;
+    createMarket: (formData: CreateMarketFormData) => Promise<string>;
     resolveMarket: (
         marketId: string,
         winningOption: "yes" | "no"
@@ -70,13 +70,13 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
     );
 
     const createMarket = useCallback(
-        async (formData: CreateMarketFormData) => {
+        async (formData: CreateMarketFormData): Promise<string> => {
             try {
                 if (!address) {
                     throw new Error('Please connect your wallet first');
                 }
 
-                const defaultTotalPool = 100 * 10**6; // 100 USDC default (6 decimals)
+                const defaultTotalPool = 100; // 100 tokens default (parseUnits handles decimals)
                 const hash = await MarketService.createMarket(
                     formData.question,
                     defaultTotalPool,
@@ -86,6 +86,7 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
                 console.log("Market creation transaction:", hash);
 
                 await mutate();
+                return hash;
             } catch (err) {
                 const errorMessage =
                     err instanceof Error

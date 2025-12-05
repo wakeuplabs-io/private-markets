@@ -277,16 +277,12 @@ export class VaultProvider implements IVaultProvider {
    */
   async getUserBets(): Promise<Bet[]> {
     return pxeManager.enqueue(async () => {
-      console.log('------------1--------------------');
       const wallet = await ensureWalletConnected();
       const aztecAddress = AztecAddress.fromString(this.contractAddress);
       const contract = await BetVaultContract.at(aztecAddress, wallet);
-      console.log('------------2--------------------');
 
-      // v3.0.0: Always include 'from' parameter
       const account = walletConnectionManager.getAccount();
       const from = account.getAddress();
-      console.log('------------3--------------------');
 
       const result: { storage: BlockchainBet[], len: bigint } = await contract.methods
         .get_user_bets(from, 0, 10)
@@ -294,12 +290,7 @@ export class VaultProvider implements IVaultProvider {
           from,
           skipFeeEnforcement: true
         });
-      console.log('------------4--------------------');
-      console.log({
-        result,
-      })
-      console.log('--------------------------------');
-      console.log('--------------------------------');
+
       const validBetsCount = Number(result.len);
       const blockchainBets = result.storage.slice(0, validBetsCount);
 
@@ -361,14 +352,7 @@ export class VaultProvider implements IVaultProvider {
         const aztecAddress = AztecAddress.fromString(this.contractAddress);
         const vaultContract = await BetVaultContract.at(aztecAddress, wallet);
 
-        console.log('[VAULT:PRIVATE] Authorizing claim...');
-        console.log('[VAULT:PRIVATE] Market ID:', params.marketId);
-        console.log('[VAULT:PRIVATE] Recipient:', params.recipient);
-        console.log('[VAULT:PRIVATE] Bet Amount (normal):', params.betAmount);
-
         const betAmountWei = BigInt(params.betAmount) * BigInt(10 ** 18);
-
-        console.log('[VAULT:PRIVATE] Bet Amount (wei):', betAmountWei.toString());
 
         const interaction = vaultContract.methods.authorizeClaim(
           Fr.fromString(params.marketId),

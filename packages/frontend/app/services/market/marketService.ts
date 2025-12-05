@@ -79,12 +79,9 @@ export class MarketService {
 
 
   static async createMarket(question: string, totalPool: number, closingTime: Date, userAddress: string): Promise<string> {
-    // Check if blockchain is available
     const isOnline = await BlockchainStatusService.isEVMOnline()
-    console.log('EVM online:', isOnline)
     if (!isOnline) {
-      console.info('EVM offline')
-      throw new Error('Contract address not configured')
+      throw new Error('EVM network is offline')
     }
 
     if (!CONTRACT_ADDRESS) {
@@ -97,40 +94,32 @@ export class MarketService {
 
     try {
       const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
-      // USDC has 6 decimals - this is what we approve AND pass to the contract
-      const usdcAmount = parseUnits(totalPool.toString(), 6)
+      // MockERC20 token has 18 decimals
+      const tokenAmount = parseUnits(totalPool.toString(), 18)
 
-      // Check and approve USDC using EVMTokenService
       const currentAllowance = await evmTokenService.checkAllowance(
         USDC_ADDRESS,
         userAddress as `0x${string}`,
         TREASURY_ADDRESS
       )
-      console.log('Current USDC allowance:', currentAllowance)
 
-      if (currentAllowance < usdcAmount) {
-        console.log('⚠️  Insufficient allowance. Requesting approval for', usdcAmount.toString(), 'USDC')
-        await evmTokenService.approve(USDC_ADDRESS, TREASURY_ADDRESS, usdcAmount)
-        console.log('✅ USDC approved')
-      } else {
-        console.log('✅ Sufficient allowance already exists')
+      if (currentAllowance < tokenAmount) {
+        await evmTokenService.approve(USDC_ADDRESS, TREASURY_ADDRESS, tokenAmount)
       }
 
-      // Create market with USDC amount (includes 6 decimals)
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: PREDICTION_MARKET_FUNCTIONS.CREATE_MARKET,
-        args: [question, usdcAmount, closingTimestamp],
+        args: [question, tokenAmount, closingTimestamp],
         gas: PREDICTION_MARKET_GAS_LIMITS.CREATE_MARKET,
       })
 
-      const waitForConfirmation = await waitForTransactionReceipt(config, {
+      await waitForTransactionReceipt(config, {
         hash,
         confirmations: 1,
       })
 
-      console.log("Market created:", waitForConfirmation)
       return hash
     } catch (error) {
       console.warn('Failed to create market on blockchain:', error instanceof Error ? error.message : 'Unknown error')

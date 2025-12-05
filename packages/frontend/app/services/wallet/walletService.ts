@@ -110,7 +110,6 @@ export class WalletService {
 
       const addressObj = account.getAddress();
       const addressString = addressObj.toString();
-      console.log('[WalletService] createAccount - addressObj:', addressObj, 'addressString:', addressString);
 
       const walletInfo: WalletInfo = {
         connector,
