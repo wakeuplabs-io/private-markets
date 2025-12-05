@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
-import { useAccount } from 'wagmi'
+import { useWallet } from '@/context'
 import { MarketService, type ContractMarket } from '@/services/market'
 import { UserBet, UserActivityData, BlockchainConnectionStatus, MarketStatus, MarketOption } from '@/types'
 import { vaultService } from '@/services/vault'
@@ -164,7 +164,7 @@ const fetchUserActivity = async (): Promise<UserActivityData> => {
 
 export function useUserActivity(): UseUserActivityReturn {
   const [connectionStatus, setConnectionStatus] = useState<BlockchainConnectionStatus>('connecting')
-  const { isConnected } = useAccount()
+  const { isConnected } = useWallet()
 
   const { data: activityData, error, isLoading, mutate } = useSWR(
     isConnected ? 'user-activity' : null, // Only fetch when connected
@@ -173,17 +173,16 @@ export function useUserActivity(): UseUserActivityReturn {
       refreshInterval: 0, // Disable auto-refresh to prevent navigation blocking
       revalidateOnFocus: false, // Disable revalidation on focus to prevent blocking during navigation
       revalidateOnReconnect: false, // Disable revalidation on reconnect to prevent race conditions
-      dedupingInterval: 5000, // Prevent duplicate requests within 5 seconds
+      dedupingInterval: 10000, // Prevent duplicate requests within 10 seconds
       suspense: false, // Prevent suspending during revalidation
       keepPreviousData: true, // Keep previous data while fetching new data
       onError: (err) => {
         console.error('Error loading user activity:', err)
         setConnectionStatus('error')
       },
-      onSuccess: async () => {
+      onSuccess: () => {
         // Update connection status when data loads successfully
-        const blockchainStatus = await MarketService.getConnectionStatus()
-        setConnectionStatus(blockchainStatus)
+        setConnectionStatus('online')
       }
     }
   )

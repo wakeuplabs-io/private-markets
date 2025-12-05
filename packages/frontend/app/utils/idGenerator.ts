@@ -7,28 +7,49 @@ import { normalizeHex64 } from "@/lib/utils";
  * Contract reference: packages/avm/vault/src/main.nr
  */
 
+// Maximum value for 248 bits (31 bytes) - required for Wormhole payload encoding
+// Wormhole uses to_le_bytes::<31>() which only supports values up to 248 bits
+const MAX_248_BITS = (1n << 248n) - 1n;
+
+/**
+ * Generate a random Fr value that fits in 31 bytes (248 bits).
+ * This is required because Wormhole payload encoding uses to_le_bytes::<31>()
+ * which only supports values up to 248 bits.
+ * @returns Random Fr masked to 248 bits
+ */
+function generateRandom248BitFr(): Fr {
+  const random = Fr.random();
+  const randomBigInt = random.toBigInt();
+  // Mask to 248 bits (clear the top 8 bits)
+  const masked = randomBigInt & MAX_248_BITS;
+  return new Fr(masked);
+}
+
 /**
  * Generate a random secret for bet commitment
- * @returns Random Fr (Field element)
+ * Uses 248-bit values for Wormhole cross-chain compatibility
+ * @returns Random Fr (Field element, 248-bit)
  */
 export function generateSecret(): Fr {
-  return Fr.random();
+  return generateRandom248BitFr();
 }
 
 /**
  * Generate a unique bet ID
- * @returns Random Fr (must be unique per bet)
+ * Uses 248-bit values for Wormhole cross-chain compatibility
+ * @returns Random Fr (must be unique per bet, 248-bit)
  */
 export function generateBetId(): Fr {
-  return Fr.random();
+  return generateRandom248BitFr();
 }
 
 /**
  * Generate an authwit nonce for transaction authorization
- * @returns Random Fr
+ * Uses 248-bit values for consistency (though authwit doesn't go cross-chain)
+ * @returns Random Fr (248-bit)
  */
 export function generateAuthwitNonce(): Fr {
-  return Fr.random();
+  return generateRandom248BitFr();
 }
 
 /**
@@ -67,10 +88,10 @@ export async function computeNullifier(
 
 /**
  * @deprecated Use generateBetId or generateAuthwitNonce instead
- * @returns Random Fr
+ * @returns Random Fr (248-bit for Wormhole compatibility)
  */
 export function generateHashId(): Fr {
-  return Fr.random();
+  return generateRandom248BitFr();
 }
 
 /**

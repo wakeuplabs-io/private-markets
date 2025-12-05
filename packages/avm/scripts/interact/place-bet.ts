@@ -71,7 +71,7 @@ async function main(): Promise<void> {
 
   // Use 248-bit values for marketId and betId (required for Wormhole payload encoding)
   // The marketId should match the one created on EVM side
-  const marketId = generateRandom248BitFr(); // Replace with actual market ID from EVM
+  const marketId = Fr.fromString("0x0071ca334e309a6b0bcff8655c043fa6b5fc00972c29f315e249abaff425cde4"); // Replace with actual market ID from EVM
   const outcome = 1n; // 1 = YES, 0 = NO
   const amount = 10n * 10n ** 18n; // 10 tokens
   const commitment = generateRandom248BitFr(); // 248-bit for potential cross-chain use

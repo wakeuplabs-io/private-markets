@@ -27,7 +27,7 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <header
       className={cn(
-        'relative z-auto w-screen h-20 backdrop-blur-sm',
+        'relative z-40 w-screen h-20 backdrop-blur-sm',
         'bg-card/70',
         className
       )}

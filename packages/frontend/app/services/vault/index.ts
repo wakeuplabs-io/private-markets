@@ -30,7 +30,7 @@
 export { VaultService, vaultService } from './VaultService';
 
 // Provider exports (for testing or advanced usage)
-export { VaultProvider } from './vaultProvider';
+export { VaultProvider } from './VaultProvider';
 
 // Type exports
 export type { IVaultService, IVaultProvider, BetParams, SimpleBetParams } from './types';

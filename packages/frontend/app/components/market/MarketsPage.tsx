@@ -43,6 +43,7 @@ export function MarketsPage() {
     } | null>(null);
 
     const { activeMarkets, isLoading } = useUserMarkets();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const { placeBet, isLoading: isPlacingBet, clearError } = useVault();
     const { wallet, connectWallet, isConnected } = useWallet();
@@ -146,7 +147,7 @@ export function MarketsPage() {
                     emptyState={<MarketsEmptyState />}
                 />
                 <MarketDetailModal
-                    isOpen={isDetailModalOpen}
+                    isOpen={false}
                     onClose={() => setIsDetailModalOpen(false)}
                     onBack={() => setIsDetailModalOpen(false)}
                     market={selectedMarket}

@@ -72,7 +72,6 @@ export class PXEManager {
     description?: string
   ): Promise<T> {
     const operationDesc = description || 'Processing operation';
-    console.log('[PXEManager] Enqueue requested:', operationDesc);
 
     const operationId = operationHistoryManager.addOperation(
       operationDesc,
@@ -104,7 +103,6 @@ export class PXEManager {
         endTime: new Date(),
       });
 
-      console.log('[PXEManager] Operation completed successfully');
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -197,8 +195,6 @@ export class PXEManager {
    * Handle queue status updates from OperationQueue
    */
   private handleQueueUpdate(queueStatus: QueueStatus): void {
-    console.log('[PXEManager] Queue update received:', queueStatus);
-
     this.state.queue = queueStatus;
     this.updateBusyAndMessage();
     this.notifyListeners();
@@ -246,8 +242,6 @@ export class PXEManager {
    * Reset manager (for testing or cleanup)
    */
   public reset(): void {
-    console.log('[PXEManager] Resetting...');
-
     this.operationQueue.clear();
     this.listeners.clear();
 

@@ -53,17 +53,13 @@ export function PXEManagerProvider({ children }: PXEManagerProviderProps) {
   const [state, setState] = useState<PXEManagerState>(() => pxeManager.getState());
 
   useEffect(() => {
-    console.log('[PXEManagerProvider] Subscribing to state changes');
-
     // Subscribe to manager state changes
     const unsubscribe = pxeManager.onStateChange((newState) => {
-      console.log('[PXEManagerProvider] State update received:', newState);
       setState(newState);
     });
 
     // Cleanup on unmount
     return () => {
-      console.log('[PXEManagerProvider] Unsubscribing from state changes');
       unsubscribe();
     };
   }, []);

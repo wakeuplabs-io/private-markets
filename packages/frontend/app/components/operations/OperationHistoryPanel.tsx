@@ -19,6 +19,7 @@ import { operationHistoryManager } from '@/services/operations';
 export function OperationHistoryPanel() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { operations, currentOperation, inProgressCount } = useOperationHistory();
 
   // Show panel after first operation

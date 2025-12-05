@@ -1,14 +1,74 @@
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { Fr } from "@aztec/foundation/fields";
+import type { ContractArtifact } from "@aztec/stdlib/abi";
 import { TokenContract } from "@/lib/contracts/Token";
 import { ensureWalletConnected } from "@/lib/wallet";
-import { walletConnectionManager } from "@/lib/wallet/walletConnectionManager";
+import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 import { BetVaultContract } from "@/lib/contracts/BetVault";
 import { pxeManager } from "@/services/pxe";
+import { pxeService } from "@/services/pxe/pxeService";
 import type { IVaultProvider, BetParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
 import { normalizeHex64 } from "@/lib/utils";
+
+/**
+ * Ensures required contracts are registered in PXE before operations.
+ * This handles cases where PXE state is lost (page refresh, IndexedDB cleared, etc.)
+ *
+ * @param contracts - Array of contracts to ensure are registered
+ */
+async function ensureContractsRegistered(
+  contracts: { address: string; artifact: ContractArtifact; name: string }[]
+): Promise<void> {
+  const pxe = pxeService.getPXE();
+  const aztecNode = pxeService.getAztecNode();
+
+  for (const contract of contracts) {
+    try {
+      const aztecAddress = AztecAddress.fromString(contract.address);
+
+      // Try to get the contract instance from PXE
+      const existingInstance = await pxe.getContractInstance(aztecAddress);
+
+      if (!existingInstance) {
+        console.log(`[VAULT] ${contract.name} not found in PXE, registering...`);
+
+        // Fetch contract instance from Aztec node
+        const contractInstance = await aztecNode.getContract(aztecAddress);
+
+        if (contractInstance) {
+          await pxe.registerContract({
+            instance: contractInstance,
+            artifact: contract.artifact,
+          });
+          console.log(`[VAULT] ✅ ${contract.name} registered successfully`);
+        } else {
+          console.warn(`[VAULT] ⚠️ ${contract.name} not found on Aztec node`);
+        }
+      }
+    } catch {
+      // Contract not registered or error checking, try to register it
+      console.log(`[VAULT] ${contract.name} check failed, attempting registration...`);
+
+      try {
+        const aztecAddress = AztecAddress.fromString(contract.address);
+        const contractInstance = await aztecNode.getContract(aztecAddress);
+
+        if (contractInstance) {
+          await pxe.registerContract({
+            instance: contractInstance,
+            artifact: contract.artifact,
+          });
+          console.log(`[VAULT] ✅ ${contract.name} registered successfully`);
+        }
+      } catch (regError) {
+        console.error(`[VAULT] ❌ Failed to register ${contract.name}:`, regError);
+        throw new Error(`Failed to register ${contract.name} contract: ${regError instanceof Error ? regError.message : 'Unknown error'}`);
+      }
+    }
+  }
+}
 
 /**
  * Blockchain bet structure (as returned from Aztec contract)
@@ -63,29 +123,34 @@ export class VaultProvider implements IVaultProvider {
         const account = walletConnectionManager.getAccount();
         const fromAddress = account.getAddress();
 
-        // v3.0.0: Create vault contract instance with wallet (no caching)
+        await ensureContractsRegistered([
+          {
+            address: params.tokenAddress,
+            artifact: TokenContract.artifact,
+            name: 'Token'
+          },
+          {
+            address: this.contractAddress,
+            artifact: BetVaultContract.artifact,
+            name: 'BetVault'
+          },
+        ]);
+
         const aztecAddress = AztecAddress.fromString(this.contractAddress);
         const vaultContract = await BetVaultContract.at(aztecAddress, wallet);
 
-        // Convert amount to e18 (wei equivalent for 18 decimals)
         const amountInE18 = BigInt(params.amount) * BigInt(10 ** 18);
 
-        // Get admin address from vault contract (must match what the contract will use)
         const adminAddress = await vaultContract.methods.get_admin().simulate({
           from: fromAddress,
           skipFeeEnforcement: true
         });
 
-        console.log('[VAULT:PRIVATE] Creating token authorization witness...');
-        console.log('[VAULT:PRIVATE] Amount:', params.amount, '→', amountInE18.toString(), '(e18)');
-
-        // v3.0.0: Create token contract instance with wallet
         const tokenContract = await TokenContract.at(
           AztecAddress.fromString(params.tokenAddress),
           wallet
         );
 
-        // Create authorization action for token transfer (using e18 amount)
         const transferAction = tokenContract.methods.transfer_private_to_private(
           fromAddress,
           adminAddress,
@@ -93,9 +158,6 @@ export class VaultProvider implements IVaultProvider {
           Fr.fromString(params.authwitNonce)
         );
 
-        // v3.0.0: Create authorization witness with new signature
-        // First param: authorizer (fromAddress)
-        // Second param: { caller, action }
         const authwit = await wallet.createAuthWit(
           fromAddress,
           {
@@ -103,9 +165,6 @@ export class VaultProvider implements IVaultProvider {
             action: transferAction
           }
         );
-
-        console.log('[VAULT:PRIVATE] Submitting bet transaction...');
-
         const interaction = vaultContract.methods.bet(
           Fr.fromString(params.marketId),
           params.outcome,
@@ -218,13 +277,16 @@ export class VaultProvider implements IVaultProvider {
    */
   async getUserBets(): Promise<Bet[]> {
     return pxeManager.enqueue(async () => {
+      console.log('------------1--------------------');
       const wallet = await ensureWalletConnected();
       const aztecAddress = AztecAddress.fromString(this.contractAddress);
       const contract = await BetVaultContract.at(aztecAddress, wallet);
+      console.log('------------2--------------------');
 
       // v3.0.0: Always include 'from' parameter
       const account = walletConnectionManager.getAccount();
       const from = account.getAddress();
+      console.log('------------3--------------------');
 
       const result: { storage: BlockchainBet[], len: bigint } = await contract.methods
         .get_user_bets(from, 0, 10)
@@ -232,7 +294,12 @@ export class VaultProvider implements IVaultProvider {
           from,
           skipFeeEnforcement: true
         });
-
+      console.log('------------4--------------------');
+      console.log({
+        result,
+      })
+      console.log('--------------------------------');
+      console.log('--------------------------------');
       const validBetsCount = Number(result.len);
       const blockchainBets = result.storage.slice(0, validBetsCount);
 
@@ -280,6 +347,15 @@ export class VaultProvider implements IVaultProvider {
         const wallet = await ensureWalletConnected();
         const account = walletConnectionManager.getAccount();
         const fromAddress = account.getAddress();
+
+        // Ensure BetVault contract is registered in PXE
+        await ensureContractsRegistered([
+          {
+            address: this.contractAddress,
+            artifact: BetVaultContract.artifact,
+            name: 'BetVault'
+          },
+        ]);
 
         // v3.0.0: Create vault contract instance with wallet (no caching)
         const aztecAddress = AztecAddress.fromString(this.contractAddress);

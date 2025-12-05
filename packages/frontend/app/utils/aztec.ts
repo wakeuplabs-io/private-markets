@@ -1,5 +1,5 @@
 import { walletRegistry } from "@/lib/wallet";
-import { AztecWalletProvider } from "@/providers/aztec/aztecWalletProvider";
+import { AztecWalletProvider } from "@/providers/aztec/AztecWalletProvider";
 import type { AztecWalletConfig } from "@/providers/aztec/types";
 
 export function createAztecProvider(config: AztecWalletConfig = {}): AztecWalletProvider {

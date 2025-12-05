@@ -1,7 +1,7 @@
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { fieldToString } from "@/lib/aztecUtils";
 import { walletService } from "../wallet/walletService";
-import { TokenProvider } from "./tokenProvider";
+import { TokenProvider } from "./TokenProvider";
 import type { ITokenService, ITokenProvider, TokenInfo } from "./types";
 import { FALLBACK_VALUES } from "./types";
 

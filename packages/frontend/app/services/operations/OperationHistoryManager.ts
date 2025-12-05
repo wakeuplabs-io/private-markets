@@ -5,8 +5,7 @@
  * Tracks all operations (in-progress + completed) with timestamps and status.
  */
 
-import { operationEventBus, type OperationEvent } from '@/lib/utils/operationEventBus';
-import type { Operation, OperationHistoryState, OperationType, StateListener } from './types';
+import type { Operation, OperationHistoryState, StateListener } from './types';
 
 class OperationHistoryManager {
   private static instance: OperationHistoryManager;
@@ -14,10 +13,7 @@ class OperationHistoryManager {
   private listeners: Set<StateListener> = new Set();
   private readonly MAX_OPERATIONS = 50;
 
-  private constructor() {
-    // Subscribe to operation events from event bus
-    this.setupEventListeners();
-  }
+  private constructor() {}
 
   /**
    * Get singleton instance
@@ -29,27 +25,6 @@ class OperationHistoryManager {
     return OperationHistoryManager.instance;
   }
 
-  /**
-   * Setup listeners for operation events
-   */
-  private setupEventListeners(): void {
-    // Listen to all operation events
-    operationEventBus.on('START', (event) => {
-      console.log('[OperationHistory] Operation started:', event.operationId);
-    });
-
-    operationEventBus.on('SUCCESS', (event) => {
-      console.log('[OperationHistory] Operation succeeded:', event.operationId);
-    });
-
-    operationEventBus.on('ERROR', (event) => {
-      console.log('[OperationHistory] Operation failed:', event.operationId, event.data);
-    });
-
-    operationEventBus.on('COMPLETE', (event) => {
-      console.log('[OperationHistory] Operation completed:', event.operationId);
-    });
-  }
 
   /**
    * Add new operation to history
@@ -67,7 +42,6 @@ class OperationHistoryManager {
     );
 
     if (existingOperation) {
-      console.log(`[OperationHistory] Operation "${description}" already in progress (ID: ${existingOperation.id}), reusing`);
       return existingOperation.id;
     }
 
@@ -83,7 +57,6 @@ class OperationHistoryManager {
     this.evictOldOperations();
     this.notifyListeners();
 
-    console.log(`[OperationHistory] New operation created: "${description}" (ID: ${operation.id})`);
     return operation.id;
   }
 

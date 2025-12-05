@@ -14,6 +14,17 @@ import { usePXEManager } from '@/hooks/pxe/usePXEManager';
 export function PXEStatusIndicator() {
   const state = usePXEManager();
 
+  // Debug: Log state when showing blocking overlay
+  if (state.busy && state.queue.isProcessing) {
+    console.log('[PXEStatusIndicator] Showing fullscreen overlay:', {
+      busy: state.busy,
+      isProcessing: state.queue.isProcessing,
+      queueLength: state.queue.length,
+      message: state.message,
+      currentOperation: state.queue.currentOperation,
+    });
+  }
+
   // Don't show if nothing is happening
   if (!state.busy) {
     return null;

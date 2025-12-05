@@ -1,6 +1,6 @@
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { ensureWalletConnected } from "@/lib/wallet";
-import { walletConnectionManager } from "@/lib/wallet/walletConnectionManager";
+import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 import { TokenContract } from "@/lib/contracts/Token";
 import type { ITokenProvider } from "./types";
 import { FALLBACK_VALUES } from "./types";

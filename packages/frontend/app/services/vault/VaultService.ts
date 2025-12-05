@@ -1,10 +1,11 @@
 import { Bet } from "@/types";
 import { walletService } from "../wallet/walletService";
-import { VaultProvider } from "./vaultProvider";
+import { VaultProvider } from "./VaultProvider";
 import type { IVaultService, IVaultProvider, SimpleBetParams, BetParams, SimpleClaimParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { generateCommitment, generateSecret, generateBetId, generateAuthwitNonce } from "@/utils/idGenerator";
 import { betStorageService, type StoredBet } from "../storage/betStorageService";
+import { normalizeHex64 } from "@/lib/utils";
 
 /**
  * Vault Service (Facade Pattern)
@@ -99,16 +100,18 @@ export class VaultService implements IVaultService {
     // Get token address from vault
     const tokenAddress = await this.getTokenAddress();
 
+    // Normalize all Fr values to hex format for consistent cross-chain encoding
+    // Fr.toString() returns decimal, but contracts expect hex with 0x prefix
     return {
-      marketId: params.marketId,
+      marketId: normalizeHex64(params.marketId),
       outcome: params.outcome,
       amount: params.amount,
-      commitment: commitment.toString(),
-      betId: betId.toString(),
-      authwitNonce: authwitNonce.toString(),
+      commitment: normalizeHex64(commitment),
+      betId: normalizeHex64(betId),
+      authwitNonce: normalizeHex64(authwitNonce),
       from: cleanedAddress,
       tokenAddress,
-      secret: secret.toString()
+      secret: normalizeHex64(secret)
     };
   }
 
@@ -260,13 +263,14 @@ export class VaultService implements IVaultService {
       // Generate authorization nonce
       const authwitNonce = generateAuthwitNonce();
 
-      // Create full claim params
+      // Create full claim params with normalized hex values
+      // storedBet values are already normalized from placeBet, but authwitNonce needs normalization
       const fullParams: ClaimParams = {
         marketId: storedBet.marketId,
         commitment: storedBet.commitment,
         secret: storedBet.secret,
         recipient: params.recipient,
-        authwitNonce: authwitNonce.toString(),
+        authwitNonce: normalizeHex64(authwitNonce),
         betAmount: parseFloat(storedBet.amount),
       };
 

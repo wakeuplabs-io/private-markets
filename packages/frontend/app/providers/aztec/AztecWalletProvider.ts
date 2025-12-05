@@ -1,5 +1,5 @@
 import type { IExtendedWalletProvider, IWalletAccount } from "@/types/wallet";
-import { AztecAccount } from "./aztecAccount";
+import { AztecAccount } from "./AztecAccount";
 import type {
   AztecWalletConfig,
   AztecAccountData,
@@ -108,8 +108,8 @@ export class AztecWalletProvider implements IExtendedWalletProvider {
         this.pxe = this.wallet.getPXE();
         this.aztecNode = this.wallet.getAztecNode();
 
-        // Register PXE in global service for access by other providers
-        await pxeService.registerPXE(this.pxe);
+        // Register PXE and AztecNode in global service for access by other providers
+        await pxeService.registerPXE(this.pxe, this.aztecNode);
 
         logger.info('✅ EmbeddedWallet initialized in browser');
         logger.info('ℹ️  SponsoredFPC already registered by EmbeddedWallet.initialize()');

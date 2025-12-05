@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface LoadingStep {
   label: string;
@@ -14,13 +14,38 @@ interface PXELoadingModalProps {
   steps?: LoadingStep[];
 }
 
+// Maximum time to show loading modal before auto-hiding (safety timeout)
+const MAX_LOADING_TIME_MS = 60000; // 60 seconds
+
 export function PXELoadingModal({
   isOpen,
   title,
   description,
   steps = [],
 }: PXELoadingModalProps) {
-  if (!isOpen) {
+  const [forceHide, setForceHide] = useState(false);
+
+  // Safety timeout: auto-hide after MAX_LOADING_TIME_MS
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[PXELoadingModal] Modal opened - starting safety timeout');
+      setForceHide(false);
+      const timeout = setTimeout(() => {
+        console.warn('[PXELoadingModal] Safety timeout reached - force hiding modal');
+        setForceHide(true);
+      }, MAX_LOADING_TIME_MS);
+      return () => clearTimeout(timeout);
+    }
+  }, [isOpen]);
+
+  // Reset forceHide when modal is closed normally
+  useEffect(() => {
+    if (!isOpen) {
+      setForceHide(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen || forceHide) {
     return null;
   }
 
