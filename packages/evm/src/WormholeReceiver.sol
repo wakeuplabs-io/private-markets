@@ -260,25 +260,17 @@ contract WormholeReceiver {
     }
 
     /**
-     * @dev Reads amount from the amount chunk of payload in Little Endian format
-     * Aztec serializes amount as a Field which gets written as [u8; 31] in LE.
-     * The amount chunk starts right after the fixed header (96 bytes for BET).
+     * @dev Reads amount from the END of the payload in Little Endian format
      *
-     * We know the exact structure:
-     *   - txId: 32 bytes
-     *   - type: 1 byte
-     *   - outcome: 1 byte
-     *   - marketId: 31 bytes
-     *   - betId: 31 bytes
-     *   - TOTAL FIXED: 96 bytes
-     *   - amount: remaining bytes (payload.length - 96)
+     * Real Aztec/Wormhole format (from testnet):
+     *   Amount chunk is variable size (e.g., 40 bytes)
+     *   Value is written at the END of the chunk in Little Endian
+     *   Leading bytes are zeros (padding)
      *
-     * IMPORTANT: Aztec serializes amount with leading zeros padding.
-     * The real payload structure is: [zeros padding][actual LE value]
-     * Example for 10e18: 00000000...0000 e8890423c78a (40 bytes total)
-     *
-     * Since we read in LE (LSB first), when chunk > 32 bytes we must
-     * read from the END of the chunk where the significant bytes are.
+     * Example for 10e18 = 0x8ac7230489e80000:
+     *   Chunk (40 bytes): [32 zeros][00 00 e8 89 04 23 c7 8a]
+     *   Read last 32 bytes in LE: 00 00 e8 89 04 23 c7 8a 00 00 ...
+     *   Result: 0x8ac7230489e80000
      *
      * @param data The payload bytes
      * @param fixedHeaderSize Size of the fixed header before amount chunk
@@ -288,18 +280,21 @@ contract WormholeReceiver {
         if (data.length <= fixedHeaderSize) {
             return 0;
         }
-        uint256 amountSize = data.length - fixedHeaderSize;
 
-        // Aztec serializes amount as Field in LE format with leading zeros padding.
-        // The structure is: [zeros padding][actual LE value]
-        // For a uint256, we can read up to 32 bytes. If chunk is larger, the significant
-        // bytes are at the END in LE, so we read from the end of the chunk.
-        if (amountSize > 32) {
-            // Read the LAST 32 bytes where the significant LE value is
-            uint256 skipBytes = amountSize - 32;
-            return _readUint256LE(data, fixedHeaderSize + skipBytes, 32);
+        uint256 chunkSize = data.length - fixedHeaderSize;
+
+        // Read up to 32 bytes from the END of the payload in Little Endian
+        uint256 bytesToRead = chunkSize > 32 ? 32 : chunkSize;
+        uint256 valueStart = data.length - bytesToRead;
+
+        // Read bytes as Little Endian (byte[i] contributes to bits i*8 through i*8+7)
+        uint256 result = 0;
+        for (uint256 i = 0; i < bytesToRead; i++) {
+            uint8 b = uint8(data[valueStart + i]);
+            result |= uint256(b) << (i * 8);
         }
-        return _readUint256LE(data, fixedHeaderSize, amountSize);
+
+        return result;
     }
 
     /**
