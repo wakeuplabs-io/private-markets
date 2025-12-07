@@ -344,37 +344,36 @@ contract WormholeReceiver {
 
     /**
      * @dev Processes claim authorization payload from Aztec Wormhole
-     * Payload format (similar to BET but with recipient):
+     * Payload format:
      *   Bytes 0-31: txId (32 bytes)
      *   Byte 32: messageType (0x02) - already validated in verify()
      *   Bytes 33-63: marketId in Little Endian (31 bytes)
      *   Bytes 64-94: nullifier in Little Endian (31 bytes)
-     *   Bytes 95-125: betAmount in Little Endian (31 bytes)
-     *   Bytes 126+: recipient in Little Endian (20 bytes for address)
+     *   Bytes 95-125: recipient in Little Endian (20 bytes for address) - FIXED SIZE
+     *   Bytes 126+: betAmount in Little Endian (variable, at END)
      */
     function _processClaimAuthPayload(bytes memory payload) internal {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // CLAIM message needs at least: txId(32) + type(1) + marketId(31) + nullifier(31) + amount(31) + recipient(20)
-        // Minimum: 146 bytes
-        if (payload.length < 146) revert PayloadTooShort(payload.length, 146);
+        // CLAIM message needs at least: txId(32) + type(1) + marketId(31) + nullifier(31) + recipient(31) + amount(31)
+        // Minimum: 157 bytes
+        if (payload.length < 157) revert PayloadTooShort(payload.length, 157);
 
         // messageType (byte 32) already validated in verify()
 
         // Bytes 33-63: marketId in LE (31 bytes)
-        // Note: CLAIM doesn't have outcome byte, so marketId starts at byte 33
         uint256 marketId = _readUint256LE(payload, TX_ID_SIZE + 1, CHUNK_SIZE);
 
         // Bytes 64-94: nullifier in LE (31 bytes)
         bytes32 nullifier = _readBytes32LE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE, CHUNK_SIZE);
 
-        // Bytes 95-125: betAmount in LE (31 bytes)
-        uint256 betAmount = _readUint256LE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE, CHUNK_SIZE);
+        // Bytes 95-125: recipient in LE (20 bytes address in 31-byte chunk) - FIXED SIZE
+        address recipient = _readAddressLE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE);
 
-        // Bytes 126+: recipient in LE (read remaining, expect at least 20 bytes for address)
-        uint256 recipientOffset = TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE + CHUNK_SIZE;
-        address recipient = _readAddressLE(payload, recipientOffset);
+        // Bytes 126+: betAmount - VARIABLE SIZE, read from END of payload
+        uint256 fixedHeaderSize = TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE + CHUNK_SIZE; // 126
+        uint256 betAmount = _readAmountChunk(payload, fixedHeaderSize);
 
         // Validate extracted data
         if (nullifier == bytes32(0)) revert InvalidNullifier();

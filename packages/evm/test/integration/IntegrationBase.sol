@@ -169,8 +169,8 @@ contract IntegrationBase is Test {
      *   Byte 32: messageType (0x02 for CLAIM)
      *   Bytes 33-63: marketId in Little Endian (31 bytes)
      *   Bytes 64-94: nullifier in Little Endian (31 bytes)
-     *   Bytes 95-125: betAmount in Little Endian (31 bytes)
-     *   Bytes 126-156: recipient in Little Endian (31 bytes, only 20 used for address)
+     *   Bytes 95-125: recipient in Little Endian (20 bytes address) - FIXED SIZE
+     *   Bytes 126+: betAmount in Little Endian (variable, at END)
      */
     function createClaimPayload(
         uint256 marketId,
@@ -178,7 +178,7 @@ contract IntegrationBase is Test {
         uint256 betAmount,
         address recipient
     ) internal pure returns (bytes memory) {
-        // Total: txId(32) + type(1) + marketId(31) + nullifier(31) + amount(31) + recipient(31) = 157 bytes
+        // Total: txId(32) + type(1) + marketId(31) + nullifier(31) + recipient(31) + amount_chunk(31) = 157 bytes
         bytes memory payload = new bytes(157);
 
         // Bytes 0-31: txId (mock with zeros)
@@ -193,11 +193,11 @@ contract IntegrationBase is Test {
         // Bytes 64-94: nullifier in LE (31 bytes)
         _writeChunkLE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE, uint256(nullifier));
 
-        // Bytes 95-125: betAmount in LE (31 bytes)
-        _writeChunkLE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE, betAmount);
+        // Bytes 95-125: recipient in LE (address is 20 bytes) - FIXED SIZE
+        _writeChunkLE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE, uint256(uint160(recipient)));
 
-        // Bytes 126-156: recipient in LE (address is 20 bytes, pad to 31)
-        _writeChunkLE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE + CHUNK_SIZE, uint256(uint160(recipient)));
+        // Bytes 126+: betAmount in LE at END of payload
+        _writeChunkLE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE + CHUNK_SIZE, betAmount);
 
         return payload;
     }
