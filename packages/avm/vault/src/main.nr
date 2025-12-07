@@ -1,5 +1,4 @@
 use dep::aztec::macros::aztec;
-
 pub mod types;
 
 #[aztec]
@@ -17,7 +16,7 @@ pub contract BetVault {
             private_set::PrivateSet
         },
         protocol_types::{
-            address::AztecAddress,
+            address::{AztecAddress, EthAddress},
             hash::poseidon2_hash,
             traits::ToField
         },
@@ -158,7 +157,7 @@ pub contract BetVault {
         market_id: Field,
         commitment: Field,
         secret: Field,
-        recipient: AztecAddress,
+        recipient: EthAddress,
         amount: u128,
         authwit_nonce: Field,
     ) {
@@ -191,8 +190,8 @@ pub contract BetVault {
         let claim_payload = create_claim_payload(
             market_id,
             nullifier,
-            amount,
             recipient,
+            amount,
         );
 
         let _ = Wormhole::at(storage.wormhole_address.read())
@@ -287,8 +286,8 @@ pub contract BetVault {
     fn create_claim_payload(
         market_id: Field,
         nullifier: Field,
-        bet_amount: u128,
-        recipient: AztecAddress,
+        recipient: EthAddress,
+        amount: u128,
     ) -> [[u8; 31]; 8] {
         // Wormhole converts each [u8; 31] chunk to Field using from_le_bytes()
         // Then guardians serialize each Field as 32 bytes big-endian in the VAA
@@ -297,9 +296,9 @@ pub contract BetVault {
         // Chunk 0: type (byte 0)
         // Chunk 1: market_id (31 bytes)
         // Chunk 2: nullifier (31 bytes)
-        // Chunk 3: bet_amount (31 bytes)
-        // Chunk 4: recipient (20 bytes address)
-        // Chunks 5-7: zeros (padding)
+        // Chunk 3: recipient (20 bytes address) - FIXED SIZE
+        // Chunk 4: amount (31 bytes) - VARIABLE SIZE, at the end
+        // Chunks 5-7: zeros (padding for amount overflow)
 
         let mut chunks: [[u8; 31]; 8] = [[0; 31]; 8];
 
@@ -312,11 +311,11 @@ pub contract BetVault {
         // Chunk 2: nullifier (must be <= 248 bits)
         chunks[2] = nullifier.to_le_bytes();
 
-        // Chunk 3: bet_amount
-        chunks[3] = (bet_amount as Field).to_le_bytes();
+        // Chunk 3: recipient (20 bytes address) - fixed size, before amount
+        chunks[3] = recipient.to_field().to_le_bytes();
 
-        // Chunk 4: recipient (20 bytes address)
-        chunks[4] = recipient.to_field().to_le_bytes();
+        // Chunk 4: amount - variable size, at the end
+        chunks[4] = (amount as Field).to_le_bytes();
 
         // Chunks 5-7: zeros (already initialized)
 
@@ -327,7 +326,25 @@ pub contract BetVault {
     #[contract_library_method]
     fn compute_nullifier(market_id: Field, commitment: Field, recipient: Field) -> Field {
         let inputs: [Field; 3] = [market_id, commitment, recipient];
-        poseidon2_hash(inputs)
+        let hash = poseidon2_hash(inputs);
+
+        // Truncate to 248 bits (31 bytes) for Wormhole compatibility
+        // Same pattern as normalize_to_31_bytes
+        let bytes: [u8; 32] = hash.to_be_bytes();
+        let mut truncated_bytes: [u8; 31] = [0; 31];
+        for i in 0..31 {
+            truncated_bytes[i] = bytes[i + 1];
+        }
+        std::field::bytes32_to_field(
+            [0, truncated_bytes[0], truncated_bytes[1], truncated_bytes[2],
+             truncated_bytes[3], truncated_bytes[4], truncated_bytes[5], truncated_bytes[6],
+             truncated_bytes[7], truncated_bytes[8], truncated_bytes[9], truncated_bytes[10],
+             truncated_bytes[11], truncated_bytes[12], truncated_bytes[13], truncated_bytes[14],
+             truncated_bytes[15], truncated_bytes[16], truncated_bytes[17], truncated_bytes[18],
+             truncated_bytes[19], truncated_bytes[20], truncated_bytes[21], truncated_bytes[22],
+             truncated_bytes[23], truncated_bytes[24], truncated_bytes[25], truncated_bytes[26],
+             truncated_bytes[27], truncated_bytes[28], truncated_bytes[29], truncated_bytes[30]]
+        )
     }
 
     // Utility functions

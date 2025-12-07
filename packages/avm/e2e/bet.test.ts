@@ -1,6 +1,6 @@
 
 import { TxStatus } from '@aztec/aztec.js/tx';
-import { AztecAddress } from '@aztec/aztec.js/addresses';
+import { AztecAddress, EthAddress } from '@aztec/aztec.js/addresses';
 import { Fr } from '@aztec/aztec.js/fields';
 import { type TestWallet } from '@aztec/test-wallet/server';
 import { type AztecLMDBStoreV2 } from '@aztec/kv-store/lmdb-v2';
@@ -256,9 +256,9 @@ describe('BetVault - E2E Tests', () => {
     const expectedCommitment = await generateCommitment(marketId, AMOUNT, secret);
     expect(commitment.toString()).toBe(expectedCommitment.toString());
 
-    // Define recipient for claim (bob's address)
-    const recipient = bob;
-    const recipientField = new Fr(recipient.toBigInt());
+    // Define recipient for claim (EVM address)
+    const recipient = EthAddress.fromString('0x1234567890123456789012345678901234567890');
+    const recipientField = new Fr(recipient.toField());
 
     // Calculate expected nullifier
     const expectedNullifier = await computeNullifier(marketId, commitment, recipientField);
@@ -370,7 +370,7 @@ describe('BetVault - E2E Tests', () => {
 
     // Try to authorize claim with WRONG secret
     const wrongSecret = Fr.random();
-    const recipient = bob;
+    const recipient = EthAddress.fromString('0x1234567890123456789012345678901234567890');
     const claimAuthwitNonce = Fr.random();
 
     // This should fail because the secret doesn't match the commitment

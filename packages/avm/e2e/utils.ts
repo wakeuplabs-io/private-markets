@@ -271,7 +271,30 @@ export async function placeBet(
 
 
 /**
+ * Truncate a Field to 248 bits (31 bytes) for Wormhole compatibility
+ * All IDs sent through Wormhole must fit in 31 bytes
+ * @param value - Field value to truncate
+ * @returns Truncated Field (guaranteed to fit in 31 bytes)
+ */
+export function truncateTo248Bits(value: Fr): Fr {
+  // Get the 32 bytes of the field (big-endian)
+  const bytes = value.toBuffer();
+  // Zero out the first byte to get 248 bits (31 bytes)
+  bytes[0] = 0;
+  return Fr.fromBuffer(bytes);
+}
+
+/**
+ * Generate a random Field truncated to 248 bits for Wormhole compatibility
+ * @returns Random Fr that fits in 31 bytes
+ */
+export function generateRandom248BitField(): Fr {
+  return truncateTo248Bits(Fr.random());
+}
+
+/**
  * Generate a random secret for bet commitment
+ * Note: Secret is internal to Aztec, doesn't need truncation
  * @returns Random Fr (Field element)
  */
 export function generateSecret(): Fr {
@@ -279,15 +302,24 @@ export function generateSecret(): Fr {
 }
 
 /**
- * Generate a unique bet ID
- * @returns Random Fr (must be unique per bet)
+ * Generate a unique bet ID (truncated to 248 bits for Wormhole)
+ * @returns Random Fr that fits in 31 bytes
  */
 export function generateBetId(): Fr {
-  return Fr.random();
+  return generateRandom248BitField();
+}
+
+/**
+ * Generate a market ID (truncated to 248 bits for Wormhole)
+ * @returns Random Fr that fits in 31 bytes
+ */
+export function generateMarketId(): Fr {
+  return generateRandom248BitField();
 }
 
 /**
  * Generate an authwit nonce for transaction authorization
+ * Note: Nonce is internal to Aztec, doesn't need truncation
  * @returns Random Fr
  */
 export function generateAuthwitNonce(): Fr {
@@ -305,32 +337,35 @@ export function generateAuthwitNonce(): Fr {
 export async function generateCommitment(marketId: Fr, amount: bigint, secret: Fr): Promise<Fr> {
   return await poseidon2Hash([marketId, new Fr(amount), secret]);
 }
-
 /**
  * Compute nullifier: poseidon2_hash([market_id, commitment, recipient])
+ * Then truncate to 248 bits for Wormhole compatibility
  * Matches contract logic in packages/avm/vault/src/main.nr
  * @param marketId - Market identifier
  * @param commitment - Bet commitment
  * @param recipient - Recipient address as Field
- * @returns Nullifier as Fr
+ * @returns Nullifier as Fr (truncated to 248 bits)
  */
 export async function computeNullifier(
   marketId: Fr,
   commitment: Fr,
   recipient: Fr
 ): Promise<Fr> {
-  return await poseidon2Hash([marketId, commitment, recipient]);
+  const hash = await poseidon2Hash([marketId, commitment, recipient]);
+  return truncateTo248Bits(hash);
 }
 
 /**
  * Generate realistic bet parameters
  * Creates a proper commitment from marketId, amount, and secret
- * @param marketId - Optional market ID (generated if not provided)
+ * All IDs are truncated to 248 bits for Wormhole compatibility
+ * @param marketId - Optional market ID (generated if not provided, will be truncated)
  * @param amount - Bet amount (defaults to AMOUNT constant)
  * @returns Object with all bet parameters including secret for claiming
  */
 export async function generateBetParams(marketId?: Fr, amount: bigint = AMOUNT) {
-  const market = marketId ?? Fr.random();
+  // Use provided marketId (truncate if needed) or generate new one
+  const market = marketId ? truncateTo248Bits(marketId) : generateMarketId();
   const secret = generateSecret();
   const commitment = await generateCommitment(market, amount, secret);
   const betId = generateBetId();
