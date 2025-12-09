@@ -137,7 +137,7 @@ user_bets: {
   public declare methods: {
     
     /** authorizeClaim(market_id: field, commitment: field, secret: field, recipient: struct, amount: integer, authwit_nonce: field) */
-    authorizeClaim: ((market_id: FieldLike, commitment: FieldLike, secret: FieldLike, recipient: AztecAddressLike, amount: (bigint | number), authwit_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    authorizeClaim: ((market_id: FieldLike, commitment: FieldLike, secret: FieldLike, recipient: EthAddressLike, amount: (bigint | number), authwit_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** bet(market_id: field, outcome: integer, amount: integer, commitment: field, bet_id: field, authwit_nonce: field, from: struct) */
     bet: ((market_id: FieldLike, outcome: (bigint | number), amount: (bigint | number), commitment: FieldLike, bet_id: FieldLike, authwit_nonce: FieldLike, from: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

@@ -32,20 +32,14 @@ function getMarketStatus(contractMarket: ContractMarket): MarketStatus {
 
 const fetchUserActivity = async (): Promise<UserActivityData> => {
   try {
-    // Get user bets from Aztec (BetVault)
     const userBets = await vaultService.getUserBets();
-
-    // Get unique market IDs
     const uniqueMarketIds = [...new Set(userBets.map(bet => String(bet.marketId)))];
-
-    // Fetch market data from Arbitrum (PredictionMarketCore)
     const marketsResults = await Promise.allSettled(
-      uniqueMarketIds.map(id => MarketService.getMarket(Number(id)))
+      uniqueMarketIds.map(id => MarketService.getMarket(id))
     );
-
-    // Create a map of successful market fetches
     const marketsMap = new Map<string, ContractMarket>();
-
+    console.log('marketsResults', marketsResults);
+    console.log('uniqueMarketIds', uniqueMarketIds);
     marketsResults.forEach((result, index) => {
       if (result.status === 'fulfilled' && result.value) {
         const marketId = uniqueMarketIds[index];

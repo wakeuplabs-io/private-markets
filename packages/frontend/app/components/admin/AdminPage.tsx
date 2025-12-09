@@ -85,7 +85,6 @@ export function AdminPage() {
         setCreatedMarket(null);
         setTxHash(null);
     };
-
     return (
         <>
             <div className="container py-8">

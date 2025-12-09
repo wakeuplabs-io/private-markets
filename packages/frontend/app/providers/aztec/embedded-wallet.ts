@@ -122,7 +122,7 @@ export class EmbeddedWallet extends BaseWallet {
     const config = getPXEConfig();
     config.l1Contracts = await aztecNode.getL1ContractAddresses();
     config.proverEnabled = PROVER_ENABLED;
-    config.l2BlockBatchSize = 10;
+    config.l2BlockBatchSize = 5;
 
     const pxe = await createPXE(aztecNode, config, {
       useLogSuffix: true,

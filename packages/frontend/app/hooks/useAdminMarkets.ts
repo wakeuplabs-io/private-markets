@@ -76,7 +76,7 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
                     throw new Error('Please connect your wallet first');
                 }
 
-                const defaultTotalPool = 100; // 100 tokens default (parseUnits handles decimals)
+                const defaultTotalPool = 1000; // 1000 tokens default (parseUnits handles decimals)
                 const hash = await MarketService.createMarket(
                     formData.question,
                     defaultTotalPool,
@@ -102,7 +102,7 @@ export function useAdminMarkets(): UseAdminMarketsReturn {
         async (marketId: string, winningOption: "yes" | "no") => {
             try {
                 const hash = await MarketService.resolveMarket(
-                    Number(marketId),
+                    marketId,
                     winningOption
                 );
                 console.log("Market resolution transaction:", hash);

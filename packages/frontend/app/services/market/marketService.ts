@@ -49,7 +49,7 @@ export class MarketService {
   }
 
 
-  static async getMarket(marketId: number): Promise<ContractMarket> {
+  static async getMarket(marketId: string): Promise<ContractMarket> {
     if (!CONTRACT_ADDRESS) {
       throw new Error('Contract address not configured')
     }
@@ -60,11 +60,10 @@ export class MarketService {
       functionName: PREDICTION_MARKET_FUNCTIONS.GET_MARKET,
       args: [BigInt(marketId)],
     })
-
     const [owner, question, totalPool, yesTotal, noTotal, resolved, winningOutcome, createdAt, expiresAt] = result as [string, string, bigint, bigint, bigint, boolean, boolean, bigint, bigint]
     
     return {
-      id: BigInt(marketId),
+      id: marketId,
       owner,
       question,
       totalPool,
@@ -96,6 +95,8 @@ export class MarketService {
       const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
       // MockERC20 token has 18 decimals
       const tokenAmount = parseUnits(totalPool.toString(), 18)
+      const tokenAmountHex = `0x${tokenAmount.toString(16)}` as `0x${string}`
+      const closingTimestampHex = `0x${closingTimestamp.toString(16)}` as `0x${string}`
 
       const currentAllowance = await evmTokenService.checkAllowance(
         USDC_ADDRESS,
@@ -111,7 +112,7 @@ export class MarketService {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: PREDICTION_MARKET_FUNCTIONS.CREATE_MARKET,
-        args: [question, tokenAmount, closingTimestamp],
+        args: [question, tokenAmountHex as unknown as bigint, closingTimestampHex as unknown as bigint],
         gas: PREDICTION_MARKET_GAS_LIMITS.CREATE_MARKET,
       })
 
@@ -149,7 +150,7 @@ export class MarketService {
         args: [userAddress as `0x${string}`, PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
 
-      const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
+      const [marketIds, marketResults] = result as unknown as [string[], ContractMarket[]]
       
       return marketResults.map((contractMarket, index) => 
         this.contractMarketToMarket({ ...contractMarket, id: marketIds[index] })
@@ -172,7 +173,7 @@ export class MarketService {
         functionName: PREDICTION_MARKET_FUNCTIONS.GET_ACTIVE_MARKETS,
         args: [PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
-      const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
+      const [marketIds, marketResults] = result as unknown as [string[], ContractMarket[]]
       
       return marketResults.map((contractMarket, index) => 
         this.contractMarketToMarket({ ...contractMarket, id: marketIds[index] })
@@ -204,7 +205,7 @@ export class MarketService {
         args: [adminAddress as `0x${string}`, PREDICTION_MARKET_PAGINATION.DEFAULT_OFFSET, PREDICTION_MARKET_PAGINATION.DEFAULT_LIMIT],
       })
 
-      const [marketIds, marketResults] = result as unknown as [bigint[], ContractMarket[]]
+      const [marketIds, marketResults] = result as unknown as [string[], ContractMarket[]]
       
       return marketResults.map((contractMarket, index) => {
         const market = this.contractMarketToMarket({ ...contractMarket, id: marketIds[index] })
@@ -252,19 +253,22 @@ export class MarketService {
     }
   }
 
-  static async resolveMarket(marketId: number, winningOption: 'yes' | 'no'): Promise<string> {
+  static async resolveMarket(marketId: string, winningOption: 'yes' | 'no'): Promise<string> {
     if (!CONTRACT_ADDRESS) {
       throw new Error('Contract address not configured')
     }
 
     try {
       const winningOutcome = winningOption === 'yes'
+      // Sanitize and convert marketId to BigInt
+      const sanitizedId = marketId.toString().trim()
+      const marketIdBigInt = BigInt(sanitizedId)
 
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: PREDICTION_MARKET_FUNCTIONS.RESOLVE_MARKET,
-        args: [BigInt(marketId), winningOutcome],
+        args: [marketIdBigInt, winningOutcome],
         gas: PREDICTION_MARKET_GAS_LIMITS.RESOLVE_MARKET,
       })
 

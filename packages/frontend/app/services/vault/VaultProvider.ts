@@ -11,6 +11,7 @@ import type { IVaultProvider, BetParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { Bet } from "@/types";
 import { normalizeHex64 } from "@/lib/utils";
+import { EthAddress } from "@aztec/aztec.js/addresses";
 
 /**
  * Ensures required contracts are registered in PXE before operations.
@@ -301,7 +302,6 @@ export class VaultProvider implements IVaultProvider {
             .simulate({ from, skipFeeEnforcement: true })
         )
       );
-
       const bets: Bet[] = blockchainBets.map((blockchainBet, index) => ({
         id: normalizeHex64(blockchainBet.bet_id),
         marketId: normalizeHex64(blockchainBet.market_id.toString()),
@@ -313,7 +313,6 @@ export class VaultProvider implements IVaultProvider {
         commitment: normalizeHex64(blockchainBet.commitment),
         randomness: normalizeHex64(blockchainBet.randomness),
       }));
-
       return bets;
     }, 'Loading user bets');
   }
@@ -339,7 +338,6 @@ export class VaultProvider implements IVaultProvider {
         const account = walletConnectionManager.getAccount();
         const fromAddress = account.getAddress();
 
-        // Ensure BetVault contract is registered in PXE
         await ensureContractsRegistered([
           {
             address: this.contractAddress,
@@ -348,17 +346,15 @@ export class VaultProvider implements IVaultProvider {
           },
         ]);
 
-        // v3.0.0: Create vault contract instance with wallet (no caching)
         const aztecAddress = AztecAddress.fromString(this.contractAddress);
         const vaultContract = await BetVaultContract.at(aztecAddress, wallet);
 
         const betAmountWei = BigInt(params.betAmount) * BigInt(10 ** 18);
-
         const interaction = vaultContract.methods.authorizeClaim(
           Fr.fromString(params.marketId),
           Fr.fromString(params.commitment),
           Fr.fromString(params.secret),
-          AztecAddress.fromString(params.recipient),
+          EthAddress.fromString(params.recipient),
           betAmountWei,
           Fr.fromString(params.authwitNonce),
         );
@@ -386,11 +382,4 @@ export class VaultProvider implements IVaultProvider {
     }, 'Authorizing claim');
   }
 
-  /**
-   * Clear cached contract
-   * v3.0.0: No caching - contracts created fresh each time
-   */
-  clearCache(): void {
-    // No caching in v3.0.0
-  }
 }

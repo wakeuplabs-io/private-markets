@@ -31,8 +31,6 @@ export interface ITokenService {
   getPrivateBalance(address: string, owner: AztecAddress): Promise<bigint>;
   mintToPrivate(address: string, recipient: AztecAddress, amount: bigint): Promise<string>;
   clearCache(): void;
-  // getCurrentProviderType(): 'private' | 'public';
-  // isPrivateProviderAvailable(): boolean;
 }
 
 export const FALLBACK_VALUES = {

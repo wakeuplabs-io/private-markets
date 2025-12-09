@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { AmountInput } from './AmountInput'
 import { SafeRender, InvalidDataState, LoadingState } from '@/components/ui/Fallbacks'
 import { cn } from '@/lib/utils'
+import { Clock, Lock } from 'lucide-react'
 import { Market, MarketOption, PlaceBetData } from '@/types'
 import {
   isValidMarket,
@@ -120,13 +121,20 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
       className={cn('max-w-md', className)}
     >
       <div className="p-8 space-y-8">
-        <div className="text-left space-y-2">
-          <h2 className="text-2xl font-bold text-foreground ">
+        <div className="text-left space-y-3">
+          <h2 className="text-2xl font-bold text-foreground">
             Place Your Bet
           </h2>
-          <p className="text-sm text-muted-foreground">
-            Your stake and address are never exposed in the market.
-          </p>
+          <div className="text-xs text-muted-foreground space-y-1.5">
+            <p className="flex items-start gap-1.5">
+              <Lock className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>Your stake and identity remain private on Aztec.</span>
+            </p>
+            <p className="flex items-start gap-1.5">
+              <Clock className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>Bet confirmation takes ~1 min. Cross-chain settlement to Arbitrum takes ~15 min.</span>
+            </p>
+          </div>
         </div>
 
         <SafeRender

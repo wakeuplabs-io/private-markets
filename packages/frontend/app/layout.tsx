@@ -7,7 +7,6 @@ import { WalletProvidersInitializer } from "./components/providers/WalletProvide
 import { PXELoadingProvider } from "./providers/PXELoadingProvider";
 import { Layout } from "./components/layout";
 import { PXEManagerProvider } from "./providers/pxe/PXEManagerProvider";
-import { PXEStatusIndicator } from "./components/pxe/PXEStatusIndicator";
 import { OperationHistoryProvider } from "./providers/OperationHistoryProvider";
 import { OperationHistoryPanel } from "./components/operations";
 
@@ -42,7 +41,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     <Layout>
                       {children}
                     </Layout>
-                    <PXEStatusIndicator />
                     <OperationHistoryPanel />
                   </PXEManagerProvider>
                 </PXELoadingProvider>

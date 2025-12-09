@@ -154,7 +154,7 @@ export interface ResolveMarketResponse {
  */
 export interface ContractMarket {
   /** Market ID (from contract storage) */
-  id: bigint;
+  id: string;
 
   /** Address of the market creator/owner */
   owner: string;

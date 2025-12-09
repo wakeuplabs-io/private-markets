@@ -112,7 +112,10 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
         }
     };
 
-    const safeQuestion = safeGetProperty(market, "question", "Untitled Market");
+    const rawQuestion = safeGetProperty(market, "question", "Untitled Market");
+    const safeQuestion = rawQuestion.length > 55
+        ? rawQuestion.slice(0, 55) + "..."
+        : rawQuestion;
     const safeChancePercentage = safeGetProperty(
         market,
         "chancePercentage",
@@ -126,16 +129,17 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
             className={cn(
                 "bg-card/50 w-full rounded-xl p-5",
                 "flex flex-col justify-between gap-4",
-                "border border-border/50 hover:border-border",
+                "border border-transparent hover:border-border/60",
                 "hover:bg-card/80 transition-all duration-200",
                 "cursor-pointer",
+                "h-[220px]",
                 className
             )}
             onClick={() => onSelectMarket?.(market)}
         >
             {/* Header with status badge */}
             <div className="flex items-start justify-between gap-3">
-                <h3 className="font-heading font-semibold text-lg text-foreground leading-snug flex-1 line-clamp-2">
+                <h3 className="font-heading font-semibold text-lg text-foreground leading-snug flex-1 min-h-[3.5rem]">
                     {safeQuestion}
                 </h3>
                 <span

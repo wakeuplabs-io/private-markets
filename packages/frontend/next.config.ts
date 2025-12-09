@@ -25,8 +25,10 @@ const nextConfig: NextConfig = {
         fs: false,
         dns: false,
         'child_process': false,
-        // Keep existing resolve aliases
+      };
+      config.resolve.alias = {
         ...config.resolve.alias,
+        '@react-native-async-storage/async-storage': false,
       };
     }
     return config;

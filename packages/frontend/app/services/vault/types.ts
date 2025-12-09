@@ -44,7 +44,6 @@ export interface IVaultProvider {
   isProcessed(betId: string): Promise<boolean>;
   getTokenAddress(): Promise<string>;
   getUserBets?(): Promise<Bet[]>;
-  clearCache(): void;
 }
 
 export interface IVaultService {
@@ -53,8 +52,8 @@ export interface IVaultService {
   isBetProcessed(betId: string): Promise<boolean>;
   getTokenAddress(): Promise<string>;
   getContractAddress(): string;
-  clearCache(): void;
   isPrivateProviderAvailable(): boolean;
+  clearCache(): void;
 }
 
 export const FALLBACK_VALUES = {
