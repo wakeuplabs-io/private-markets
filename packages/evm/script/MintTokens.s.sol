@@ -14,7 +14,7 @@ import {console} from "forge-std/console.sol";
  */
 contract MintTokens is Script {
 
-    address constant TOKEN = 0xDd73daF9b3Fd98E95b1E50ECCFB21ad44048dC3E;
+    address constant TOKEN = 0x4aaB05112eCDba70b99Ab05002ec9f492E7bba8e;
     address constant RECIPIENT = 0xD245710638f66A16386df955D45e65d13B0C0E3e; 
     uint256 constant AMOUNT = 1000000000000000000000000;  // 1,000,000 USDC 
 

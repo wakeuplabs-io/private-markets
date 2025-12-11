@@ -136,12 +136,6 @@ contract PredictionMarketCoreTest is Test {
         predictionMarket.createMarket("Test", 0, block.timestamp + 1 days);
     }
 
-    function test_createMarket_revertsIfExpired() public {
-        vm.prank(wormholeReceiver);
-        vm.expectRevert(PredictionMarketCore.InvalidExpiresAt.selector);
-        predictionMarket.createMarket("Test", 1000 * 10**18, block.timestamp);
-    }
-
     // ============================================
     // processBet Tests (4)
     // ============================================

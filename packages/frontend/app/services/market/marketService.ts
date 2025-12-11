@@ -93,10 +93,8 @@ export class MarketService {
 
     try {
       const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
-      // MockERC20 token has 18 decimals
-      const tokenAmount = parseUnits(totalPool.toString(), 18)
-      const tokenAmountHex = `0x${tokenAmount.toString(16)}` as `0x${string}`
-      const closingTimestampHex = `0x${closingTimestamp.toString(16)}` as `0x${string}`
+      // USDC has 6 decimals
+      const tokenAmount = parseUnits(totalPool.toString(), 6)
 
       const currentAllowance = await evmTokenService.checkAllowance(
         USDC_ADDRESS,
@@ -105,14 +103,16 @@ export class MarketService {
       )
 
       if (currentAllowance < tokenAmount) {
-        await evmTokenService.approve(USDC_ADDRESS, TREASURY_ADDRESS, tokenAmount)
+        await evmTokenService.approve(USDC_ADDRESS, TREASURY_ADDRESS, tokenAmount, userAddress)
       }
 
       const hash = await writeContract(config, {
+        account: userAddress as `0x${string}`,
+        chainId: 421614,
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: PREDICTION_MARKET_FUNCTIONS.CREATE_MARKET,
-        args: [question, tokenAmountHex as unknown as bigint, closingTimestampHex as unknown as bigint],
+        args: [question, tokenAmount, closingTimestamp],
         gas: PREDICTION_MARKET_GAS_LIMITS.CREATE_MARKET,
       })
 
@@ -259,12 +259,17 @@ export class MarketService {
     }
 
     try {
+      // Convert to boolean
       const winningOutcome = winningOption === 'yes'
-      // Sanitize and convert marketId to BigInt
+      // Sanitize and convert marketId to bigint
       const sanitizedId = marketId.toString().trim()
       const marketIdBigInt = BigInt(sanitizedId)
 
+      console.log('[MarketService.resolveMarket] marketId:', sanitizedId)
+      console.log('[MarketService.resolveMarket] winningOutcome:', winningOutcome)
+
       const hash = await writeContract(config, {
+        chainId: 421614,
         address: CONTRACT_ADDRESS,
         abi: PREDICTION_MARKET_ABI,
         functionName: PREDICTION_MARKET_FUNCTIONS.RESOLVE_MARKET,

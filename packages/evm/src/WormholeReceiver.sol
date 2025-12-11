@@ -356,8 +356,8 @@ contract WormholeReceiver {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // CLAIM message needs at least: txId(32) + type(1) + marketId(31) + nullifier(31) + recipient(31) + amount(31)
-        // Minimum: 157 bytes
+        // CLAIM message needs at least: txId(32) + type(1) + marketId(31) + nullifier(31) + recipient(31) + amount(1)
+        // Minimum: 97 bytes
         if (payload.length < 157) revert PayloadTooShort(payload.length, 157);
 
         // messageType (byte 32) already validated in verify()

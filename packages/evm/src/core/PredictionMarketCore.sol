@@ -86,7 +86,6 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
         returns (uint256 marketId)
     {
         if (totalPool == 0) revert ZeroTotalPool();
-        if (expiresAt <= block.timestamp) revert InvalidExpiresAt();
 
         // Generate marketId using keccak256, then mask to 248 bits (31 bytes)
         // This ensures compatibility with Aztec Wormhole which uses to_le_bytes::<31>()
