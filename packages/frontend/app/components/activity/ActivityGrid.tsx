@@ -8,14 +8,14 @@ import {
     SafeRender,
     EmptyState,
     InvalidDataState,
-    AdminMarketCardSkeleton,
+    ActivityRowSkeleton,
 } from "@/components/ui/Fallbacks";
 import {
     isValidArray,
 } from "@/utils/typeGuards";
 import { cn, formatDate } from "@/lib/utils";
 import { useStatus } from "@/hooks/useStatus";
-import { useWallet } from "@/context";
+import { ClaimRecipientModal } from "./ClaimRecipientModal";
 import {
     CheckCircle2,
     XCircle,
@@ -39,13 +39,50 @@ export const ActivityGrid: React.FC<ActivityGridProps> = ({
     onRefresh,
 }) => {
     const { getStatusIconInfo, getMarketStatusColor } = useStatus();
-    
+
     const ICON_DIMENSIONS = { width: 24, height: 24 } as const;
-    
+
     const getStatusIcon = (status: MarketStatus): React.JSX.Element => {
         const iconInfo = getStatusIconInfo(status);
         return <Image src={iconInfo.src} alt={iconInfo.alt} {...ICON_DIMENSIONS} />;
     };
+
+    if (isLoading) {
+        return (
+            <div className="space-y-6">
+                <div className="overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <div className="w-full min-w-[1000px]">
+                            <div className="bg-muted rounded-lg p-4">
+                                <div className="grid grid-cols-12 gap-4">
+                                    <div className="col-span-4 font-normal text-muted-foreground">
+                                        Market Question
+                                    </div>
+                                    <div className="col-span-2 font-normal text-muted-foreground">
+                                        Amount
+                                    </div>
+                                    <div className="col-span-2 font-normal text-muted-foreground">
+                                        Your Bet & Result
+                                    </div>
+                                    <div className="col-span-2 font-normal text-muted-foreground">
+                                        Status
+                                    </div>
+                                    <div className="col-span-2 font-normal text-muted-foreground">
+                                        Action
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-6 mt-4">
+                                {Array.from({ length: 4 }).map((_, index) => (
+                                    <ActivityRowSkeleton key={`skeleton-${index}`} />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <SafeRender
@@ -122,7 +159,6 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
             <div className="overflow-hidden">
                 <div className="overflow-x-auto">
                     <div className="w-full min-w-[1000px]">
-                        {/* Header */}
                         <div className="bg-muted rounded-lg p-4">
                             <div className="grid grid-cols-12 gap-4">
                                 <div className="col-span-4 font-normal text-muted-foreground">
@@ -146,7 +182,7 @@ const ActivityGridContent: React.FC<ActivityGridContentProps> = ({
                         {isLoading ? (
                             <div className="space-y-6 mt-4">
                                 {Array.from({ length: 4 }).map((_, index) => (
-                                    <AdminMarketCardSkeleton key={`skeleton-${index}`} />
+                                    <ActivityRowSkeleton key={`skeleton-${index}`} />
                                 ))}
                             </div>
                         ) : (
@@ -185,21 +221,25 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
     formatDate,
 }) => {
     const [isClaiming, setIsClaiming] = React.useState(false);
-    const { wallet } = useWallet();
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
 
-    const handleClaim = async () => {
+    const handleOpenModal = () => {
+        setIsModalOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        if (!isClaiming) {
+            setIsModalOpen(false);
+        }
+    };
+
+    const handleConfirmClaim = async (recipientAddress: string) => {
         try {
             setIsClaiming(true);
-
-            if (!wallet?.address) {
-                throw new Error('Wallet not connected. Please connect your Aztec wallet to claim rewards.');
-            }
-
-            // Pass all required parameters: betId, marketId, and Aztec address
-            await onClaimReward(bet.id, bet.marketId, wallet.address);
+            await onClaimReward(bet.id, bet.marketId, recipientAddress);
+            setIsModalOpen(false);
         } catch (error) {
             console.error('Error claiming reward:', error);
-            // Re-throw to allow parent components to handle the error
             throw error;
         } finally {
             setIsClaiming(false);
@@ -318,9 +358,6 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                                 {bet.marketQuestion}
                             </h3>
                             <div className={cn("flex space-x-4 text-sm", textColor)}>
-                                <span>
-                                    {formatDate(bet.placedAt, "Placed")}
-                                </span>
                                 {bet.marketResolvedAt && (
                                     <span>
                                         {formatDate(bet.marketResolvedAt, "Resolved")}
@@ -332,13 +369,8 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                 </div>
                 <div className="col-span-2">
                     <div className={cn("text-lg font-semibold", textColor)}>
-                        {bet.amount} ETH
+                        {bet.amount} USD
                     </div>
-                    {bet.potentialReward && bet.potentialReward > 0 && (
-                        <div className="text-sm text-green-400">
-                            +{bet.potentialReward} ETH
-                        </div>
-                    )}
                 </div>
 
                 <div className="col-span-2">
@@ -361,7 +393,7 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                 <div className="col-span-2">
                     {bet.isClaimable ? (
                         <Button
-                            onClick={handleClaim}
+                            onClick={handleOpenModal}
                             disabled={isClaiming}
                             className="rounded-button"
                         >
@@ -395,6 +427,14 @@ const ActivityRow: React.FC<ActivityRowProps> = ({
                     )}
                 </div>
             </div>
+
+            <ClaimRecipientModal
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                onConfirm={handleConfirmClaim}
+                bet={bet}
+                isLoading={isClaiming}
+            />
         </div>
     );
 };

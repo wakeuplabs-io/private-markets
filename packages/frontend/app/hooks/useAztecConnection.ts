@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useWallet } from '@/context'
-import { walletRegistry } from '@/lib/wallet/WalletRegistry'
+import { walletRegistry } from '@/lib/wallet/walletRegistry'
 
 // Re-export types for backwards compatibility
 export type AztecConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'

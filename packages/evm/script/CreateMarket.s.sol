@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {PredictionMarketCore} from "../src/core/PredictionMarketCore.sol";
-import {MockERC20} from "../src/mocks/MockERC20.sol";
+import {MockERC20} from "../src/MockERC20.sol";
 
 /**
  * @title CreateMarket
@@ -15,9 +15,9 @@ import {MockERC20} from "../src/mocks/MockERC20.sol";
  */
 contract CreateMarket is Script {
 
-    address constant PREDICTION_MARKET = 0x41A5068584d9D4730a667A1a5577367302e7E900;
-    address constant TREASURY = 0x8BB9C7431a4d3618449B725CB75D51aE37704678;
-    address constant USDC = 0xBc67AB4F6DBc711D643e612Aa27d733D0402FFc1;
+    address constant PREDICTION_MARKET = 0x72c522Ad0599a2B41e1F7C47A4F72c0f768cFF6C;
+    address constant TREASURY = 0x0d830d3aFcBd1155ae83275293B06841730b895A;
+    address constant USDC = 0xDd73daF9b3Fd98E95b1E50ECCFB21ad44048dC3E;
     
     string constant QUESTION = "Will there be swag at NoirCon 3?";
     uint256 constant TOTAL_POOL = 100;

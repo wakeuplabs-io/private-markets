@@ -1,4 +1,4 @@
-import type { AztecAddress } from "@aztec/aztec.js";
+import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 export interface TokenInfo {
   name: string;

@@ -14,7 +14,7 @@ pub struct BetNote {
     pub bet_id: Field,
     pub commitment: Field,
     pub randomness: Field,
-    pub placed_at: u64,
+    pub placed_at_block: u32,
 }
 
 impl BetNote {
@@ -31,7 +31,7 @@ impl BetNote {
         // the full note pre-image anyway, and so the recipient already trusts them to not disclose this
         // information. We can therefore assume that the sender will cooperate in the random value generation.
         let randomness = unsafe { random() };
-        let placed_at = 0u64; // Will be set by the contract
-        Self { owner, market_id, outcome, amount, bet_id, commitment, randomness, placed_at }
+        let placed_at_block = 0u32; // Will be set by the contract
+        Self { owner, market_id, outcome, amount, bet_id, commitment, randomness, placed_at_block }
     }
 }

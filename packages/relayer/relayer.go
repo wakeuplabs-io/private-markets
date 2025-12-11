@@ -18,7 +18,6 @@ import (
 	"syscall"
 	"time"
 
-	v1 "github.com/certusone/wormhole/node/pkg/proto/publicrpc/v1"
 	spyv1 "github.com/certusone/wormhole/node/pkg/proto/spy/v1"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -28,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	vaaLib "github.com/wormhole-foundation/wormhole/sdk/vaa"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -116,31 +114,19 @@ func initLogger() {
 	// Check for LOG_LEVEL environment variable
 	logLevel := os.Getenv("LOG_LEVEL")
 
-	// Configurar encoder con colores
-	encoderConfig := zap.NewDevelopmentEncoderConfig()
-	encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
-
-	config := zap.Config{
-		Level:            zap.NewAtomicLevelAt(zap.InfoLevel),
-		Development:      true,
-		Encoding:         "console",
-		EncoderConfig:    encoderConfig,
-		OutputPaths:      []string{"stderr"},
-		ErrorOutputPaths: []string{"stderr"},
-	}
-
-	// Ajustar nivel segun variable de entorno
-	switch logLevel {
-	case "debug":
+	var config zap.Config
+	if logLevel == "debug" {
+		config = zap.NewDevelopmentConfig()
 		config.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	case "info":
-		config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-	case "warn":
-		config.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
-	case "error":
-		config.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
+	} else {
+		config = zap.NewProductionConfig()
+		if logLevel == "info" {
+			config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+		} else if logLevel == "warn" {
+			config.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+		} else if logLevel == "error" {
+			config.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
+		}
 	}
 
 	logger, err = config.Build()
@@ -279,17 +265,17 @@ func NewConfigFromEnv() Config {
 		SpyRPCHost:       getEnvOrDefault("SPY_RPC_HOST", "localhost:7073"),
 		SourceChainID:    uint16(getEnvIntOrDefault("SOURCE_CHAIN_ID", 56)),  // Aztec
 		DestChainID:      uint16(getEnvIntOrDefault("DEST_CHAIN_ID", 10003)), // Arbitrum Sepolia (TODO: verify this works)
-		WormholeContract: getEnvOrDefault("WORMHOLE_CONTRACT", "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493"),
-		EmitterAddress:   getEnvOrDefault("EMITTER_ADDRESS", "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493"),
+		WormholeContract: getEnvOrDefault("WORMHOLE_CONTRACT", "0x0e61ae3f9f51ae20042f48674e2bf1c19cde5c916ae3a5ed114d84c873cc9a8f"),
+		EmitterAddress:   getEnvOrDefault("EMITTER_ADDRESS", "0x28b7293296565d34df725aa0cd5dd5171ea0ae39cb0c309d8e0507a864a1ec23"),
 		// Needed when sending to Arbitrum
-		AztecWalletAddress:     getEnvOrDefault("AZTEC_WALLET_ADDRESS", "0x1f3933ca4d66e948ace5f8339e5da687993b76ee57bcf65e82596e0fc10a8859"),
+		AztecWalletAddress:     getEnvOrDefault("AZTEC_WALLET_ADDRESS", "0x11e6377dc59da6ae817d25cf006564a4d64a7b98bb068026ceec9a162c03417f"),
 		ArbitrumRPCURL:         getEnvOrDefault("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc"),
-		PrivateKey:             getEnvOrDefault("PRIVATE_KEY", "0x32ff94d6063f1477539ce3b8df4793adecc371cf12d4a10472938feee6c003f4"),
-		ArbitrumTargetContract: getEnvOrDefault("ARBITRUM_TARGET_CONTRACT", "0xc135dAa8f070fa67E9679440C8d2204a4f2e759a"),
+		PrivateKey:             getEnvOrDefault("PRIVATE_KEY", "0x0000000000000000000000000000000000000000000000000000000000000000"),
+		ArbitrumTargetContract: getEnvOrDefault("ARBITRUM_TARGET_CONTRACT", "0x8Ae222aF8482013396F160A370EEc4dA1585316b"),
 		// Needed when sending to Aztec
 		AztecPXEURL:            getEnvOrDefault("AZTEC_PXE_URL", "http://localhost:8090"),
 		AztecTargetContract:    getEnvOrDefault("AZTEC_TARGET_CONTRACT", "0x0848d2af89dfd7c0e171238f9216399e61e908cd31b0222a920f1bf621a16ed6"),
-		VerificationServiceURL: getEnvOrDefault("VERIFICATION_SERVICE_URL", "http://localhost:8080"),
+		VerificationServiceURL: getEnvOrDefault("VERIFICATION_SERVICE_URL", "http://localhost:3005"),
 	}
 }
 
@@ -334,8 +320,8 @@ func (c *SpyClient) Close() {
 	}
 }
 
-// SubscribeSignedVAA subscribes to signed VAAs with retry logic and optional filtering
-func (c *SpyClient) SubscribeSignedVAA(ctx context.Context, filters []*spyv1.FilterEntry) (spyv1.SpyRPCService_SubscribeSignedVAAClient, error) {
+// SubscribeSignedVAA subscribes to all signed VAAs with retry logic
+func (c *SpyClient) SubscribeSignedVAA(ctx context.Context) (spyv1.SpyRPCService_SubscribeSignedVAAClient, error) {
 	const maxRetries = 5
 	const retryDelay = 2 * time.Second
 
@@ -363,9 +349,7 @@ func (c *SpyClient) SubscribeSignedVAA(ctx context.Context, filters []*spyv1.Fil
 		}
 
 		client := spyv1.NewSpyRPCServiceClient(conn)
-		stream, err = client.SubscribeSignedVAA(ctx, &spyv1.SubscribeSignedVAARequest{
-			Filters: filters,
-		})
+		stream, err = client.SubscribeSignedVAA(ctx, &spyv1.SubscribeSignedVAARequest{})
 		if err == nil {
 			return stream, nil
 		}
@@ -382,12 +366,12 @@ func (c *SpyClient) SubscribeSignedVAA(ctx context.Context, filters []*spyv1.Fil
 			case <-time.After(retryDelay):
 				// Continue to next retry
 			case <-ctx.Done():
-				return nil, fmt.Errorf("subscribe to signed VAAs: %v", ctx.Err())
+				return nil, fmt.Errorf("context cancelled during retry: %v", ctx.Err())
 			}
 		}
 	}
 
-	return nil, fmt.Errorf("subscribe to signed VAAs after %d attempts: %v", maxRetries, err)
+	return nil, fmt.Errorf("failed to subscribe after %d attempts: %v", maxRetries, err)
 }
 
 // AztecPXEClient handles interactions with Aztec blockchain via PXE
@@ -750,27 +734,13 @@ func (r *Relayer) Start(ctx context.Context) error {
 	// Create a wait group to track goroutines
 	var wg sync.WaitGroup
 
-	// Subscribe to Aztec VAAs only using spy-level filtering
-	// This uses spy-level filtering with Aztec parameters
-	filters := []*spyv1.FilterEntry{
-		{
-			Filter: &spyv1.FilterEntry_EmitterFilter{
-				EmitterFilter: &spyv1.EmitterFilter{
-					ChainId:        v1.ChainID(r.config.SourceChainID),                // Aztec (56)
-					EmitterAddress: strings.TrimPrefix(r.config.EmitterAddress, "0x"), // Aztec emitter without 0x
-				},
-			},
-		},
-	}
-
-	stream, err := r.spyClient.SubscribeSignedVAA(ctx, filters)
+	// Subscribe to VAAs
+	stream, err := r.spyClient.SubscribeSignedVAA(ctx)
 	if err != nil {
 		return fmt.Errorf("subscribe to VAA stream: %v", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "%s%s%s  %s%s%s Listening for VAAs...\n",
-		colorGray, time.Now().Format("15:04:05"), colorReset,
-		colorGreen, symbolInfo, colorReset)
+	r.logger.Info("Listening for VAAs")
 
 	// Create a separate context for graceful shutdown
 	processingCtx, cancelProcessing := context.WithCancel(context.Background())
@@ -793,7 +763,7 @@ func (r *Relayer) Start(ctx context.Context) error {
 			if err != nil {
 				r.logger.Warn("Stream error, retrying in 5s", zap.Error(err))
 				time.Sleep(5 * time.Second)
-				stream, err = r.spyClient.SubscribeSignedVAA(ctx, nil)
+				stream, err = r.spyClient.SubscribeSignedVAA(ctx)
 				if err != nil {
 					// Cancel all processing before returning
 					cancelProcessing()
@@ -860,18 +830,11 @@ func (r *Relayer) processVAA(ctx context.Context, vaaBytes []byte) {
 		TxID:       txID,
 	}
 
-	r.logger.Info("Processing VAA",
+	r.logger.Debug("Processing VAA",
 		zap.Uint16("chain", vaaData.ChainID),
 		zap.Uint64("sequence", vaaData.Sequence),
 		zap.String("emitter", vaaData.EmitterHex),
 		zap.String("sourceTxID", vaaData.TxID))
-
-	// Debug: Log Aztec VAAs (spy-level filtering should only send us Aztec VAAs)
-	if vaaData.ChainID == r.config.SourceChainID { // Aztec
-		r.logger.Info("🎯 AZTEC VAA RECEIVED! (Spy-level filtering working)",
-			zap.String("emitter", vaaData.EmitterHex),
-			zap.Uint64("sequence", vaaData.Sequence))
-	}
 
 	// Use the passed context when calling the processor
 	if err := r.vaaProcessor(r, vaaData); err != nil {
@@ -885,15 +848,7 @@ func defaultVAAProcessor(r *Relayer, vaaData *VAAData) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// ALWAYS log VAAs from Aztec (chainId 56) regardless of config
-	if vaaData.ChainID == 56 {
-		logVAA("info", "Aztec", "detected", vaaData.Sequence, "", nil)
-		r.logger.Debug("Aztec VAA details",
-			zap.String("emitter", vaaData.EmitterHex),
-			zap.String("payload", fmt.Sprintf("%x", vaaData.VAA.Payload[:min(64, len(vaaData.VAA.Payload))])))
-	}
-
-	// Log debug info
+	// Log essential VAA information at debug level
 	r.logger.Debug("VAA Details",
 		zap.Uint16("emitterChain", vaaData.ChainID),
 		zap.String("emitterAddress", vaaData.EmitterHex),
@@ -905,26 +860,35 @@ func defaultVAAProcessor(r *Relayer, vaaData *VAAData) error {
 
 	// Check if this is a VAA from Aztec (source chain) -> send to Arbitrum
 	if vaaData.ChainID == r.config.SourceChainID {
-		direction = "Aztec→Arb"
-		logVAA("info", direction, "received", vaaData.Sequence, "", nil)
+		direction = "Aztec->Arbitrum"
+
+		r.logger.Info("Processing VAA from Aztec to Arbitrum",
+			zap.Uint64("sequence", vaaData.Sequence),
+			zap.String("sourceTxID", vaaData.TxID))
 
 		// Send to Arbitrum using EVM client
 		txHash, err = r.evmClient.SendVerifyTransaction(ctx, r.config.ArbitrumTargetContract, vaaData.RawBytes)
 
 		// Check if this is a VAA from Arbitrum (dest chain) -> send to Aztec
 	} else if vaaData.ChainID == r.config.DestChainID {
-		direction = "Arb→Aztec"
-		logVAA("info", direction, "received", vaaData.Sequence, "", nil)
+		direction = "Arbitrum->Aztec"
 
-		// Try verification service first, fallback to direct PXE
+		r.logger.Info("Processing VAA from Arbitrum to Aztec",
+			zap.Uint64("sequence", vaaData.Sequence),
+			zap.String("sourceTxID", vaaData.TxID))
+
+		// MODIFY: Try verification service first, fallback to direct PXE
 		txHash, err = r.verificationClient.VerifyVAA(ctx, vaaData.RawBytes)
 		if err != nil {
-			logVAA("warn", direction, "verification service failed, trying PXE", vaaData.Sequence, "", nil)
+			r.logger.Warn("Verification service failed, trying direct PXE", zap.Error(err))
+			// Fallback to direct PXE call
 			txHash, err = r.aztecClient.SendVerifyTransaction(ctx, r.config.AztecTargetContract, vaaData.RawBytes)
+		} else {
+			r.logger.Debug("Used verification service successfully")
 		}
 
 	} else {
-		// Skip VAAs not from our configured chains (but we already logged Aztec ones above)
+		// Skip VAAs not from our configured chains
 		r.logger.Debug("Skipping VAA (not from configured chains)",
 			zap.Uint64("sequence", vaaData.Sequence),
 			zap.Uint16("chain", vaaData.ChainID))

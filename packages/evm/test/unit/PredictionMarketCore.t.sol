@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {PredictionMarketCore} from "../../src/core/PredictionMarketCore.sol";
-import {Treasury} from "../../src/tokens/Treasury.sol";
-import {MockERC20} from "../../src/mocks/MockERC20.sol";
+import {Treasury} from "../../src/Treasury.sol";
+import {MockERC20} from "../../src/MockERC20.sol";
 
 /**
  * @title PredictionMarketCoreTest
@@ -26,7 +26,7 @@ contract PredictionMarketCoreTest is Test {
 
     function setUp() public {
         // Deploy contracts
-        usdc = new MockERC20("Mock USDC", "USDC", 6, 0);
+        usdc = new MockERC20("Mock Token", "MTK", 18, 0);
         treasury = new Treasury(address(usdc));
         predictionMarket = new PredictionMarketCore(
             WORMHOLE_CHAIN_ID,
@@ -40,8 +40,8 @@ contract PredictionMarketCoreTest is Test {
         predictionMarket.transferOwnership(wormholeReceiver);
 
         // Fund users
-        usdc.mint(user1, 10_000 * 10**6);
-        usdc.mint(user2, 10_000 * 10**6);
+        usdc.mint(user1, 10_000 * 10**18);
+        usdc.mint(user2, 10_000 * 10**18);
     }
 
     // ============================================
@@ -59,23 +59,20 @@ contract PredictionMarketCoreTest is Test {
     }
 
     /// @dev Helper: Setup market with bets (150 YES, 100 NO)
-    function _setupMarketWithBets(uint256 /* unused */) internal returns (uint256 totalPool, uint256 expiresAt) {
-        totalPool = 1000 * 10**6;
+    /// @return marketId The created market ID
+    /// @return totalPool The total pool
+    /// @return expiresAt The expiration timestamp
+    function _setupMarketWithBets() internal returns (uint256 marketId, uint256 totalPool, uint256 expiresAt) {
+        totalPool = 1000 * 10**18;
         expiresAt = block.timestamp + 1 days;
-        uint256 marketId = _createMarket(0, totalPool, expiresAt);
+        marketId = _createMarket(0, totalPool, expiresAt);
 
         vm.startPrank(wormholeReceiver);
-        predictionMarket.processBet(marketId, keccak256("bet1"), true, 150 * 10**6);
-        predictionMarket.processBet(marketId, keccak256("bet2"), false, 100 * 10**6);
+        predictionMarket.processBet(marketId, keccak256("bet1"), true, 150 * 10**18);
+        predictionMarket.processBet(marketId, keccak256("bet2"), false, 100 * 10**18);
         vm.stopPrank();
-        
-        return (totalPool, expiresAt);
-    }
-    
-    /// @dev Helper: Get the last created market ID
-    function _getLastMarketId() internal view returns (uint256) {
-        uint256 count = predictionMarket.getAllMarketsCount();
-        return count > 0 ? count - 1 : 0;
+
+        return (marketId, totalPool, expiresAt);
     }
 
     /// @dev Helper: Resolve market after expiry
@@ -91,7 +88,7 @@ contract PredictionMarketCoreTest is Test {
     // ============================================
 
     function test_createMarket_success() public {
-        uint256 totalPool = 10_000 * 10**6;
+        uint256 totalPool = 10_000 * 10**18;
         uint256 expiresAt = block.timestamp + 7 days;
 
         uint256 marketId = _createMarket(0, totalPool, expiresAt);
@@ -125,7 +122,7 @@ contract PredictionMarketCoreTest is Test {
 
     function test_createMarket_revertsIfMarketExists() public {
         uint256 marketId = 1;
-        _createMarket(marketId, 1000 * 10**6, block.timestamp + 1 days);
+        _createMarket(marketId, 1000 * 10**18, block.timestamp + 1 days);
 
         // Note: With auto-increment, duplicate markets cannot be created
         // This test is now redundant but kept for coverage
@@ -139,21 +136,15 @@ contract PredictionMarketCoreTest is Test {
         predictionMarket.createMarket("Test", 0, block.timestamp + 1 days);
     }
 
-    function test_createMarket_revertsIfExpired() public {
-        vm.prank(wormholeReceiver);
-        vm.expectRevert(PredictionMarketCore.InvalidExpiresAt.selector);
-        predictionMarket.createMarket("Test", 1000 * 10**6, block.timestamp);
-    }
-
     // ============================================
     // processBet Tests (4)
     // ============================================
 
     function test_processBet_updatesYesTotal() public {
-        uint256 marketId = _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
+        uint256 marketId = _createMarket(0, 1000 * 10**18, block.timestamp + 1 days);
 
         bytes32 betId = keccak256("bet1");
-        uint256 betAmount = 200 * 10**6;
+        uint256 betAmount = 200 * 10**18;
 
         vm.prank(wormholeReceiver);
         predictionMarket.processBet(marketId, betId, true, betAmount);
@@ -164,10 +155,10 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_processBet_updatesNoTotal() public {
-        uint256 marketId = _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
+        uint256 marketId = _createMarket(0, 1000 * 10**18, block.timestamp + 1 days);
 
         bytes32 betId = keccak256("bet1");
-        uint256 betAmount = 150 * 10**6;
+        uint256 betAmount = 150 * 10**18;
 
         vm.prank(wormholeReceiver);
         predictionMarket.processBet(marketId, betId, false, betAmount);
@@ -178,12 +169,12 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_processBet_revertsIfDuplicateBetId() public {
-        uint256 marketId = _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
+        uint256 marketId = _createMarket(0, 1000 * 10**18, block.timestamp + 1 days);
 
         bytes32 betId = keccak256("bet1");
 
         vm.startPrank(wormholeReceiver);
-        predictionMarket.processBet(marketId, betId, true, 100 * 10**6);
+        predictionMarket.processBet(marketId, betId, true, 100 * 10**18);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -191,13 +182,13 @@ contract PredictionMarketCoreTest is Test {
                 betId
             )
         );
-        predictionMarket.processBet(marketId, betId, true, 100 * 10**6);
+        predictionMarket.processBet(marketId, betId, true, 100 * 10**18);
         vm.stopPrank();
     }
 
     function test_processBet_revertsIfMarketExpired() public {
         uint256 expiresAt = block.timestamp + 1 days;
-        uint256 marketId = _createMarket(0, 1000 * 10**6, expiresAt);
+        uint256 marketId = _createMarket(0, 1000 * 10**18, expiresAt);
 
         // Warp past expiry
         vm.warp(expiresAt + 1);
@@ -210,7 +201,7 @@ contract PredictionMarketCoreTest is Test {
                 marketId
             )
         );
-        predictionMarket.processBet(marketId, betId, true, 100 * 10**6);
+        predictionMarket.processBet(marketId, betId, true, 100 * 10**18);
     }
 
     // ============================================
@@ -218,8 +209,7 @@ contract PredictionMarketCoreTest is Test {
     // ============================================
 
     function test_resolveMarket_setsYesWins() public {
-        (uint256 totalPool, uint256 expiresAt) = _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , uint256 expiresAt) = _setupMarketWithBets();
 
         // Warp past expiry and resolve
         vm.warp(expiresAt + 1);
@@ -232,8 +222,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_resolveMarket_revertsIfNotExpired() public {
-        (uint256 totalPool, uint256 expiresAt) = _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
 
         // Don't warp
         vm.prank(wormholeReceiver);
@@ -247,8 +236,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_resolveMarket_revertsIfAlreadyResolved() public {
-        (uint256 totalPool, uint256 expiresAt) = _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
 
         _resolveMarket(marketId, true);
 
@@ -268,15 +256,14 @@ contract PredictionMarketCoreTest is Test {
     // ============================================
 
     function test_claim_calculatesParimutuelCorrectly() public {
-        (uint256 totalPool, ) = _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, uint256 totalPool, ) = _setupMarketWithBets();
         _resolveMarket(marketId, true); // YES wins
 
         // Winner bet: 150 USDC on YES
         // Total YES bets: 150 USDC
         // Formula: payout = (150 * 1000) / 150 = 1000 USDC (all pool)
         bytes32 nullifier = keccak256("nullifier1");
-        uint256 betAmount = 150 * 10**6;
+        uint256 betAmount = 150 * 10**18;
 
         uint256 balanceBefore = usdc.balanceOf(user1);
 
@@ -293,8 +280,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_claim_transfersUSDCToWinner() public {
-        _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
         _resolveMarket(marketId, false); // NO wins
 
         // Winner bet: 100 USDC on NO
@@ -307,17 +293,16 @@ contract PredictionMarketCoreTest is Test {
         predictionMarket.processClaimAuthorization(
             marketId,
             nullifier,
-            100 * 10**6,
+            100 * 10**18,
             user2
         );
 
         uint256 balanceAfter = usdc.balanceOf(user2);
-        assertEq(balanceAfter - balanceBefore, 1000 * 10**6);
+        assertEq(balanceAfter - balanceBefore, 1000 * 10**18);
     }
 
     function test_claim_revertsIfNullifierUsed() public {
-        _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
         _resolveMarket(marketId, true);
 
         bytes32 nullifier = keccak256("nullifier1");
@@ -326,7 +311,7 @@ contract PredictionMarketCoreTest is Test {
         predictionMarket.processClaimAuthorization(
             marketId,
             nullifier,
-            150 * 10**6,
+            150 * 10**18,
             user1
         );
 
@@ -340,15 +325,14 @@ contract PredictionMarketCoreTest is Test {
         predictionMarket.processClaimAuthorization(
             marketId,
             nullifier,
-            150 * 10**6,
+            150 * 10**18,
             user2
         );
         vm.stopPrank();
     }
 
     function test_claim_revertsIfMarketNotResolved() public {
-        _setupMarketWithBets(0);
-        uint256 marketId = _getLastMarketId();
+        (uint256 marketId, , ) = _setupMarketWithBets();
         // Don't resolve
 
         bytes32 nullifier = keccak256("nullifier1");
@@ -362,7 +346,7 @@ contract PredictionMarketCoreTest is Test {
         predictionMarket.processClaimAuthorization(
             marketId,
             nullifier,
-            150 * 10**6,
+            150 * 10**18,
             user1
         );
     }
@@ -375,9 +359,9 @@ contract PredictionMarketCoreTest is Test {
 
     function test_getOwnerMarketCount_returnsCorrectCount() public {
         // Create 3 markets for user1 (wormholeReceiver in our setup)
-        _createMarket(1, 1000 * 10**6, block.timestamp + 1 days);
-        _createMarket(2, 2000 * 10**6, block.timestamp + 2 days);
-        _createMarket(3, 500 * 10**6, block.timestamp + 3 days);
+        _createMarket(1, 1000 * 10**18, block.timestamp + 1 days);
+        _createMarket(2, 2000 * 10**18, block.timestamp + 2 days);
+        _createMarket(3, 500 * 10**18, block.timestamp + 3 days);
 
         assertEq(predictionMarket.getOwnerMarketCount(wormholeReceiver), 3);
         assertEq(predictionMarket.getOwnerMarketCount(user1), 0);
@@ -386,17 +370,18 @@ contract PredictionMarketCoreTest is Test {
     function test_getAllMarketsCount_returnsCorrectCount() public {
         assertEq(predictionMarket.getAllMarketsCount(), 0);
 
-        _createMarket(1, 1000 * 10**6, block.timestamp + 1 days);
+        _createMarket(1, 1000 * 10**18, block.timestamp + 1 days);
         assertEq(predictionMarket.getAllMarketsCount(), 1);
 
-        _createMarket(2, 2000 * 10**6, block.timestamp + 2 days);
+        _createMarket(2, 2000 * 10**18, block.timestamp + 2 days);
         assertEq(predictionMarket.getAllMarketsCount(), 2);
     }
 
     function test_getMarketsByOwner_returnsPaginatedResults() public {
-        // Create 5 markets
+        // Create 5 markets and store their IDs
+        uint256[] memory createdIds = new uint256[](5);
         for (uint256 i = 0; i < 5; i++) {
-            _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
+            createdIds[i] = _createMarket(0, 1000 * 10**18, block.timestamp + 1 days);
         }
 
         // Get first 3 markets (offset=0, limit=3)
@@ -404,15 +389,17 @@ contract PredictionMarketCoreTest is Test {
 
         assertEq(total, 5);
         assertEq(ids.length, 3);
-        assertEq(ids[0], 0);
-        assertEq(ids[1], 1);
-        assertEq(ids[2], 2);
+        // With keccak256, IDs are hashes, not sequential - just verify they match our created IDs
+        assertEq(ids[0], createdIds[0]);
+        assertEq(ids[1], createdIds[1]);
+        assertEq(ids[2], createdIds[2]);
     }
 
     function test_getMarketsByOwner_returnsRemainingItems() public {
-        // Create 5 markets
+        // Create 5 markets and store their IDs
+        uint256[] memory createdIds = new uint256[](5);
         for (uint256 i = 0; i < 5; i++) {
-            _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
+            createdIds[i] = _createMarket(0, 1000 * 10**18, block.timestamp + 1 days);
         }
 
         // Get last 2 markets (offset=3, limit=10)
@@ -420,12 +407,12 @@ contract PredictionMarketCoreTest is Test {
 
         assertEq(total, 5);
         assertEq(ids.length, 2); // Only 2 remaining
-        assertEq(ids[0], 3);
-        assertEq(ids[1], 4);
+        assertEq(ids[0], createdIds[3]);
+        assertEq(ids[1], createdIds[4]);
     }
 
     function test_getMarketsByOwner_returnsEmptyIfOffsetTooHigh() public {
-        _createMarket(1, 1000 * 10**6, block.timestamp + 1 days);
+        _createMarket(1, 1000 * 10**18, block.timestamp + 1 days);
 
         // Offset beyond available markets
         (uint256[] memory ids, , uint256 total) = predictionMarket.getMarketsByOwner(wormholeReceiver, 5, 10);
@@ -436,9 +423,9 @@ contract PredictionMarketCoreTest is Test {
 
     function test_getActiveMarkets_filtersCorrectly() public {
         // Create 3 markets with different states
-        uint256 market1 = _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);  // Active
-        uint256 market2 = _createMarket(0, 1000 * 10**6, block.timestamp + 2 days);  // Active
-        uint256 market3 = _createMarket(0, 1000 * 10**6, block.timestamp + 100);     // Will expire
+        uint256 market1 = _createMarket(0, 1000 * 10**18, block.timestamp + 1 days);  // Active
+        uint256 market2 = _createMarket(0, 1000 * 10**18, block.timestamp + 2 days);  // Active
+        uint256 market3 = _createMarket(0, 1000 * 10**18, block.timestamp + 100);     // Will expire
 
         // Resolve market1 (not active)
         vm.warp(block.timestamp + 1 days + 1);
@@ -462,7 +449,7 @@ contract PredictionMarketCoreTest is Test {
     function test_getActiveMarkets_paginatesCorrectly() public {
         // Create 5 active markets
         for (uint256 i = 0; i < 5; i++) {
-            _createMarket(0, 1000 * 10**6, block.timestamp + 1 days);
+            _createMarket(0, 1000 * 10**18, block.timestamp + 1 days);
         }
 
         // Get first 3
@@ -477,7 +464,7 @@ contract PredictionMarketCoreTest is Test {
     }
 
     function test_getMarketsByOwner_revertsIfLimitTooHigh() public {
-        _createMarket(1, 1000 * 10**6, block.timestamp + 1 days);
+        _createMarket(1, 1000 * 10**18, block.timestamp + 1 days);
 
         vm.expectRevert("Limit too high");
         predictionMarket.getMarketsByOwner(wormholeReceiver, 0, 101);

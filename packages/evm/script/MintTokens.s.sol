@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script} from "forge-std/Script.sol";
-import {MockERC20} from "../src/mocks/MockERC20.sol";
+import {MockERC20} from "../src/MockERC20.sol";
 import {console} from "forge-std/console.sol";
 
 /**
@@ -14,9 +14,9 @@ import {console} from "forge-std/console.sol";
  */
 contract MintTokens is Script {
 
-    address constant TOKEN = 0xBc67AB4F6DBc711D643e612Aa27d733D0402FFc1;  // MockERC20 (USDC) en Arbitrum Sepolia
+    address constant TOKEN = 0x4aaB05112eCDba70b99Ab05002ec9f492E7bba8e;
     address constant RECIPIENT = 0xD245710638f66A16386df955D45e65d13B0C0E3e; 
-    uint256 constant AMOUNT = 100000;  // 10,000 USDC 
+    uint256 constant AMOUNT = 1000000000000000000000000;  // 1,000,000 USDC 
 
     function run() external {
         MockERC20 usdc = MockERC20(TOKEN);

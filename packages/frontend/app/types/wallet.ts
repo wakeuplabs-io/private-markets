@@ -1,8 +1,10 @@
-import type { PXE, AuthWitness, AztecAddress } from "@aztec/aztec.js";
+import type { PXE } from "@aztec/pxe/client/lazy";
+import type { AuthWitness } from "@aztec/stdlib/auth-witness";
+import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 // Core wallet interfaces
 export interface IWalletAccount {
-  getAddress(): { toString(): string };
+  getAddress(): AztecAddress;
 }
 
 export interface IWalletProvider {
@@ -20,7 +22,7 @@ export interface IExtendedWalletProvider extends IWalletProvider {
   createAccount(options?: unknown): Promise<IWalletAccount>;
   sendTransaction(interaction: unknown, authWitnesses?: AuthWitness[], from?: AztecAddress): Promise<void>;
   simulateTransaction(interaction: unknown): Promise<unknown>;
-  registerContract(artifact: unknown, deployer: unknown, salt: unknown, args: unknown[]): Promise<void>;
+  registerContract?(artifact: unknown, deployer: unknown, salt: unknown, args: unknown[]): Promise<void>;
 }
 
 export interface WalletProviderConfig {

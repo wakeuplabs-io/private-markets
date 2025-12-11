@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
-import { walletService, type WalletInfo } from "@/services/walletService"
+import { walletService, type WalletInfo } from "@/services/wallet"
 import type { AccountStatus } from "@/types/wallet"
 import { tokenService } from "@/services/token"
 import { vaultService } from "@/services/vault"

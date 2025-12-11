@@ -6,6 +6,9 @@ import { WagmiProviderWrapper } from "./providers/wagmiProvider";
 import { WalletProvidersInitializer } from "./components/providers/WalletProvidersInitializer";
 import { PXELoadingProvider } from "./providers/PXELoadingProvider";
 import { Layout } from "./components/layout";
+import { PXEManagerProvider } from "./providers/pxe/PXEManagerProvider";
+import { OperationHistoryProvider } from "./providers/OperationHistoryProvider";
+import { OperationHistoryPanel } from "./components/operations";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -27,17 +30,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body className={`${dmSans.variable} ${lato.variable} font-sans antialiased`}>
-        <WalletProvidersInitializer>
-          <WagmiProviderWrapper>
-            <WalletProvider>
-              <PXELoadingProvider>
-                <Layout>
-                  {children}
-                </Layout>
-              </PXELoadingProvider>
-            </WalletProvider>
-          </WagmiProviderWrapper>
-        </WalletProvidersInitializer>
+        <OperationHistoryProvider>
+          <WalletProvidersInitializer>
+            <WagmiProviderWrapper>
+              <WalletProvider>
+                {/* Keep old provider for backward compatibility */}
+                <PXELoadingProvider>
+                  {/* Simplified PXE Queue Manager */}
+                  <PXEManagerProvider>
+                    <Layout>
+                      {children}
+                    </Layout>
+                    <OperationHistoryPanel />
+                  </PXEManagerProvider>
+                </PXELoadingProvider>
+              </WalletProvider>
+            </WagmiProviderWrapper>
+          </WalletProvidersInitializer>
+        </OperationHistoryProvider>
       </body>
     </html>
   );

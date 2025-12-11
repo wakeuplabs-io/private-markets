@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import {
     SafeRender,
@@ -100,9 +99,9 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
             percentage === null ||
             isNaN(percentage)
         ) {
-            return "Unknown chance";
+            return "--";
         }
-        return `${percentage}% chance`;
+        return `${percentage}%`;
     };
 
     const handleOptionClick = (option: MarketOption) => {
@@ -113,96 +112,100 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
         }
     };
 
-    const safeImageUrl = safeGetProperty(market, "imageUrl", null);
-    const safeQuestion = safeGetProperty(market, "question", "Untitled Market");
+    const rawQuestion = safeGetProperty(market, "question", "Untitled Market");
+    const safeQuestion = rawQuestion.length > 55
+        ? rawQuestion.slice(0, 55) + "..."
+        : rawQuestion;
     const safeChancePercentage = safeGetProperty(
         market,
         "chancePercentage",
         null
     );
 
+    const isOpen = market.status === "open";
+
     return (
         <div
             className={cn(
-                "bg-card/50 w-full rounded p-4 h-[240px] lg:max-h-[240px]",
-                "flex flex-col justify-between gap-4 hover:bg-card/80 transition-colors",
+                "bg-card/50 w-full rounded-xl p-5",
+                "flex flex-col justify-between gap-4",
+                "border border-transparent hover:border-border/60",
+                "hover:bg-card/80 transition-all duration-200",
+                "cursor-pointer",
+                "h-[220px]",
                 className
             )}
+            onClick={() => onSelectMarket?.(market)}
         >
-            <div>
-                <div className="flex items-start gap-5 cursor-pointer" onClick={() => onSelectMarket?.(market)}>
-                    <div className="w-12 h-12 rounded bg-muted/50 overflow-hidden flex-shrink-0">
-                        {safeImageUrl ? (
-                            <Image
-                                src={safeImageUrl}
-                                alt={safeQuestion}
-                                width={48}
-                                height={48}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                    // Fallback to placeholder if image fails to load
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = "none";
-                                    target.parentElement!.innerHTML = `
-                  <div class="w-full h-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
-                    <span class="text-lg">🔮</span>
-                  </div>
-                `;
-                                }}
-                            />
-                        ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center">
-                                <span className="text-lg">🔮</span>
-                            </div>
-                        )}
-                    </div>
+            {/* Header with status badge */}
+            <div className="flex items-start justify-between gap-3">
+                <h3 className="font-heading font-semibold text-lg text-foreground leading-snug flex-1 min-h-[3.5rem]">
+                    {safeQuestion}
+                </h3>
+                <span
+                    className={cn(
+                        "px-2 py-0.5 rounded-full text-xs font-medium shrink-0",
+                        isOpen
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-muted text-muted-foreground"
+                    )}
+                >
+                    {isOpen ? "Open" : "Closed"}
+                </span>
+            </div>
 
-                    <h3 className="font-heading font-bold text-xl text-foreground leading-tight flex-1">
-                        {safeQuestion}
-                    </h3>
+            {/* Stats row */}
+            <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-background/60 px-3 py-1.5 rounded-lg">
+                    <svg
+                        className="w-3.5 h-3.5 text-muted-foreground"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12,6 12,12 16,14" />
+                    </svg>
+                    <span className="text-xs text-muted-foreground">
+                        {formatDate(closingDate)}
+                    </span>
                 </div>
 
-                <div className="flex items-center gap-2 flex-nowrap w-full mt-5">
-                    <div className="flex items-center gap-2 bg-background px-5 py-1 rounded w-full">
-                        <Image
-                            src="/clock.svg"
-                            alt="Calendar"
-                            width={16}
-                            height={16}
-                            className="w-4 h-4 text-foreground"
-                        />
-                        <span className="text-xs text-foreground font-normal">
-                            {formatDate(closingDate)}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 bg-background px-5 py-1 rounded w-full">
-                        <Image
-                            src="/chart-line.svg"
-                            alt="Percent"
-                            width={16}
-                            height={16}
-                            className="w-4 h-4 text-foreground"
-                        />
-                        <span className="text-xs text-foreground font-normal">
-                            {formatChanceText(safeChancePercentage)}
-                        </span>
-                    </div>
+                <div className="flex items-center gap-2 bg-background/60 px-3 py-1.5 rounded-lg">
+                    <svg
+                        className="w-3.5 h-3.5 text-muted-foreground"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <path d="M3 3v18h18" />
+                        <path d="M18 9l-5 5-4-4-3 3" />
+                    </svg>
+                    <span className="text-xs text-muted-foreground">
+                        {formatChanceText(safeChancePercentage)} chance
+                    </span>
                 </div>
             </div>
-            <div className="flex items-center gap-3">
+
+            {/* Action buttons */}
+            <div
+                className="flex items-center gap-2 pt-2"
+                onClick={(e) => e.stopPropagation()}
+            >
                 <Button
-                    className="flex-1 rounded-button"
+                    className="flex-1 h-9 rounded-lg font-medium"
                     onClick={() => handleOptionClick("yes")}
-                    disabled={market.status !== "open"}
+                    disabled={!isOpen}
                 >
                     Yes
                 </Button>
 
                 <Button
-                    className="flex-1 rounded-button"
+                    className="flex-1 h-9 rounded-lg font-medium"
                     onClick={() => handleOptionClick("no")}
-                    disabled={market.status !== "open"}
+                    disabled={!isOpen}
                     variant="destructive"
                 >
                     No

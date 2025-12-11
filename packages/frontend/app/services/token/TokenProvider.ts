@@ -1,15 +1,10 @@
-import { AztecAddress, Contract } from "@aztec/aztec.js";
-import { CopyCatAccountWallet } from '@aztec/accounts/copy-cat/lazy';
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { ensureWalletConnected } from "@/lib/wallet";
 import { walletConnectionManager } from "@/lib/wallet/WalletConnectionManager";
 import { TokenContract } from "@/lib/contracts/Token";
-import { pxeService } from "@/services/pxeService";
-import { pxeQueueService } from "@/services/pxeQueueService";
 import type { ITokenProvider } from "./types";
 import { FALLBACK_VALUES } from "./types";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyAccount = any;
+import { pxeManager } from "../pxe";
 
 /**
  * Token Provider
@@ -24,9 +19,6 @@ type AnyAccount = any;
  * Use case: Production environment with real user wallets
  */
 export class TokenProvider implements ITokenProvider {
-  private contract: Contract | null = null;
-  private contractAddress: string | null = null;
-
   /**
    * Timeout wrapper for long-running operations
    */
@@ -38,124 +30,91 @@ export class TokenProvider implements ITokenProvider {
   }
 
   /**
-   * Get or create token contract instance with connected wallet
-   */
-  async getContract(address: string): Promise<Contract> {
-    try {
-      // Return cached contract if address matches
-      if (this.contract && this.contractAddress === address) {
-        return this.contract;
-      }
-
-      // Get connected wallet account
-      const account = await ensureWalletConnected();
-      const aztecAddress = AztecAddress.fromString(address);
-
-      // Create contract instance with user's wallet
-      this.contract = await Contract.at(aztecAddress, TokenContract.artifact, account as AnyAccount);
-      this.contractAddress = address;
-
-      return this.contract;
-    } catch (error) {
-      console.error('[TOKEN:PRIVATE] Failed to get token contract:', error);
-      throw new Error(`Failed to get token contract: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
    * Get token name using connected wallet
-   * Uses CopyCatAccountWallet for proper simulation context
+   * v3.0.0: Direct contract call with wallet
    */
   async getTokenName(address: string): Promise<unknown> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
-        const account = await ensureWalletConnected();
-        const pxe = pxeService.getPXE();
-        const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+        const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);
-        const contract = await Contract.at(aztecAddress, TokenContract.artifact, copyCatWallet);
-
-        const name = await contract.methods.name().simulate({
-          from: account.getAddress(),
-          skipFeeEnforcement: true
+        const contract = await TokenContract.at(aztecAddress, wallet);
+        const account = walletConnectionManager.getAccount();
+        const from = account.getAddress();
+        return await contract.methods.name().simulate({
+          from,
         });
-
-        return name;
       } catch (error) {
         console.error('[TOKEN:PRIVATE] Failed to get token name:', error);
         return FALLBACK_VALUES.TOKEN_NAME;
       }
-    });
+    }, 'Loading token name');
   }
 
   /**
    * Get token symbol using connected wallet
-   * Uses CopyCatAccountWallet for proper simulation context
    */
   async getTokenSymbol(address: string): Promise<unknown> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
-        const account = await ensureWalletConnected();
-        const pxe = pxeService.getPXE();
-        const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+        const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);
-        const contract = await Contract.at(aztecAddress, TokenContract.artifact, copyCatWallet);
+        const contract = await TokenContract.at(aztecAddress, wallet);
 
-        const symbol = await contract.methods.symbol().simulate({
-          from: account.getAddress(),
-          skipFeeEnforcement: true
+        const account = walletConnectionManager.getAccount();
+        const from = account.getAddress();
+
+        return await contract.methods.symbol().simulate({
+          from,
         });
-
-        return symbol;
       } catch (error) {
         console.error('[TOKEN:PRIVATE] Failed to get token symbol:', error);
         return FALLBACK_VALUES.TOKEN_SYMBOL;
       }
-    });
+    }, 'Loading token symbol');
   }
 
   /**
    * Get token decimals using connected wallet
-   * Uses CopyCatAccountWallet for proper simulation context
    */
   async getTokenDecimals(address: string): Promise<number> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
-        const account = await ensureWalletConnected();
-        const pxe = pxeService.getPXE();
-        const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+        const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);
-        const contract = await Contract.at(aztecAddress, TokenContract.artifact, copyCatWallet);
+        const contract = await TokenContract.at(aztecAddress, wallet);
+
+        const account = walletConnectionManager.getAccount();
+        const from = account.getAddress();
 
         const decimals = await contract.methods.decimals().simulate({
-          from: account.getAddress(),
-          skipFeeEnforcement: true
+          from,
         });
         return Number(decimals);
       } catch (error) {
         console.error('[TOKEN:PRIVATE] Failed to get token decimals:', error);
         return FALLBACK_VALUES.TOKEN_DECIMALS;
       }
-    });
+    }, 'Loading token decimals');
   }
 
   /**
    * Get private balance for an owner using connected wallet
-   * Uses CopyCatAccountWallet for proper simulation context
    * Uses timeout to prevent hanging on long operations
    */
   async getPrivateBalance(address: string, owner: AztecAddress): Promise<bigint> {
-    return pxeQueueService.enqueue(async () => {
+    return pxeManager.enqueue(async () => {
       try {
-        const account = await ensureWalletConnected();
-        const pxe = pxeService.getPXE();
-        const copyCatWallet = await CopyCatAccountWallet.create(pxe, account);
+        const wallet = await ensureWalletConnected();
         const aztecAddress = AztecAddress.fromString(address);
-        const contract = await Contract.at(aztecAddress, TokenContract.artifact, copyCatWallet);
+        const contract = await TokenContract.at(aztecAddress, wallet);
+
+        const account = walletConnectionManager.getAccount();
+        const from = account.getAddress();
 
         const balance = await this.withTimeout(
           contract.methods.balance_of_private(owner).simulate({
-            from: account.getAddress(),
+            from,
             skipFeeEnforcement: true
           }),
           120000
@@ -166,33 +125,40 @@ export class TokenProvider implements ITokenProvider {
         console.error('[TOKEN:PRIVATE] Failed to get private balance:', error);
         return FALLBACK_VALUES.BALANCE;
       }
-    });
+    }, 'Loading private balance');
   }
 
   /**
    * Mint tokens to private balance
+   * v3.0.0: Only 2 parameters (recipient, amount)
    * Submits transaction through wallet connection manager
    * This is a write operation that requires user approval
    */
   async mintToPrivate(address: string, recipient: AztecAddress, amount: bigint): Promise<string> {
-    try {
-      const contract = await this.getContract(address);
-      const account = await ensureWalletConnected();
-      const from = account.getAddress();
-      const interaction = contract.methods.mint_to_private(from, recipient, amount);
-      await walletConnectionManager.sendTransaction(interaction);
-      return 'Transaction sent successfully';
-    } catch (error) {
-      console.error('[TOKEN:PRIVATE] Failed to mint to private:', error);
-      throw new Error(`Failed to mint to private: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return pxeManager.enqueue(async () => {
+      try {
+        const wallet = await ensureWalletConnected();
+        const aztecAddress = AztecAddress.fromString(address);
+        const contract = await TokenContract.at(aztecAddress, wallet);
+
+        // v3.0.0: mint_to_private takes only 2 params (recipient, amount)
+        const account = walletConnectionManager.getAccount();
+        const from = account.getAddress();
+
+        const interaction = contract.methods.mint_to_private(recipient, amount);
+        await walletConnectionManager.sendTransaction(interaction, undefined, from);
+        return 'Transaction sent successfully';
+      } catch (error) {
+        console.error('[TOKEN:PRIVATE] Failed to mint to private:', error);
+        throw new Error(`Failed to mint to private: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }, 'Minting tokens');
   }
 
   /**
    * Clear cached contract and address
    */
   clearCache(): void {
-    this.contract = null;
-    this.contractAddress = null;
+    // No caching in v3.0.0 - contracts created fresh each time
   }
 }

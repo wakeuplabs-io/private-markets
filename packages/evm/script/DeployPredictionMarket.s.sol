@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {PredictionMarketCore} from "../src/core/PredictionMarketCore.sol";
-import {Treasury} from "../src/tokens/Treasury.sol";
-import {WormholeReceiver} from "../src/wormhole/WormholeReceiver.sol";
-import {MockERC20} from "../src/mocks/MockERC20.sol";
+import {Treasury} from "../src/Treasury.sol";
+import {WormholeReceiver} from "../src/WormholeReceiver.sol";
+import {MockERC20} from "../src/MockERC20.sol";
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
@@ -75,11 +75,10 @@ contract DeployPredictionMarket is Script {
         console.log("Finality:", finality);
         console.log("Aztec Emitter:", aztecEmitter == bytes32(0) ? "NOT SET" : vm.toString(aztecEmitter));
         console.log("===================================================");
-        console.log("NOTE: Using MANUAL VAA verification (no automatic Wormhole Relayer)");
 
         vm.startBroadcast(deployerPrivateKey);
 
-        MockERC20 mockErc20 = new MockERC20("Mock USDC", "USDC", 6, 1_000_000_000 * 10**6);
+        MockERC20 mockErc20 = new MockERC20("Mock Token", "MTK", 18, 1_000_000_000 * 10**18);
         console.log("MockERC20 deployed to:", address(mockErc20));
 
         Treasury treasury = new Treasury(address(mockErc20));
@@ -97,8 +96,6 @@ contract DeployPredictionMarket is Script {
             payable(wormholeCoreAddress),
             wormholeChainId,
             block.chainid,
-            finality,
-            address(treasury),
             address(predictionMarketCore)
         );
         console.log("WormholeReceiver deployed to:", address(wormholeReceiver));
@@ -191,7 +188,6 @@ contract DeployPredictionMarket is Script {
 
     /**
      * @dev Get network-specific configuration based on chain ID
-     * Returns Wormhole Core address (manual VAA verification, no Relayer)
      */
     function _getNetworkConfig() internal view returns (
         address wormholeCoreAddress,
@@ -210,7 +206,7 @@ contract DeployPredictionMarket is Script {
             wormholeCoreAddress = vm.envOr("WORMHOLE_CORE_ADDRESS", address(0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35));
             wormholeChainId = uint16(vm.envOr("WORMHOLE_CHAIN_ID", uint256(10003)));
             finality = uint8(vm.envOr("FINALITY", uint256(2)));
-            aztecEmitter = vm.envOr("AZTEC_EMITTER_ADDRESS", bytes32(0x19898ea9cd3f19e20a95d5a9448a7b0e9b4eb3ce2c9daa1d4f4606344997e014));
+            aztecEmitter = vm.envOr("AZTEC_EMITTER_ADDRESS", bytes32(0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493));
         } else {
             revert(string.concat("Unsupported chain ID: ", vm.toString(block.chainid), " (only local and testnet supported)"));
         }

@@ -1,10 +1,11 @@
 import { Bet } from "@/types";
-import { walletService } from "../walletService";
+import { walletService } from "../wallet/walletService";
 import { VaultProvider } from "./VaultProvider";
 import type { IVaultService, IVaultProvider, SimpleBetParams, BetParams, SimpleClaimParams, ClaimParams } from "./types";
 import { FALLBACK_VALUES } from "./types";
 import { generateCommitment, generateSecret, generateBetId, generateAuthwitNonce } from "@/utils/idGenerator";
-import { betStorageService, type StoredBet } from "../betStorageService";
+import { betStorageService, type StoredBet } from "../storage/betStorageService";
+import { normalizeHex64 } from "@/lib/utils";
 
 /**
  * Vault Service (Facade Pattern)
@@ -29,7 +30,7 @@ import { betStorageService, type StoredBet } from "../betStorageService";
 export class VaultService implements IVaultService {
   private static instance: VaultService;
 
-  private readonly privateProvider: IVaultProvider;
+  private readonly vaultProvider: IVaultProvider;
   private readonly contractAddress: string;
 
   /**
@@ -38,7 +39,7 @@ export class VaultService implements IVaultService {
    */
   private constructor(
     contractAddress?: string,
-    privateProvider?: IVaultProvider
+    vaultProvider?: IVaultProvider
   ) {
     // Get contract address from environment
     this.contractAddress = contractAddress || process.env.NEXT_PUBLIC_VAULT_CONTRACT_ADDRESS || "";
@@ -48,7 +49,7 @@ export class VaultService implements IVaultService {
     }
 
     // Allow dependency injection for testing
-    this.privateProvider = privateProvider || new VaultProvider(this.contractAddress);
+    this.vaultProvider = vaultProvider || new VaultProvider(this.contractAddress);
   }
 
   /**
@@ -83,32 +84,24 @@ export class VaultService implements IVaultService {
    */
   private async transformBetParams(params: SimpleBetParams): Promise<BetParams> {
     const cleanedAddress = this.cleanAddress(params.userAddress);
-
-    // Generate secret and commitment using the same algorithm as the contract
     const secret = generateSecret();
     const marketIdBigInt = BigInt(params.marketId);
-    // Convert amount to wei (e18) for commitment generation
-    // The contract stores amount in wei, so commitment must use wei too
     const amountInWei = BigInt(params.amount) * BigInt(10 ** 18);
     const commitment = await generateCommitment(marketIdBigInt, amountInWei, secret);
-
-    // Generate unique bet ID using hash
     const betId = generateBetId();
-    // Generate nonce for authorization witness using hash
     const authwitNonce = generateAuthwitNonce();
-    // Get token address from vault
     const tokenAddress = await this.getTokenAddress();
 
     return {
-      marketId: params.marketId,
+      marketId: normalizeHex64(params.marketId),
       outcome: params.outcome,
       amount: params.amount,
-      commitment: commitment.toString(),
-      betId: betId.toString(),
-      authwitNonce: authwitNonce.toString(),
+      commitment: normalizeHex64(commitment),
+      betId: normalizeHex64(betId),
+      authwitNonce: normalizeHex64(authwitNonce),
       from: cleanedAddress,
       tokenAddress,
-      secret: secret.toString()
+      secret: normalizeHex64(secret)
     };
   }
 
@@ -133,14 +126,13 @@ export class VaultService implements IVaultService {
     }
 
     try {
-      // Transform simplified params to full params
       const fullParams = await this.transformBetParams(params);
 
-      if (!this.privateProvider.placeBet) {
+      if (!this.vaultProvider.placeBet) {
         throw new Error('Place bet operation not supported by current provider');
       }
 
-      const result = await this.privateProvider.placeBet(fullParams);
+      const result = await this.vaultProvider.placeBet(fullParams);
       const cleanedAddress = this.cleanAddress(params.userAddress);
       const betData: StoredBet = {
         marketId: fullParams.marketId,
@@ -175,7 +167,7 @@ export class VaultService implements IVaultService {
     }
 
     try {
-      return await this.privateProvider.isProcessed(betId);
+      return await this.vaultProvider.isProcessed(betId);
     } catch (error) {
       console.error('[VAULT] Failed to check bet status:', error);
       throw new Error(`Failed to check bet status: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -194,7 +186,7 @@ export class VaultService implements IVaultService {
     }
 
     try {
-      return await this.privateProvider.getTokenAddress();
+      return await this.vaultProvider.getTokenAddress();
     } catch (error) {
       console.error('[VAULT] Failed to get token address:', error);
       throw new Error(`Failed to get token address: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -212,11 +204,11 @@ export class VaultService implements IVaultService {
       throw new Error('Wallet must be connected to get user bets');
     }
 
-    if (!this.privateProvider.getUserBets) {
+    if (!this.vaultProvider.getUserBets) {
       throw new Error('Get user bets operation not supported by current provider');
     }
 
-    return await this.privateProvider.getUserBets();
+    return await this.vaultProvider.getUserBets();
   }
 
   /**
@@ -260,25 +252,25 @@ export class VaultService implements IVaultService {
       // Generate authorization nonce
       const authwitNonce = generateAuthwitNonce();
 
-      // Create full claim params
+      // Create full claim params with normalized hex values
+      // storedBet values are already normalized from placeBet, but authwitNonce needs normalization
       const fullParams: ClaimParams = {
         marketId: storedBet.marketId,
         commitment: storedBet.commitment,
         secret: storedBet.secret,
         recipient: params.recipient,
-        authwitNonce: authwitNonce.toString(),
+        authwitNonce: normalizeHex64(authwitNonce),
         betAmount: parseFloat(storedBet.amount),
       };
 
-      if (!this.privateProvider.authorizeClaim) {
+      if (!this.vaultProvider.authorizeClaim) {
         throw new Error('Authorize claim operation not supported by current provider');
       }
 
-      const txHash = await this.privateProvider.authorizeClaim(fullParams);
+      const txHash = await this.vaultProvider.authorizeClaim(fullParams);
 
       return txHash;
     } catch (error) {
-      console.error('[VAULT] Failed to authorize claim:', error);
       throw new Error(`Failed to authorize claim: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -290,14 +282,6 @@ export class VaultService implements IVaultService {
    */
   getContractAddress(): string {
     return this.contractAddress;
-  }
-
-  /**
-   * Clear provider cache
-   * Useful when switching wallets or resetting state
-   */
-  clearCache(): void {
-    this.privateProvider.clearCache();
   }
 
   /**
@@ -317,6 +301,15 @@ export class VaultService implements IVaultService {
    */
   isPrivateProviderAvailable(): boolean {
     return walletService.isConnected();
+  }
+
+  /**
+   * Clear any cached data
+   * No-op for VaultService since it doesn't cache data
+   */
+  clearCache(): void {
+    // VaultService doesn't maintain a cache
+    // This method exists for interface compatibility
   }
 }
 

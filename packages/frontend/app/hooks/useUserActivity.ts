@@ -2,8 +2,8 @@
 
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
-import { useAccount } from 'wagmi'
-import { MarketService, type ContractMarket } from '@/services/marketService'
+import { useWallet } from '@/context'
+import { MarketService, type ContractMarket } from '@/services/market'
 import { UserBet, UserActivityData, BlockchainConnectionStatus, MarketStatus, MarketOption } from '@/types'
 import { vaultService } from '@/services/vault'
 
@@ -32,20 +32,14 @@ function getMarketStatus(contractMarket: ContractMarket): MarketStatus {
 
 const fetchUserActivity = async (): Promise<UserActivityData> => {
   try {
-    // Get user bets from Aztec (BetVault)
     const userBets = await vaultService.getUserBets();
-
-    // Get unique market IDs
     const uniqueMarketIds = [...new Set(userBets.map(bet => String(bet.marketId)))];
-
-    // Fetch market data from Arbitrum (PredictionMarketCore)
     const marketsResults = await Promise.allSettled(
-      uniqueMarketIds.map(id => MarketService.getMarket(Number(id)))
+      uniqueMarketIds.map(id => MarketService.getMarket(id))
     );
-
-    // Create a map of successful market fetches
     const marketsMap = new Map<string, ContractMarket>();
-
+    console.log('marketsResults', marketsResults);
+    console.log('uniqueMarketIds', uniqueMarketIds);
     marketsResults.forEach((result, index) => {
       if (result.status === 'fulfilled' && result.value) {
         const marketId = uniqueMarketIds[index];
@@ -164,7 +158,7 @@ const fetchUserActivity = async (): Promise<UserActivityData> => {
 
 export function useUserActivity(): UseUserActivityReturn {
   const [connectionStatus, setConnectionStatus] = useState<BlockchainConnectionStatus>('connecting')
-  const { isConnected } = useAccount()
+  const { isConnected } = useWallet()
 
   const { data: activityData, error, isLoading, mutate } = useSWR(
     isConnected ? 'user-activity' : null, // Only fetch when connected
@@ -173,17 +167,16 @@ export function useUserActivity(): UseUserActivityReturn {
       refreshInterval: 0, // Disable auto-refresh to prevent navigation blocking
       revalidateOnFocus: false, // Disable revalidation on focus to prevent blocking during navigation
       revalidateOnReconnect: false, // Disable revalidation on reconnect to prevent race conditions
-      dedupingInterval: 5000, // Prevent duplicate requests within 5 seconds
+      dedupingInterval: 10000, // Prevent duplicate requests within 10 seconds
       suspense: false, // Prevent suspending during revalidation
       keepPreviousData: true, // Keep previous data while fetching new data
       onError: (err) => {
         console.error('Error loading user activity:', err)
         setConnectionStatus('error')
       },
-      onSuccess: async () => {
+      onSuccess: () => {
         // Update connection status when data loads successfully
-        const blockchainStatus = await MarketService.getConnectionStatus()
-        setConnectionStatus(blockchainStatus)
+        setConnectionStatus('online')
       }
     }
   )
@@ -194,7 +187,16 @@ export function useUserActivity(): UseUserActivityReturn {
 
   const claimReward = useCallback(async (betId: string, marketId: string, recipientAddress: string) => {
     try {
-      await MarketService.claimReward(betId, marketId, recipientAddress)
+      // Call vaultService.authorizeClaim() directly (no need for marketService layer)
+      // This will:
+      // 1. Retrieve commitment and secret from localStorage
+      // 2. Call BetVault.authorizeClaim() on Aztec
+      // 3. Send Wormhole message to Arbitrum for payout
+      await vaultService.authorizeClaim({
+        marketId,
+        betId,
+        recipient: recipientAddress,
+      })
       // Refresh data after successful claim
       await mutate()
     } catch (err) {

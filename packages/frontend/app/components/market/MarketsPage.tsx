@@ -7,7 +7,6 @@ import { Market, PlaceBetData, MarketOption } from "@/types";
 import { useVault } from "@/hooks/useVault";
 import { useWallet } from "@/context/WalletContext";
 import { useUserMarkets } from "@/hooks/useUserMarkets";
-import { MarketDetailModal } from "./MarketDetailModal";
 import { EmptyState } from "@/components/ui/Fallbacks";
 import { NetworkMismatchAlert } from "@/components/ui/NetworkMismatchAlert";
 import Image from "next/image";
@@ -43,7 +42,6 @@ export function MarketsPage() {
     } | null>(null);
 
     const { activeMarkets, isLoading } = useUserMarkets();
-    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const { placeBet, isLoading: isPlacingBet, clearError } = useVault();
     const { wallet, connectWallet, isConnected } = useWallet();
 
@@ -117,11 +115,6 @@ export function MarketsPage() {
         }
     };
 
-    const handleSelectMarket = (market: Market) => {
-        console.log("handleSelectMarket", market);
-        setSelectedMarket(market);
-        setIsDetailModalOpen(true);
-    };
 
     return (
         <>
@@ -142,15 +135,7 @@ export function MarketsPage() {
                     onConnectWallet={handleConnectWallet}
                     isWalletConnected={isConnected}
                     isLoading={isLoading}
-                    onSelectMarket={handleSelectMarket}
                     emptyState={<MarketsEmptyState />}
-                />
-                <MarketDetailModal
-                    isOpen={isDetailModalOpen}
-                    onClose={() => setIsDetailModalOpen(false)}
-                    onBack={() => setIsDetailModalOpen(false)}
-                    market={selectedMarket}
-                    bets={null}
                 />
                 <PlaceBetModal
                     isOpen={isBetModalOpen}

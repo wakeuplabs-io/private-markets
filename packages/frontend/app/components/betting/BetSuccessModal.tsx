@@ -3,7 +3,7 @@
 import React from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Market, MarketOption } from '@/types'
 import { safeFormatDate } from '@/utils/typeGuards'
@@ -64,6 +64,12 @@ export const BetSuccessModal: React.FC<BetSuccessModalProps> = ({
           Bet Placed Successfully!
         </h2>
 
+        {/* Settlement Notice */}
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+          <Clock className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <span>Your bet will reflect in the market in ~15 minutes after cross-chain settlement via Wormhole.</span>
+        </div>
+
         {/* Bet Details Card */}
         <div className="p-6 rounded-xl bg-card border border-border space-y-4">
           {/* Market Question */}
@@ -93,15 +99,6 @@ export const BetSuccessModal: React.FC<BetSuccessModalProps> = ({
                 {formatClosingDate()}
               </span>
             </div>
-
-            {/* {txHash && (
-              <div className="flex justify-between items-center pt-2 border-t border-border/50">
-                <span className="text-muted-foreground text-sm">TX Hash:</span>
-                <span className="font-mono text-sm text-muted-foreground">
-                  {formatTxHash(txHash)}
-                </span>
-              </div>
-            )} */}
           </div>
         </div>
 

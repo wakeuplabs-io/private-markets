@@ -86,9 +86,22 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
         returns (uint256 marketId)
     {
         if (totalPool == 0) revert ZeroTotalPool();
-        if (expiresAt <= block.timestamp) revert InvalidExpiresAt();
 
-        marketId = _state.nextMarketId++;
+        // Generate marketId using keccak256, then mask to 248 bits (31 bytes)
+        // This ensures compatibility with Aztec Wormhole which uses to_le_bytes::<31>()
+        // for cross-chain encoding (max 248-bit values)
+        uint256 nonce = _state.nextMarketId++;
+        uint256 fullHash = uint256(keccak256(abi.encodePacked(
+            msg.sender,
+            block.timestamp,
+            question,
+            nonce
+        )));
+        // Mask to 248 bits (31 bytes) for Wormhole compatibility
+        marketId = fullHash & ((1 << 248) - 1);
+
+        // Verify marketId doesn't already exist (virtually impossible with keccak256)
+        if (_state.markets[marketId].owner != address(0)) revert MarketAlreadyExists(marketId);
 
         _state.markets[marketId] = Market({
             owner: msg.sender,

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { ReactNode } from 'react';
-import { PXELoadingContextProvider, usePXELoading } from '@/context/PXELoadingContext';
+import { PXELoadingContextProvider } from '@/context/PXELoadingContext';
 import { PXELoadingModal } from '@/components/ui/PXELoadingModal';
 import { useWallet } from '@/context';
 
@@ -10,13 +10,13 @@ interface PXELoadingProviderProps {
 }
 
 function PXELoadingModalWrapper() {
-  const { isPXEBusy, queueLength } = usePXELoading();
   const { isInitializingProvider } = useWallet();
 
-  // Show modal when PXE is initializing or busy
-  const isLoading = isInitializingProvider || isPXEBusy;
+  // Only show modal when PXE is initializing (not for regular operations)
+  // Regular operations are now handled by OperationHistoryPanel (non-blocking)
+  const isLoading = isInitializingProvider;
 
-  // Different messages based on state
+  // Loading info only for initialization
   const getLoadingInfo = () => {
     if (isInitializingProvider) {
       return {
@@ -26,17 +26,6 @@ function PXELoadingModalWrapper() {
           { label: 'Creating PXE service in browser' },
           { label: 'Registering contracts', delay: 'delay-75' },
           { label: 'Connecting to Aztec network', delay: 'delay-150' },
-        ],
-      };
-    }
-
-    if (isPXEBusy) {
-      return {
-        title: 'Loading Data',
-        description: `Processing ${queueLength > 0 ? `${queueLength} operation${queueLength > 1 ? 's' : ''}` : 'blockchain data'}...`,
-        steps: [
-          { label: 'Querying private state' },
-          { label: 'Fetching contract data', delay: 'delay-75' },
         ],
       };
     }

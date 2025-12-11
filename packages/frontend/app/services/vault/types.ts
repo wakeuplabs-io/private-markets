@@ -39,13 +39,11 @@ export interface SimpleClaimParams {
  * - VaultProvider: Full access (READ + WRITE)
  */
 export interface IVaultProvider {
-  getContract(): Promise<unknown>;
   placeBet?(params: BetParams): Promise<string>;
   authorizeClaim?(params: ClaimParams): Promise<string>;
   isProcessed(betId: string): Promise<boolean>;
   getTokenAddress(): Promise<string>;
   getUserBets?(): Promise<Bet[]>;
-  clearCache(): void;
 }
 
 export interface IVaultService {
@@ -54,8 +52,8 @@ export interface IVaultService {
   isBetProcessed(betId: string): Promise<boolean>;
   getTokenAddress(): Promise<string>;
   getContractAddress(): string;
-  clearCache(): void;
   isPrivateProviderAvailable(): boolean;
+  clearCache(): void;
 }
 
 export const FALLBACK_VALUES = {

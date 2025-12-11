@@ -1,20 +1,13 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import { useUserActivity } from "@/hooks/useUserActivity";
 import { ActivityGrid } from "@/components/activity/ActivityGrid";
 import { ErrorState } from "../ui/Fallbacks";
-import { pxeQueueService } from "@/services/pxeQueueService";
 
 export function ActivityPage() {
     const { activityData, isLoading, error, refreshActivity, claimReward } =
         useUserActivity();
-    useEffect(() => {
-        return () => {
-            pxeQueueService.clear();
-            console.log('[ActivityPage] Cleared PXE queue on unmount');
-        };
-    }, []);
 
     return (
         <div className="container mx-auto px-8 py-8">

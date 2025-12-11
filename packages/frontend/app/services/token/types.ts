@@ -1,4 +1,4 @@
-import { AztecAddress } from "@aztec/aztec.js";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 
 export interface TokenInfo {
   name: string;
@@ -14,7 +14,6 @@ export interface TokenInfo {
  * - PublicTokenProvider: Read-only (throws on write ops)
  */
 export interface ITokenProvider {
-  getContract(address: string): Promise<unknown>;
   getTokenName(address: string): Promise<unknown>;
   getTokenSymbol(address: string): Promise<unknown>;
   getTokenDecimals(address: string): Promise<number>;
@@ -32,8 +31,6 @@ export interface ITokenService {
   getPrivateBalance(address: string, owner: AztecAddress): Promise<bigint>;
   mintToPrivate(address: string, recipient: AztecAddress, amount: bigint): Promise<string>;
   clearCache(): void;
-  // getCurrentProviderType(): 'private' | 'public';
-  // isPrivateProviderAvailable(): boolean;
 }
 
 export const FALLBACK_VALUES = {

@@ -16,7 +16,6 @@
     "avm:call:bet": "npm run call:bet --workspace=packages/avm",
     "evm:deploy:local": "cd packages/evm && source .env && forge script script/DeployPredictionMarket.s.sol:DeployPredictionMarket --rpc-url $ANVIL_RPC_URL --private-key $ANVIL_PRIVATE_KEY --broadcast",
     "evm:deploy:testnet": "cd packages/evm && source .env && forge script script/DeployPredictionMarket.s.sol:DeployPredictionMarket --rpc-url $ARBITRUM_SEPOLIA_RPC_URL --private-key $TESTNET_PRIVATE_KEY --broadcast --verify",
-    "evm:deploy:testnet:no-verify": "cd packages/evm && source .env && forge script script/DeployPredictionMarket.s.sol:DeployPredictionMarket --rpc-url $ARBITRUM_SEPOLIA_RPC_URL --private-key $TESTNET_PRIVATE_KEY --broadcast",
     "evm:mint:testnet": "cd packages/evm && source .env && forge script script/MintTokens.s.sol:MintTokens --rpc-url $ARBITRUM_SEPOLIA_RPC_URL --private-key $TESTNET_PRIVATE_KEY --broadcast",
     "evm:create-market:testnet": "cd packages/evm && source .env && forge script script/CreateMarket.s.sol:CreateMarket --rpc-url $ARBITRUM_SEPOLIA_RPC_URL --private-key $TESTNET_PRIVATE_KEY --broadcast",
     "evm:build": "cd packages/evm && forge build",

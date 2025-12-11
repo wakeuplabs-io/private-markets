@@ -1,34 +1,54 @@
 import { poseidon2Hash } from "@aztec/foundation/crypto";
 import { Fr } from "@aztec/foundation/fields";
-import { normalizeHex64 } from "@/lib/utils";
 
 /**
  * Utilities for generating IDs, secrets, commitments, and nullifiers
  * Contract reference: packages/avm/vault/src/main.nr
  */
 
+// Maximum value for 248 bits (31 bytes) - required for Wormhole payload encoding
+// Wormhole uses to_le_bytes::<31>() which only supports values up to 248 bits
+const MAX_248_BITS = (1n << 248n) - 1n;
+
+/**
+ * Generate a random Fr value that fits in 31 bytes (248 bits).
+ * This is required because Wormhole payload encoding uses to_le_bytes::<31>()
+ * which only supports values up to 248 bits.
+ * @returns Random Fr masked to 248 bits
+ */
+function generateRandom248BitFr(): Fr {
+  const random = Fr.random();
+  const randomBigInt = random.toBigInt();
+  // Mask to 248 bits (clear the top 8 bits)
+  const masked = randomBigInt & MAX_248_BITS;
+  return new Fr(masked);
+}
+
 /**
  * Generate a random secret for bet commitment
- * @returns Random Fr (Field element)
+ * Uses 248-bit values for Wormhole cross-chain compatibility
+ * @returns Random Fr (Field element, 248-bit)
  */
 export function generateSecret(): Fr {
-  return Fr.random();
+  return generateRandom248BitFr();
 }
 
 /**
  * Generate a unique bet ID
- * @returns Random Fr (must be unique per bet)
+ * Uses 248-bit values for Wormhole cross-chain compatibility
+ * @returns Random Fr (must be unique per bet, 248-bit)
  */
 export function generateBetId(): Fr {
-  return Fr.random();
+  return generateRandom248BitFr();
 }
 
 /**
  * Generate an authwit nonce for transaction authorization
- * @returns Random Fr
+ * Uses 248-bit values for consistency (though authwit doesn't go cross-chain)
+ * @returns Random Fr (248-bit)
  */
 export function generateAuthwitNonce(): Fr {
-  return Fr.random();
+  return generateRandom248BitFr();
 }
 
 /**
@@ -63,102 +83,4 @@ export async function computeNullifier(
   const recipientFr = typeof recipient === 'bigint' ? new Fr(recipient) : recipient;
 
   return await poseidon2Hash([marketIdFr, commitmentFr, recipientFr]);
-}
-
-/**
- * @deprecated Use generateBetId or generateAuthwitNonce instead
- * @returns Random Fr
- */
-export function generateHashId(): Fr {
-  return Fr.random();
-}
-
-/**
- * Convert AztecAddress to Field for nullifier computation
- * @param address - Aztec address as hex string
- * @returns Field representation as Fr
- */
-export function addressToField(address: string): Fr {
-  // Remove '0x' prefix if present
-  const cleanAddress = address.startsWith('0x') ? address.slice(2) : address;
-  return Fr.fromString(cleanAddress);
-}
-
-/**
- * Serialize bet data for localStorage (secret is required for claiming)
- * @param betData - Bet information to store
- * @returns JSON string
- */
-export interface StoredBet {
-  marketId: string;
-  betId: string;
-  commitment: string;
-  secret: string;
-  amount: string;
-  outcome: boolean;
-  timestamp: number;
-}
-
-export function serializeBet(betData: StoredBet): string {
-  return JSON.stringify(betData);
-}
-
-export function deserializeBet(json: string): StoredBet {
-  return JSON.parse(json);
-}
-
-/**
- * Save bet to localStorage
- * @param userAddress - User's Aztec address
- * @param betData - Bet data to store
- */
-export function storeBet(userAddress: string, betData: StoredBet): void {
-  if (typeof window === 'undefined') return;
-  
-  const normalizedBetId = normalizeHex64(betData.betId);
-  const key = `bet_${userAddress}_${normalizedBetId}`;
-  
-  localStorage.setItem(key, serializeBet(betData));
-}
-
-/**
- * Get a specific bet by ID
- * @param userAddress - User's Aztec address
- * @param betId - Bet ID to retrieve
- * @returns Stored bet or null
- */
-export function getStoredBet(userAddress: string, betId: string): StoredBet | null {
-  if (typeof window === 'undefined') return null;
-  
-  const normalizedBetId = normalizeHex64(betId);
-  const key = `bet_${userAddress}_${normalizedBetId}`;
-  const value = localStorage.getItem(key);
-
-  if (!value) return null;
-
-  try {
-    return deserializeBet(value);
-  } catch (e) {
-    console.error(`Failed to parse bet from storage: ${key}`, e);
-    return null;
-  }
-}
-
-/**
- * Check if nullifier has been used
- * @param vaultContract - Vault contract instance
- * @param nullifier - Nullifier to check
- * @returns true if used
- */
-export async function isNullifierUsed(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  vaultContract: { methods: { is_nullifier_used: (nullifier: Fr) => { simulate: () => Promise<boolean> } } },
-  nullifier: Fr
-): Promise<boolean> {
-  try {
-    return await vaultContract.methods.is_nullifier_used(nullifier).simulate();
-  } catch (error) {
-    console.error('Failed to check nullifier status:', error);
-    throw error;
-  }
 }

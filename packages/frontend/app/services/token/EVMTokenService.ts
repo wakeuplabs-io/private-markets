@@ -1,7 +1,6 @@
 import { readContract, writeContract, waitForTransactionReceipt } from 'wagmi/actions'
 import { config } from '@/config/wagmi'
 import { ERC20_ABI } from '@/constants/abis'
-import { PREDICTION_MARKET_GAS_LIMITS } from '@/constants/contracts'
 
 /**
  * EVM Token Information
@@ -42,12 +41,12 @@ export class EVMTokenService {
    *
    * @example
    * ```typescript
-   * // USDC balance (6 decimals)
+   * // Token balance (18 decimals)
    * const balance = await evmTokenService.getBalance(
-   *   '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+   *   tokenAddress,
    *   userAddress
    * )
-   * // balance = 1000000n represents 1.0 USDC
+   * // balance = 1000000000000000000n represents 1.0 token
    * ```
    */
   async getBalance(tokenAddress: `0x${string}`, ownerAddress: `0x${string}`): Promise<bigint> {
@@ -113,11 +112,11 @@ export class EVMTokenService {
    *
    * @example
    * ```typescript
-   * // Approve Treasury to spend 100 USDC (6 decimals)
+   * // Approve Treasury to spend 100 tokens (18 decimals)
    * const hash = await evmTokenService.approve(
-   *   usdcAddress,
+   *   tokenAddress,
    *   treasuryAddress,
-   *   100000000n // 100 USDC with 6 decimals
+   *   100000000000000000000n // 100 tokens with 18 decimals
    * )
    * ```
    */
@@ -127,14 +126,11 @@ export class EVMTokenService {
     amount: bigint
   ): Promise<string> {
     try {
-      console.log(`Approving ${amount} tokens for ${spenderAddress}...`)
-
       const hash = await writeContract(config, {
         address: tokenAddress,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [spenderAddress, amount],
-        gas: PREDICTION_MARKET_GAS_LIMITS.APPROVE_USDC,
       })
 
       await waitForTransactionReceipt(config, {
@@ -142,7 +138,6 @@ export class EVMTokenService {
         confirmations: 1,
       })
 
-      console.log('Tokens approved:', hash)
       return hash
     } catch (error) {
       console.error('Failed to approve tokens:', error)

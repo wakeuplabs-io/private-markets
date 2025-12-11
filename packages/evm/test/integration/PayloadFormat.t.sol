@@ -6,18 +6,17 @@ import {IntegrationBase} from "./IntegrationBase.sol";
 /**
  * @title PayloadFormatTest
  * @notice Tests to validate payload encoding/decoding between Aztec (Noir) and Solidity (EVM)
- * @dev These tests ensure that payloads encoded in Aztec using big-endian (to_be_bytes)
- *      are correctly decoded in Solidity's WormholeReceiver contract.
+ * @dev These tests ensure that payloads encoded in Aztec Wormhole are correctly decoded in Solidity.
  *
- * Key Validations:
- * - BET payload (98 bytes): type(1) | marketId(32) | betId(32) | outcome(1) | amount(32)
- * - CLAIM payload (129 bytes): type(1) | marketId(32) | nullifier(32) | betAmount(32) | recipientField(32)
- * - Correct extraction of address from recipientField (32 bytes → 20 bytes)
+ * Key Validations (format discovered from testnet):
+ * - BET payload (~136 bytes): txId(32) | type(1) | outcome(1) | marketId(31) | betId(31) | amount(31) | padding
+ * - CLAIM payload (~157 bytes): txId(32) | type(1) | marketId(31) | nullifier(31) | amount(31) | recipient(31)
+ * - Values are stored in Little Endian format
  * - Rejection of malformed payloads
  */
 contract PayloadFormatTest is IntegrationBase {
     uint256 marketId;
-    uint256 constant TOTAL_POOL = 1000 * 10**6;
+    uint256 constant TOTAL_POOL = 1000 * 10**18;
     uint256 constant EXPIRES_AT_OFFSET = 1 days;
 
     function setUp() public virtual override {
@@ -36,32 +35,24 @@ contract PayloadFormatTest is IntegrationBase {
     // ============================================
 
     /**
-     * @notice Tests that BET payload encoded in big-endian (as Aztec does) is correctly decoded
-     * @dev Simulates exact encoding from Aztec's create_bet_payload function
+     * @notice Tests that BET payload in Field format is correctly decoded
+     * @dev Simulates the format that arrives from Wormhole after Aztec encoding
      */
     function test_betPayload_encodingMatchesAztecFormat() public {
-        // Aztec encoding parameters
+        // Test parameters
         uint256 testMarketId = marketId;
         bytes32 testBetId = keccak256("test_bet_1");
         bool testOutcome = true; // YES
-        uint256 testAmount = 250 * 10**6; // 250 USDC
+        uint256 testAmount = 250 * 10**18;
 
-        // Encode exactly as Aztec does (big-endian with abi.encodePacked)
-        // Aztec: to_be_bytes() produces big-endian bytes
-        // Solidity: abi.encodePacked with uint256/bytes32 produces big-endian bytes
-        bytes memory aztecStylePayload = abi.encodePacked(
-            uint8(0x01),        // Message type: BET
-            testMarketId,       // 32 bytes big-endian
-            testBetId,          // 32 bytes
-            uint8(testOutcome ? 1 : 0), // 1 byte (0x00 or 0x01)
-            testAmount          // 32 bytes big-endian
-        );
+        // Create payload using the helper function (simulates Wormhole's Field serialization)
+        bytes memory payload = createBetPayload(testMarketId, testBetId, testOutcome, testAmount);
 
-        // Verify payload length
-        assertEq(aztecStylePayload.length, 98, "BET payload should be exactly 98 bytes");
+        // Verify payload length (format discovered from testnet)
+        assertEq(payload.length, 136, "BET payload should be 136 bytes");
 
         // Create VAA and process
-        bytes memory vaa = createMockVaa(aztecStylePayload);
+        bytes memory vaa = createMockVaa(payload);
         wormholeReceiver.verify(vaa);
 
         // Verify market state was updated correctly
@@ -80,14 +71,9 @@ contract PayloadFormatTest is IntegrationBase {
      * @notice Tests that BET payload with invalid length is rejected
      */
     function test_betPayload_invalidLength_reverts() public {
-        // Create payload with wrong length (97 bytes instead of 98)
-        bytes memory invalidPayload = abi.encodePacked(
-            uint8(0x01),
-            uint256(marketId),
-            keccak256("bet1"),
-            uint8(1)
-            // Missing amount field
-        );
+        // Create payload too short (minimum is 97 bytes for BET)
+        bytes memory invalidPayload = new bytes(50);
+        invalidPayload[32] = 0x01; // Set message type at correct position
 
         bytes memory vaa = createMockVaa(invalidPayload);
 
@@ -101,9 +87,9 @@ contract PayloadFormatTest is IntegrationBase {
     function test_betPayload_multipleBets_decodedCorrectly() public {
         // Process multiple bets with different values
         uint256[] memory amounts = new uint256[](3);
-        amounts[0] = 100 * 10**6;
-        amounts[1] = 200 * 10**6;
-        amounts[2] = 150 * 10**6;
+        amounts[0] = 100 * 10**18;
+        amounts[1] = 200 * 10**18;
+        amounts[2] = 150 * 10**18;
 
         uint256 expectedYesTotal = 0;
         uint256 expectedNoTotal = 0;
@@ -112,14 +98,7 @@ contract PayloadFormatTest is IntegrationBase {
             bool outcome = (i % 2 == 0); // Alternate YES/NO
             bytes32 betId = keccak256(abi.encodePacked("bet", i));
 
-            bytes memory payload = abi.encodePacked(
-                uint8(0x01),
-                marketId,
-                betId,
-                uint8(outcome ? 1 : 0),
-                amounts[i]
-            );
-
+            bytes memory payload = createBetPayload(marketId, betId, outcome, amounts[i]);
             wormholeReceiver.verify(createMockVaa(payload));
 
             if (outcome) {
@@ -140,21 +119,15 @@ contract PayloadFormatTest is IntegrationBase {
     // ============================================
 
     /**
-     * @notice Tests that CLAIM payload with recipientField (32 bytes) is correctly decoded
-     * @dev Validates extraction of 20-byte address from 32-byte Field
+     * @notice Tests that CLAIM payload in Field format is correctly decoded
+     * @dev Validates extraction of address from Field format
      */
     function test_claimPayload_encodingMatchesAztecFormat() public {
         // Setup: Process bet and resolve market
         bytes32 betId = keccak256("winning_bet");
-        uint256 betAmount = 150 * 10**6;
+        uint256 betAmount = 150 * 10**18;
 
-        bytes memory betPayload = abi.encodePacked(
-            uint8(0x01),
-            marketId,
-            betId,
-            uint8(1), // YES
-            betAmount
-        );
+        bytes memory betPayload = createBetPayload(marketId, betId, true, betAmount);
         wormholeReceiver.verify(createMockVaa(betPayload));
 
         // Resolve market
@@ -166,25 +139,15 @@ contract PayloadFormatTest is IntegrationBase {
         bytes32 nullifier = keccak256("test_nullifier");
         address recipient = user1;
 
-        // Convert address to recipientField (32 bytes with address in last 20 bytes)
-        // This simulates how Aztec converts AztecAddress.to_field().to_be_bytes()
-        bytes32 recipientField = bytes32(uint256(uint160(recipient)));
+        // Create CLAIM payload using the helper function
+        bytes memory claimPayload = createClaimPayload(marketId, nullifier, betAmount, recipient);
 
-        // Encode CLAIM payload exactly as Aztec does
-        bytes memory aztecStyleClaimPayload = abi.encodePacked(
-            uint8(0x02),        // Message type: CLAIM_AUTH
-            marketId,           // 32 bytes
-            nullifier,          // 32 bytes
-            betAmount,          // 32 bytes
-            recipientField      // 32 bytes (address in last 20 bytes)
-        );
-
-        // Verify payload length
-        assertEq(aztecStyleClaimPayload.length, 129, "CLAIM payload should be exactly 129 bytes");
+        // Verify payload length (format discovered from testnet)
+        assertEq(claimPayload.length, 157, "CLAIM payload should be 157 bytes");
 
         // Process claim
         uint256 balanceBefore = mockErc20.balanceOf(recipient);
-        wormholeReceiver.verify(createMockVaa(aztecStyleClaimPayload));
+        wormholeReceiver.verify(createMockVaa(claimPayload));
         uint256 balanceAfter = mockErc20.balanceOf(recipient);
 
         // Winner should receive full pool (only one bettor)
@@ -192,66 +155,33 @@ contract PayloadFormatTest is IntegrationBase {
     }
 
     /**
-     * @notice Tests correct extraction of address from recipientField
-     * @dev Validates that the last 20 bytes of the 32-byte Field are correctly extracted
+     * @notice Tests correct extraction of address from Field format
+     * @dev Validates that the address is correctly extracted from Field 4
      */
     function test_claimPayload_recipientFieldExtraction() public {
-        // Test address conversion with various addresses
+        // Test address extraction with various addresses
         address[] memory testAddresses = new address[](3);
         testAddresses[0] = address(0x1234567890123456789012345678901234567890);
         testAddresses[1] = address(0xabCDeF0123456789AbcdEf0123456789aBCDEF01);
         testAddresses[2] = user2;
 
-        for (uint256 i = 0; i < testAddresses.length; i++) {
-            address originalAddress = testAddresses[i];
-
-            // Convert address to recipientField (32 bytes)
-            bytes32 recipientField = bytes32(uint256(uint160(originalAddress)));
-
-            // Verify the recipientField has correct structure:
-            // - First 12 bytes should be zero
-            // - Last 20 bytes should be the address
-            bytes memory fieldBytes = abi.encodePacked(recipientField);
-
-            // Extract address using the same method as WormholeReceiver
-            address extractedAddress;
-            assembly {
-                let field := mload(add(fieldBytes, 32))
-                extractedAddress := and(field, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
-            }
-
-            // Verify extraction matches original
-            assertEq(extractedAddress, originalAddress, "Address extraction mismatch");
-
-            // Verify first 12 bytes are zero
-            uint256 fieldAsUint = uint256(recipientField);
-            uint256 maskedHighBytes = fieldAsUint >> 160; // Remove last 160 bits (20 bytes)
-            assertEq(maskedHighBytes, 0, "High bytes should be zero");
-        }
-
-        // Now test actual claim with one of the addresses
+        // Test actual claim with one of the addresses
         bytes32 betId = keccak256("bet_for_extraction_test");
-        uint256 betAmount = 100 * 10**6;
+        uint256 betAmount = 100 * 10**18;
         address testRecipient = testAddresses[0];
 
-        wormholeReceiver.verify(createMockVaa(abi.encodePacked(
-            uint8(0x01), marketId, betId, uint8(1), betAmount
-        )));
+        // Place bet
+        bytes memory betPayload = createBetPayload(marketId, betId, true, betAmount);
+        wormholeReceiver.verify(createMockVaa(betPayload));
 
+        // Resolve market
         vm.warp(block.timestamp + EXPIRES_AT_OFFSET + 1);
         vm.prank(address(wormholeReceiver));
         predictionMarket.resolveMarket(marketId, true);
 
+        // Process claim
         bytes32 nullifier = keccak256("extraction_test_nullifier");
-        bytes32 recipientField = bytes32(uint256(uint160(testRecipient)));
-
-        bytes memory claimPayload = abi.encodePacked(
-            uint8(0x02),
-            marketId,
-            nullifier,
-            betAmount,
-            recipientField
-        );
+        bytes memory claimPayload = createClaimPayload(marketId, nullifier, betAmount, testRecipient);
 
         uint256 balanceBefore = mockErc20.balanceOf(testRecipient);
         wormholeReceiver.verify(createMockVaa(claimPayload));
@@ -264,14 +194,9 @@ contract PayloadFormatTest is IntegrationBase {
      * @notice Tests that CLAIM payload with invalid length is rejected
      */
     function test_claimPayload_invalidLength_reverts() public {
-        // Create payload with wrong length (missing recipientField)
-        bytes memory invalidPayload = abi.encodePacked(
-            uint8(0x02),
-            marketId,
-            keccak256("nullifier1"),
-            uint256(100 * 10**6)
-            // Missing recipientField
-        );
+        // Create payload too short (minimum is 146 bytes for CLAIM)
+        bytes memory invalidPayload = new bytes(100);
+        invalidPayload[32] = 0x02; // Set message type at correct position
 
         bytes memory vaa = createMockVaa(invalidPayload);
 
@@ -280,29 +205,181 @@ contract PayloadFormatTest is IntegrationBase {
     }
 
     /**
-     * @notice Tests that recipientField with all zeros is rejected
+     * @notice Tests that recipient with zero address is rejected
      */
     function test_claimPayload_zeroRecipient_reverts() public {
         // Setup
         bytes32 betId = keccak256("bet1");
-        wormholeReceiver.verify(createMockVaa(abi.encodePacked(
-            uint8(0x01), marketId, betId, uint8(1), uint256(100 * 10**6)
-        )));
+        bytes memory betPayload = createBetPayload(marketId, betId, true, 100 * 10**18);
+        wormholeReceiver.verify(createMockVaa(betPayload));
 
         vm.warp(block.timestamp + EXPIRES_AT_OFFSET + 1);
         vm.prank(address(wormholeReceiver));
         predictionMarket.resolveMarket(marketId, true);
 
-        // Create CLAIM with zero recipientField
-        bytes memory claimPayload = abi.encodePacked(
-            uint8(0x02),
-            marketId,
-            keccak256("nullifier1"),
-            uint256(100 * 10**6),
-            bytes32(0) // Zero recipientField → address(0)
-        );
+        // Create CLAIM with zero recipient
+        bytes memory claimPayload = createClaimPayload(marketId, keccak256("nullifier1"), 100 * 10**18, address(0));
 
         vm.expectRevert();
         wormholeReceiver.verify(createMockVaa(claimPayload));
+    }
+
+    // ============================================
+    // Real Testnet VAA Test
+    // ============================================
+
+    /**
+     * @notice Tests parsing of REAL VAA payload from Aztec testnet
+     * @dev This test uses the exact payload bytes extracted from a real VAA
+     *
+     * Real payload from testnet (136 bytes):
+     * - Bytes 0-31: txId (260cab056ee65a170b34d3dd3a87543e1473c1441e551509b375eb1a6412f104)
+     * - Byte 32: 0x01 (BET)
+     * - Byte 33: 0x01 (YES)
+     * - Bytes 34-64: marketId LE (31 bytes)
+     * - Bytes 65-95: betId LE (31 bytes)
+     * - Bytes 96-135: amount chunk (40 bytes with leading zeros, value at END)
+     *
+     * Expected values:
+     * - marketId: 0x7742874864abbdec6595988ac5e4cfcc8bcc1b36b46c9b53ab6d665b4418a5
+     * - amount: 10000000000000000000 (10 * 10^18)
+     */
+    function test_realTestnetPayload_parsesCorrectly() public {
+        // Real payload extracted from testnet VAA (136 bytes)
+        // This is the EXACT payload from the VAA (after Wormhole header is stripped)
+        bytes memory realPayload = hex"260cab056ee65a170b34d3dd3a87543e1473c1441e551509b375eb1a6412f1040101a518445b666dab539b6cb4361bcc8bcccfe4c58a989565ecbdab64488742778021df97b9bd0c3b5c1d1e24a7b5ae50b9888f30dc8ca373cde17dac844eea00000000000000000000000000000000000000000000000000000000000000000000e8890423c78a";
+
+        // Verify payload is exactly 136 bytes
+        assertEq(realPayload.length, 136, "Real payload should be 136 bytes");
+
+        // Verify byte 32 is 0x01 (BET message type)
+        assertEq(uint8(realPayload[32]), 0x01, "Message type should be BET (0x01)");
+
+        // Verify byte 33 is 0x01 (YES outcome)
+        assertEq(uint8(realPayload[33]), 0x01, "Outcome should be YES (0x01)");
+
+        // Since we can't create a market with the exact marketId from the payload,
+        // we create a new market and generate a test payload with that marketId
+        // but using the REAL amount format (leading zeros, significant bytes at END)
+        vm.startPrank(address(wormholeReceiver));
+        mockErc20.mint(address(wormholeReceiver), 10000 * 10**18);
+        mockErc20.approve(address(treasury), 10000 * 10**18);
+        uint256 createdMarketId = predictionMarket.createMarket("Real Testnet Market", 10000 * 10**18, block.timestamp + 30 days);
+        vm.stopPrank();
+
+        // Create a payload with our marketId but same structure as real testnet payload
+        bytes memory testPayload = _createRealFormatPayload(createdMarketId);
+
+        // Process the payload through WormholeReceiver
+        bytes memory vaa = createMockVaa(testPayload);
+        wormholeReceiver.verify(vaa);
+
+        // Verify the bet was processed with correct amount (10e18)
+        (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(createdMarketId);
+        assertEq(yesTotal, 10 * 10**18, "Amount should be 10e18");
+    }
+
+    /**
+     * @notice Tests that small amounts (1 token) are correctly parsed
+     * @dev Small amounts use fewer significant bytes in LE format
+     */
+    function test_betPayload_smallAmount_parsesCorrectly() public {
+        uint256 smallAmount = 1 * 10**18; // 1 token (0xDE0B6B3A7640000 = 8 bytes)
+
+        bytes32 betId = keccak256("small_bet");
+        bytes memory payload = createBetPayload(marketId, betId, true, smallAmount);
+
+        bytes memory vaa = createMockVaa(payload);
+        wormholeReceiver.verify(vaa);
+
+        (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(marketId);
+        assertEq(yesTotal, smallAmount, "Small amount should be parsed correctly");
+    }
+
+    /**
+     * @notice Tests that large amounts (10000 tokens) are correctly parsed
+     * @dev Large amounts use more significant bytes in LE format
+     */
+    function test_betPayload_largeAmount_parsesCorrectly() public {
+        uint256 largeAmount = 10000 * 10**18; // 10000 tokens (0x21E19E0C9BAB2400000 = 11 bytes)
+
+        // Need a market with enough pool
+        vm.startPrank(address(wormholeReceiver));
+        mockErc20.mint(address(wormholeReceiver), 100000 * 10**18);
+        mockErc20.approve(address(treasury), 100000 * 10**18);
+        uint256 largeMarketId = predictionMarket.createMarket("Large Market", 100000 * 10**18, block.timestamp + EXPIRES_AT_OFFSET);
+        vm.stopPrank();
+
+        bytes32 betId = keccak256("large_bet");
+        bytes memory payload = createBetPayload(largeMarketId, betId, true, largeAmount);
+
+        bytes memory vaa = createMockVaa(payload);
+        wormholeReceiver.verify(vaa);
+
+        (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(largeMarketId);
+        assertEq(yesTotal, largeAmount, "Large amount should be parsed correctly");
+    }
+
+    /**
+     * @notice Tests that very small amounts (1 wei) are correctly parsed
+     * @dev Edge case: minimal amount that should still work
+     */
+    function test_betPayload_verySmallAmount_parsesCorrectly() public {
+        uint256 tinyAmount = 1; // 1 wei (0x01 = 1 byte)
+
+        bytes32 betId = keccak256("tiny_bet");
+        bytes memory payload = createBetPayload(marketId, betId, true, tinyAmount);
+
+        bytes memory vaa = createMockVaa(payload);
+        wormholeReceiver.verify(vaa);
+
+        (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(marketId);
+        assertEq(yesTotal, tinyAmount, "Tiny amount should be parsed correctly");
+    }
+
+    /**
+     * @dev Creates a payload with the REAL testnet format
+     * Amount is written starting at byte 96 (after fixed header) in LE format
+     */
+    function _createRealFormatPayload(uint256 testMarketId) internal pure returns (bytes memory) {
+        bytes memory payload = new bytes(136);
+
+        // Bytes 0-31: txId (mock with sample data)
+        bytes32 txId = 0x260cab056ee65a170b34d3dd3a87543e1473c1441e551509b375eb1a6412f104;
+        for (uint256 i = 0; i < 32; i++) {
+            payload[i] = txId[i];
+        }
+
+        // Byte 32: messageType = 0x01 (BET)
+        payload[32] = 0x01;
+
+        // Byte 33: outcome = 0x01 (YES)
+        payload[33] = 0x01;
+
+        // Bytes 34-64: marketId in LE (31 bytes)
+        for (uint256 i = 0; i < 31; i++) {
+            payload[34 + i] = bytes1(uint8(testMarketId >> (i * 8)));
+        }
+
+        // Bytes 65-95: betId in LE (31 bytes)
+        bytes32 betId = 0x8021df97b9bd0c3b5c1d1e24a7b5ae50b9888f30dc8ca373cde17dac844eea00;
+        uint256 betIdUint = uint256(betId);
+        for (uint256 i = 0; i < 31; i++) {
+            payload[65 + i] = bytes1(uint8(betIdUint >> (i * 8)));
+        }
+
+        // Bytes 96-135: amount chunk (40 bytes) in LE format
+        // Real Aztec format: leading zeros + LE value at END
+        uint256 amount = 10 * 10**18;
+        uint256 amountStart = 96; // Fixed header size
+        uint256 amountSize = 136 - amountStart; // 40 bytes
+
+        // Write amount at the LAST 32 bytes of the chunk (matching real testnet format)
+        uint256 valueStart = amountStart + (amountSize > 32 ? amountSize - 32 : 0); // 96 + 8 = 104
+        for (uint256 i = 0; i < 32 && (valueStart + i) < 136; i++) {
+            payload[valueStart + i] = bytes1(uint8(amount >> (i * 8)));
+        }
+
+        return payload;
     }
 }

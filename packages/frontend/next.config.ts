@@ -16,10 +16,19 @@ const nextConfig: NextConfig = {
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
-      // Mock Aztec testing utilities for browser environment
+      // Polyfills for Node.js modules not available in browser
+      // Required for Aztec v3.0.0 packages
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        net: false,
+        tls: false,
+        fs: false,
+        dns: false,
+        'child_process': false,
+      };
       config.resolve.alias = {
         ...config.resolve.alias,
-        '@aztec/foundation/testing': require.resolve('./lib/aztec-test-mock.js'),
+        '@react-native-async-storage/async-storage': false,
       };
     }
     return config;

@@ -235,6 +235,44 @@ export const AdminMarketCardSkeleton: React.FC<{ className?: string }> = ({
     </div>
 );
 
+export const ActivityRowSkeleton: React.FC<{ className?: string }> = ({
+    className,
+}) => (
+    <div className={cn("rounded-lg bg-[#1D293D]/65 h-[100px] overflow-hidden flex items-center", className)}>
+        <div className="grid grid-cols-12 gap-4 h-full items-center px-6 w-full">
+            {/* Market Question - col-span-4 */}
+            <div className="col-span-4">
+                <div className="flex items-start space-x-3">
+                    <div className="size-6 rounded-full bg-muted animate-pulse" />
+                    <div className="flex-1 space-y-2">
+                        <div className="h-5 w-full max-w-[280px] rounded bg-muted animate-pulse" />
+                        <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                    </div>
+                </div>
+            </div>
+            {/* Amount - col-span-2 */}
+            <div className="col-span-2">
+                <div className="h-5 w-16 rounded bg-muted animate-pulse" />
+            </div>
+            {/* Your Bet & Result - col-span-2 */}
+            <div className="col-span-2">
+                <div className="space-y-2">
+                    <div className="h-4 w-14 rounded bg-muted animate-pulse" />
+                    <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+                </div>
+            </div>
+            {/* Status - col-span-2 */}
+            <div className="col-span-2">
+                <div className="h-4 w-20 rounded bg-muted animate-pulse" />
+            </div>
+            {/* Action - col-span-2 */}
+            <div className="col-span-2">
+                <div className="h-9 w-28 rounded-lg bg-muted animate-pulse" />
+            </div>
+        </div>
+    </div>
+);
+
 // HOC for safe component rendering
 interface SafeRenderProps<T> {
     data: T | null | undefined;

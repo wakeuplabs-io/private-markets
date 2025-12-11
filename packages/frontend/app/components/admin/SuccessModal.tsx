@@ -19,6 +19,7 @@ interface SuccessModalProps {
     onViewMarket: () => void;
     onCreateAnother: () => void;
     createdMarket: Market | null | undefined;
+    txHash?: string | null;
 }
 
 export function SuccessModal({
@@ -27,6 +28,7 @@ export function SuccessModal({
     onViewMarket,
     onCreateAnother,
     createdMarket,
+    txHash,
 }: SuccessModalProps) {
     const formatDate = (date: Date | null | undefined): string => {
         return safeFormatDate(
@@ -74,6 +76,7 @@ export function SuccessModal({
                             formatDate={formatDate}
                             onViewMarket={onViewMarket}
                             onCreateAnother={onCreateAnother}
+                            txHash={txHash}
                         />
                     )}
                 </SafeRender>
@@ -88,12 +91,14 @@ interface SuccessModalContentProps {
     formatDate: (date: Date | null | undefined) => string;
     onViewMarket: () => void;
     onCreateAnother: () => void;
+    txHash?: string | null;
 }
 
 const SuccessModalContent: React.FC<SuccessModalContentProps> = ({
     market,
     formatDate,
     onViewMarket,
+    txHash,
 }) => {
     const question = safeGetProperty(market, "question", "Untitled Market");
     const closingDate = safeGetMarketClosingDate(market);
@@ -118,6 +123,21 @@ const SuccessModalContent: React.FC<SuccessModalContentProps> = ({
                         {formatDate(closingDate)}
                     </p>
                 </div>
+                {txHash && (
+                    <div className="flex justify-between items-center">
+                        <label className="block text-sm font-medium text-foreground">
+                            Transaction:
+                        </label>
+                        <a
+                            href={`https://sepolia.arbiscan.io/tx/${txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline text-sm font-mono"
+                        >
+                            {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                        </a>
+                    </div>
+                )}
             </div>
 
             <div className="flex justify-center">

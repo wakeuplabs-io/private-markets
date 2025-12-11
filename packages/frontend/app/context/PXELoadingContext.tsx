@@ -1,9 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { pxeQueueService, type QueueState } from '@/services/pxeQueueService';
+import { pxeManager, type PXEManagerState } from '@/services/pxe';
 
-type PXELoadingContextType = QueueState;
+type PXELoadingContextType = PXEManagerState;
 
 const PXELoadingContext = createContext<PXELoadingContextType | undefined>(undefined);
 
@@ -12,16 +12,12 @@ interface PXELoadingProviderProps {
 }
 
 export function PXELoadingContextProvider({ children }: PXELoadingProviderProps) {
-  const [queueState, setQueueState] = useState<QueueState>({
-    isPXEBusy: false,
-    queueLength: 0,
-    isProcessing: false,
-  });
+  const [managerState, setManagerState] = useState<PXEManagerState>(pxeManager.getState());
 
   useEffect(() => {
-    // Subscribe to queue state changes
-    const unsubscribe = pxeQueueService.subscribe((state) => {
-      setQueueState(state);
+    // Subscribe to manager state changes
+    const unsubscribe = pxeManager.onStateChange((state) => {
+      setManagerState(state);
     });
 
     // Cleanup on unmount
@@ -31,7 +27,7 @@ export function PXELoadingContextProvider({ children }: PXELoadingProviderProps)
   }, []);
 
   return (
-    <PXELoadingContext.Provider value={queueState}>
+    <PXELoadingContext.Provider value={managerState}>
       {children}
     </PXELoadingContext.Provider>
   );
