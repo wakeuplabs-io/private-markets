@@ -265,17 +265,17 @@ func NewConfigFromEnv() Config {
 		SpyRPCHost:       getEnvOrDefault("SPY_RPC_HOST", "localhost:7073"),
 		SourceChainID:    uint16(getEnvIntOrDefault("SOURCE_CHAIN_ID", 56)),  // Aztec
 		DestChainID:      uint16(getEnvIntOrDefault("DEST_CHAIN_ID", 10003)), // Arbitrum Sepolia (TODO: verify this works)
-		WormholeContract: getEnvOrDefault("WORMHOLE_CONTRACT", "0x0e61ae3f9f51ae20042f48674e2bf1c19cde5c916ae3a5ed114d84c873cc9a8f"),
-		EmitterAddress:   getEnvOrDefault("EMITTER_ADDRESS", "0x28b7293296565d34df725aa0cd5dd5171ea0ae39cb0c309d8e0507a864a1ec23"),
-		// Needed when sending to Arbitrum
-		AztecWalletAddress:     getEnvOrDefault("AZTEC_WALLET_ADDRESS", "0x11e6377dc59da6ae817d25cf006564a4d64a7b98bb068026ceec9a162c03417f"),
+		WormholeContract: getEnvOrDefault("WORMHOLE_CONTRACT", "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493"),
+		EmitterAddress:   getEnvOrDefault("EMITTER_ADDRESS", "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493"),
+		// Needed when sending to Aztec (Arbitrum→Aztec flow)
+		AztecWalletAddress: getEnvOrDefault("AZTEC_WALLET_ADDRESS", "0x0000000000000000000000000000000000000000000000000000000000000000"),
+		// Needed when sending to Arbitrum (Aztec→Arbitrum flow)
 		ArbitrumRPCURL:         getEnvOrDefault("ARBITRUM_RPC_URL", "https://sepolia-rollup.arbitrum.io/rpc"),
 		PrivateKey:             getEnvOrDefault("PRIVATE_KEY", "0x0000000000000000000000000000000000000000000000000000000000000000"),
-		ArbitrumTargetContract: getEnvOrDefault("ARBITRUM_TARGET_CONTRACT", "0x8Ae222aF8482013396F160A370EEc4dA1585316b"),
-		// Needed when sending to Aztec
+		ArbitrumTargetContract: getEnvOrDefault("ARBITRUM_TARGET_CONTRACT", "0x0000000000000000000000000000000000000000"),
 		AztecPXEURL:            getEnvOrDefault("AZTEC_PXE_URL", "http://localhost:8090"),
 		AztecTargetContract:    getEnvOrDefault("AZTEC_TARGET_CONTRACT", "0x0848d2af89dfd7c0e171238f9216399e61e908cd31b0222a920f1bf621a16ed6"),
-		VerificationServiceURL: getEnvOrDefault("VERIFICATION_SERVICE_URL", "http://localhost:3005"),
+		VerificationServiceURL: getEnvOrDefault("VERIFICATION_SERVICE_URL", "http://localhost:8080"),
 	}
 }
 
@@ -595,13 +595,14 @@ func (c *EVMClient) SendVerifyTransaction(ctx context.Context, targetContract st
 		return "", fmt.Errorf("failed to get gas price: %v", err)
 	}
 
-	// Add 20% buffer to gas price to account for base fee fluctuations
-	gasPriceWithBuffer := new(big.Int).Mul(gasPrice, big.NewInt(120))
+	// Add 25% buffer to handle baseFee fluctuations
+	gasPriceWithBuffer := new(big.Int).Mul(gasPrice, big.NewInt(125))
 	gasPriceWithBuffer.Div(gasPriceWithBuffer, big.NewInt(100))
 
-	c.logger.Debug("Gas price",
-		zap.String("suggested", gasPrice.String()),
-		zap.String("withBuffer", gasPriceWithBuffer.String()))
+	c.logger.Debug("Using nonce for transaction",
+		zap.Uint64("nonce", nonce),
+		zap.String("gasPrice", gasPrice.String()),
+		zap.String("gasPriceWithBuffer", gasPriceWithBuffer.String()))
 
 	// Create the transaction
 	targetAddr := common.HexToAddress(targetContract)
@@ -629,19 +630,20 @@ func (c *EVMClient) SendVerifyTransaction(ctx context.Context, targetContract st
 	// Send the transaction
 	err = c.client.SendTransaction(ctx, signedTx)
 	if err != nil {
+		// Enhanced error logging for nonce issues
 		if strings.Contains(err.Error(), "nonce too low") {
-			c.logger.Warn("Nonce too low error - transaction may have already been mined",
-				zap.Uint64("attemptedNonce", nonce),
-				zap.String("txHash", signedTx.Hash().Hex()))
-
-			return signedTx.Hash().Hex(), nil
+			c.logger.Error("Nonce too low - possible duplicate VAA processing",
+				zap.Uint64("usedNonce", nonce),
+				zap.String("txHash", signedTx.Hash().Hex()),
+				zap.Error(err))
 		}
 		return "", fmt.Errorf("failed to send transaction: %v", err)
 	}
 
-	c.logger.Debug("Transaction sent successfully",
+	c.logger.Info("Transaction sent successfully",
 		zap.String("txHash", signedTx.Hash().Hex()),
-		zap.Uint64("nonce", nonce))
+		zap.Uint64("nonce", nonce),
+		zap.String("gasPrice", gasPriceWithBuffer.String()))
 
 	return signedTx.Hash().Hex(), nil
 }
@@ -849,10 +851,12 @@ func defaultVAAProcessor(r *Relayer, vaaData *VAAData) error {
 	defer cancel()
 
 	// Log essential VAA information at debug level
-	r.logger.Debug("VAA Details",
-		zap.Uint16("emitterChain", vaaData.ChainID),
-		zap.String("emitterAddress", vaaData.EmitterHex),
-		zap.Uint64("sequence", vaaData.Sequence))
+
+
+	// Parse payload structure at debug level
+	if len(vaaData.VAA.Payload) >= 32 {
+		r.parseAndLogPayload(vaaData.VAA.Payload)
+	}
 
 	var txHash string
 	var err error
@@ -861,10 +865,104 @@ func defaultVAAProcessor(r *Relayer, vaaData *VAAData) error {
 	// Check if this is a VAA from Aztec (source chain) -> send to Arbitrum
 	if vaaData.ChainID == r.config.SourceChainID {
 		direction = "Aztec->Arbitrum"
+		payload := vaaData.VAA.Payload
 
+		// ANSI color codes
+		cyan := "\033[36m"
+		green := "\033[32m"
+		yellow := "\033[33m"
+		reset := "\033[0m"
+		bold := "\033[1m"
+
+		// VAA Payload structure (BET message = 256 bytes, 8 chunks of 32 bytes each):
+		// [0-31]    txId (prepended by Wormhole system)
+		// [32-63]   chunk0: msgType(1) + outcome(1) as 32-byte BE Field (msgType at byte 63, outcome at byte 62)
+		// [64-95]   chunk1: marketId as 32-byte BE Field
+		// [96-127]  chunk2: betId as 32-byte BE Field
+		// [128-159] chunk3: amount as 32-byte BE Field
+		// [160-255] chunks 4-7: zeros (padding)
+
+		// Build formatted output
+		fmt.Println()
+		fmt.Printf("%s┌────────────────────────────────────────────────────────────────────────────────────────────────┐%s\n", cyan, reset)
+		fmt.Printf("%s│%s %s🔗 VAA RECEIVED: Aztec → Arbitrum%s                                                      %s│%s\n", cyan, reset, bold, reset, cyan, reset)
+		fmt.Printf("%s├────────────────────────────────────────────────────────────────────────────────────────────────┤%s\n", cyan, reset)
+		fmt.Printf("%s│%s Chain: %s%d%s | Sequence: %s%d%s | Payload: %s%d bytes%s\n",
+			cyan, reset, green, vaaData.ChainID, reset, green, vaaData.Sequence, reset, green, len(payload), reset)
+		fmt.Printf("%s│%s TxHash: %s0x%s%s\n",
+			cyan, reset, yellow, hex.EncodeToString(payload[:32]), reset)
+		fmt.Printf("%s├────────────────────────────────────────────────────────────────────────────────────────────────┤%s\n", cyan, reset)
+
+		// Parse msgType from last byte of chunk0 (byte 63) due to BE serialization
+		var msgType uint8
+		var msgTypeName string
+		if len(payload) >= 64 {
+			msgType = payload[63]
+			msgTypeName = "UNKNOWN"
+			if msgType == 0x01 {
+				msgTypeName = "BET"
+			} else if msgType == 0x02 {
+				msgTypeName = "CLAIM"
+			}
+		}
+
+		fmt.Printf("%s│%s %s📦 PAYLOAD STRUCTURE (%s)%s\n", cyan, reset, bold, msgTypeName, reset)
+
+		// Parse and display payload structure with correct offsets
+		if len(payload) >= 32 {
+			fmt.Printf("%s│%s ├─ [0-31]    txId:     %s0x%s%s\n",
+				cyan, reset, yellow, hex.EncodeToString(payload[0:32]), reset)
+		}
+		if len(payload) >= 64 {
+			fmt.Printf("%s│%s ├─ [32-63]   msgType:  %s0x%02x (%s)%s\n",
+				cyan, reset, green, msgType, msgTypeName, reset)
+			// outcome is at byte 62 (second-to-last byte of chunk0)
+			if msgType == 0x01 {
+				outcome := "NO"
+				if payload[62] > 0 {
+					outcome = "YES"
+				}
+				fmt.Printf("%s│%s │            outcome:  %s0x%02x (%s)%s\n",
+					cyan, reset, green, payload[62], outcome, reset)
+			}
+		}
+		if len(payload) >= 96 {
+			fmt.Printf("%s│%s ├─ [64-95]   marketId: %s0x%s%s\n",
+				cyan, reset, yellow, hex.EncodeToString(payload[64:96]), reset)
+		}
+		if len(payload) >= 128 {
+			if msgType == 0x01 {
+				fmt.Printf("%s│%s ├─ [96-127]  betId:    %s0x%s%s\n",
+					cyan, reset, yellow, hex.EncodeToString(payload[96:128]), reset)
+			} else if msgType == 0x02 {
+				fmt.Printf("%s│%s ├─ [96-127]  nullifier:%s0x%s%s\n",
+					cyan, reset, yellow, hex.EncodeToString(payload[96:128]), reset)
+			}
+		}
+		if len(payload) >= 160 {
+			if msgType == 0x01 {
+				fmt.Printf("%s│%s └─ [128-159] amount:   %s0x%s%s\n",
+					cyan, reset, yellow, hex.EncodeToString(payload[128:160]), reset)
+			} else if msgType == 0x02 {
+				fmt.Printf("%s│%s ├─ [128-159] recipient:%s0x%s%s\n",
+					cyan, reset, yellow, hex.EncodeToString(payload[128:160]), reset)
+				if len(payload) >= 192 {
+					fmt.Printf("%s│%s └─ [160-191] amount:   %s0x%s%s\n",
+						cyan, reset, yellow, hex.EncodeToString(payload[160:192]), reset)
+				}
+			}
+		}
+		fmt.Printf("%s└────────────────────────────────────────────────────────────────────────────────────────────────┘%s\n", cyan, reset)
+		fmt.Println()
+
+		// Log structured data for programmatic access
 		r.logger.Info("Processing VAA from Aztec to Arbitrum",
 			zap.Uint64("sequence", vaaData.Sequence),
-			zap.String("sourceTxID", vaaData.TxID))
+			zap.String("sourceTxID", vaaData.TxID),
+			zap.Int("payloadLength", len(payload)))
+
+		// Debug level: full payload hex
+		r.logger.Debug("Full payload hex", zap.String("payload", hex.EncodeToString(payload)))
 
 		// Send to Arbitrum using EVM client
 		txHash, err = r.evmClient.SendVerifyTransaction(ctx, r.config.ArbitrumTargetContract, vaaData.RawBytes)

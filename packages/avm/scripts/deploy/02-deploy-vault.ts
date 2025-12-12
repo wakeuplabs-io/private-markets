@@ -11,17 +11,13 @@ async function main(): Promise<void> {
   // const WORMHOLE_ADDRESS = process.env.WORMHOLE_ADDRESS;
   const WORMHOLE_ADDRESS = "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493";
 
-  // Initialize Aztec setup (Node → PXE → Wallet)
   await aztecSetup.initialize();
 
-  // Get or create deployer account
   const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
   console.log("Deployer address:", deployerAddress.toString());
 
-  // Get wallet instance
   const wallet = aztecSetup.getWallet();
 
-  // Get network for summary
   const network = aztecSetup.getNetwork();
 
   const providedTokenAddress = process.argv[2];
@@ -44,14 +40,13 @@ async function main(): Promise<void> {
   console.log("\n>> Deploying BetVault contract...");
   const salt = Fr.random();
 
-  // Get sponsored payment method for fee payment
   const sponsoredPaymentMethod = await aztecSetup.getSponsoredPaymentMethod();
 
   const deployer = new ContractDeployer(BetVaultContractArtifact, wallet);
   const tx = deployer.deploy(
     AztecAddress.fromString(tokenAddress),
     AztecAddress.fromString(WORMHOLE_ADDRESS),
-    deployerAddress, // admin address
+    deployerAddress,
   ).send({
     contractAddressSalt: salt,
     from: deployerAddress,
