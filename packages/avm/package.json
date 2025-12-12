@@ -6,7 +6,7 @@
     "compile": "aztec-nargo compile",
     "postprocess": "aztec-postprocess-contract",
     "codegen": "aztec codegen target --outdir artifacts --force",
-    "build": "npm run compile && npm run postprocess && npm run codegen",
+    "build": "npm run compile && npm run postprocess && cp wormhole_target/wormhole_contracts-Wormhole.json target/ && npm run codegen",
     "deploy:token": "node --import tsx/esm scripts/deploy/01-deploy-token.ts",
     "deploy:vault": "node --import tsx/esm scripts/deploy/02-deploy-vault.ts",
     "deploy:all": "npm run deploy:token && npm run deploy:vault",
@@ -19,6 +19,8 @@
     "sandbox:interact:mint": "NODE_URL=http://localhost:8080 npm run interact:mint",
     "sandbox:interact:bet": "NODE_URL=http://localhost:8080 npm run interact:bet",
     "sandbox:interact:check": "NODE_URL=http://localhost:8080 npm run interact:check",
+    "export:account": "node --import tsx/esm scripts/interact/export-account.ts",
+    "sandbox:export:account": "AZTEC_NETWORK=sandbox npm run export:account",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch"
   },

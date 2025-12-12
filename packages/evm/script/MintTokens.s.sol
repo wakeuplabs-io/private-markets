@@ -16,16 +16,16 @@ contract MintTokens is Script {
 
     address constant TOKEN = 0x4aaB05112eCDba70b99Ab05002ec9f492E7bba8e;
     address constant RECIPIENT = 0xD245710638f66A16386df955D45e65d13B0C0E3e; 
-    uint256 constant AMOUNT = 1000000000000000000000000;  // 1,000,000 USDC 
+    uint256 constant AMOUNT = 1000000000000000000000000;  // 1,000,000 ERC20 tokens 
 
     function run() external {
-        MockERC20 usdc = MockERC20(TOKEN);
+        MockERC20 token = MockERC20(TOKEN);
 
         console.log("Minting tokens to:", RECIPIENT);
         console.log("Amount:", AMOUNT);
 
         vm.broadcast();
-        usdc.mint(RECIPIENT, AMOUNT * 10**6);
+        token.mint(RECIPIENT, AMOUNT);
 
         console.log("Done!");
     }
