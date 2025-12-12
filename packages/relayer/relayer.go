@@ -34,6 +34,79 @@ import (
 // Global logger for initial setup
 var logger *zap.Logger
 
+// ANSI color codes
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorBlue   = "\033[34m"
+	colorCyan   = "\033[36m"
+	colorGray   = "\033[90m"
+)
+
+// UX symbols
+const (
+	symbolSuccess = "✓"
+	symbolError   = "✗"
+	symbolInfo    = "⬢"
+	symbolArrowR  = "→"
+	symbolArrowL  = "←"
+)
+
+// logVAA prints a formatted VAA log line with colors
+func logVAA(level, direction, message string, sequence uint64, txHash string, err error) {
+	timestamp := time.Now().Format("15:04:05")
+
+	var symbol, color string
+	switch level {
+	case "success":
+		symbol, color = symbolSuccess, colorGreen
+	case "error":
+		symbol, color = symbolError, colorRed
+	case "info":
+		symbol, color = symbolArrowR, colorCyan
+		if direction == "Arb→Aztec" {
+			symbol = symbolArrowL
+		}
+	case "warn":
+		symbol, color = symbolInfo, colorYellow
+	}
+
+	dirColor := colorCyan
+	if direction == "Arb→Aztec" {
+		dirColor = colorBlue
+	}
+
+	fmt.Fprintf(os.Stderr, "%s%s%s  %s%s%s [%s%s%s] VAA #%d %s",
+		colorGray, timestamp, colorReset,
+		color, symbol, colorReset,
+		dirColor, direction, colorReset,
+		sequence, message)
+
+	if txHash != "" {
+		fmt.Fprintf(os.Stderr, "  tx:%s%s%s", colorYellow, txHash, colorReset)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, ": %s%v%s", colorRed, err, colorReset)
+	}
+	fmt.Fprintln(os.Stderr)
+}
+
+// logStartBanner prints a startup banner with config info
+func logStartBanner(aztecWallet, arbAddress, verificationURL string) {
+	fmt.Fprintln(os.Stderr, "┌─────────────────────────────────────────────────────────")
+	fmt.Fprintf(os.Stderr, "│ %s  %s%s%s Relayer started\n",
+		time.Now().Format("15:04:05"), colorGreen, symbolInfo, colorReset)
+	fmt.Fprintf(os.Stderr, "│           Aztec wallet: %s%s%s\n",
+		colorCyan, aztecWallet, colorReset)
+	fmt.Fprintf(os.Stderr, "│           Arbitrum:     %s%s%s\n",
+		colorBlue, arbAddress, colorReset)
+	fmt.Fprintf(os.Stderr, "│           Verification: %s%s%s\n",
+		colorYellow, verificationURL, colorReset)
+	fmt.Fprintln(os.Stderr, "└─────────────────────────────────────────────────────────")
+}
+
 // Initialize global logger
 func initLogger() {
 	var err error
@@ -514,7 +587,9 @@ func (c *EVMClient) SendVerifyTransaction(ctx context.Context, targetContract st
 		return "", fmt.Errorf("failed to get nonce: %v", err)
 	}
 
-	// Get the current gas price
+	c.logger.Debug("Using nonce for transaction", zap.Uint64("nonce", nonce))
+
+	// Get the current gas price and add 20% buffer to avoid "max fee per gas less than block base fee"
 	gasPrice, err := c.client.SuggestGasPrice(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get gas price: %v", err)
@@ -651,12 +726,12 @@ func (r *Relayer) Close() {
 
 // Start begins listening for VAAs and processing them
 func (r *Relayer) Start(ctx context.Context) error {
-	r.logger.Info("Starting bidirectional Aztec-Arbitrum relayer",
-		zap.String("aztecWallet", r.aztecClient.GetWalletAddress()),
-		zap.String("arbitrumAddress", r.evmClient.GetAddress().Hex()),
-		zap.Uint16("aztecChain", r.config.SourceChainID),
-		zap.Uint16("arbitrumChain", r.config.DestChainID),
-		zap.String("verificationServiceURL", r.config.VerificationServiceURL)) // ADD
+	// Print startup banner with UX formatting
+	logStartBanner(
+		r.aztecClient.GetWalletAddress(),
+		r.evmClient.GetAddress().Hex(),
+		r.config.VerificationServiceURL,
+	)
 
 	// Create a wait group to track goroutines
 	var wg sync.WaitGroup
@@ -769,10 +844,10 @@ func (r *Relayer) processVAA(ctx context.Context, vaaBytes []byte) {
 	}
 }
 
-// MODIFY: defaultVAAProcessor to use verification service for Arbitrum->Aztec
+// defaultVAAProcessor processes VAAs and routes them to the appropriate chain
 func defaultVAAProcessor(r *Relayer, vaaData *VAAData) error {
 	// Create a context with timeout for processing operations
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second) // Increased timeout for HTTP calls
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// Log essential VAA information at debug level
@@ -919,26 +994,15 @@ func defaultVAAProcessor(r *Relayer, vaaData *VAAData) error {
 	}
 
 	if err != nil {
-		// Check if the context was cancelled or timed out
 		if ctx.Err() != nil {
-			r.logger.Warn("Transaction sending cancelled or timed out", zap.Error(ctx.Err()))
+			logVAA("error", direction, "timeout", vaaData.Sequence, "", ctx.Err())
 			return fmt.Errorf("transaction interrupted: %v", ctx.Err())
 		}
-
-		r.logger.Error("Failed to send verify transaction",
-			zap.String("direction", direction),
-			zap.Uint64("sequence", vaaData.Sequence),
-			zap.String("sourceTxID", vaaData.TxID),
-			zap.Error(err))
+		logVAA("error", direction, "failed", vaaData.Sequence, "", err)
 		return fmt.Errorf("transaction failed: %v", err)
 	}
 
-	r.logger.Info("VAA verification completed",
-		zap.String("direction", direction),
-		zap.Uint64("sequence", vaaData.Sequence),
-		zap.String("txHash", txHash),
-		zap.String("sourceTxID", vaaData.TxID))
-
+	logVAA("success", direction, "verified", vaaData.Sequence, txHash, nil)
 	return nil
 }
 
