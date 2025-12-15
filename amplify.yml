@@ -7,7 +7,7 @@ frontend:
         - npm run build --workspace=packages/frontend
     build:
       commands:
-        - echo "Build completed in preBuild phase"
+        - cd packages/frontend && NODE_OPTIONS="--max-old-space-size=4096" yarn build
   artifacts:
     baseDirectory: packages/frontend/out
     files:
