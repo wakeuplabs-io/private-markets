@@ -6,6 +6,7 @@ CLAUDE.md
 .claude
 
 **/target
+!packages/frontend/app/lib/target
 
 
 # Foundry files
