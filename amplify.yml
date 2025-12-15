@@ -3,18 +3,16 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm install --cache .npm --prefer-offline
-        - npm run build --workspace=packages/frontend
+        - nvm use 22
+        - yarn install --ignore-engines
     build:
       commands:
-        - echo "Build completed in preBuild phase"
+        - cd packages/frontend && yarn build
   artifacts:
-    baseDirectory: packages/frontend/out
+    baseDirectory: packages/frontend/.next
     files:
       - '**/*'
   cache:
     paths:
-      - packages/frontend/.next/cache/**/*
-      - packages/frontend/out/**/*
-      - .npm/**/*
       - node_modules/**/*
+      - packages/frontend/node_modules/**/*
