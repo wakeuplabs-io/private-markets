@@ -19,6 +19,7 @@
     "@aztec/pxe": "^3.0.0-devnet.4",
     "@aztec/stdlib": "3.0.0-devnet.5",
     "@aztec/test-wallet": "3.0.0-devnet.5",
+    "@tanstack/react-query": "^5.62.0",
     "clsx": "^2.1.1",
     "ethers": "^6.15.0",
     "lucide-react": "^0.546.0",
