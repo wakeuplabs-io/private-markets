@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount } from 'wagmi'
-import { evmTokenService, type EVMTokenInfo } from '@/services/token/evmTokenService'
+import { evmTokenService, type EVMTokenInfo } from '@/services/token/EVMTokenService'
 
 /**
  * Hook result interface

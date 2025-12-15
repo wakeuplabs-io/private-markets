@@ -32,3 +32,7 @@ docs
 
 # Aztec PXE store
 **/pxe-store
+
+# SST
+.sst
+sst-env.d.ts

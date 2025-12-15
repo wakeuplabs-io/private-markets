@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/joho/godotenv"
 	vaaLib "github.com/wormhole-foundation/wormhole/sdk/vaa"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -36,13 +37,14 @@ var logger *zap.Logger
 
 // ANSI color codes
 const (
-	colorReset  = "\033[0m"
-	colorRed    = "\033[31m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorBlue   = "\033[34m"
-	colorCyan   = "\033[36m"
-	colorGray   = "\033[90m"
+	colorReset   = "\033[0m"
+	colorRed     = "\033[31m"
+	colorGreen   = "\033[32m"
+	colorYellow  = "\033[33m"
+	colorBlue    = "\033[34m"
+	colorMagenta = "\033[35m"
+	colorCyan    = "\033[36m"
+	colorGray    = "\033[90m"
 )
 
 // UX symbols
@@ -94,17 +96,17 @@ func logVAA(level, direction, message string, sequence uint64, txHash string, er
 }
 
 // logStartBanner prints a startup banner with config info
-func logStartBanner(aztecWallet, arbAddress, verificationURL string) {
-	fmt.Fprintln(os.Stderr, "┌─────────────────────────────────────────────────────────")
+func logStartBanner(wormholeContract, aztecWallet, arbAddress, verificationURL string) {
+	fmt.Fprintln(os.Stderr, "┌────────────────────────────────────────────────────────────────────────────────")
 	fmt.Fprintf(os.Stderr, "│ %s  %s%s%s Relayer started\n",
 		time.Now().Format("15:04:05"), colorGreen, symbolInfo, colorReset)
-	fmt.Fprintf(os.Stderr, "│           Aztec wallet: %s%s%s\n",
-		colorCyan, aztecWallet, colorReset)
+	fmt.Fprintf(os.Stderr, "│           Wormhole:     %s%s%s\n",
+		colorMagenta, wormholeContract, colorReset)
 	fmt.Fprintf(os.Stderr, "│           Arbitrum:     %s%s%s\n",
 		colorBlue, arbAddress, colorReset)
 	fmt.Fprintf(os.Stderr, "│           Verification: %s%s%s\n",
 		colorYellow, verificationURL, colorReset)
-	fmt.Fprintln(os.Stderr, "└─────────────────────────────────────────────────────────")
+	fmt.Fprintln(os.Stderr, "└────────────────────────────────────────────────────────────────────────────────")
 }
 
 // Initialize global logger
@@ -264,9 +266,9 @@ func NewConfigFromEnv() Config {
 	return Config{
 		SpyRPCHost:       getEnvOrDefault("SPY_RPC_HOST", "localhost:7073"),
 		SourceChainID:    uint16(getEnvIntOrDefault("SOURCE_CHAIN_ID", 56)),  // Aztec
-		DestChainID:      uint16(getEnvIntOrDefault("DEST_CHAIN_ID", 10003)), // Arbitrum Sepolia (TODO: verify this works)
-		WormholeContract: getEnvOrDefault("WORMHOLE_CONTRACT", "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493"),
-		EmitterAddress:   getEnvOrDefault("EMITTER_ADDRESS", "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493"),
+		DestChainID:      uint16(getEnvIntOrDefault("DEST_CHAIN_ID", 10003)), // Arbitrum Sepolia
+		WormholeContract: getEnvOrDefault("WORMHOLE_CONTRACT", "0x0000000000000000000000000000000000000000000000000000000000000000"),
+		EmitterAddress:   getEnvOrDefault("EMITTER_ADDRESS", "0x0000000000000000000000000000000000000000000000000000000000000000"),
 		// Needed when sending to Aztec (Arbitrum→Aztec flow)
 		AztecWalletAddress: getEnvOrDefault("AZTEC_WALLET_ADDRESS", "0x0000000000000000000000000000000000000000000000000000000000000000"),
 		// Needed when sending to Arbitrum (Aztec→Arbitrum flow)
@@ -274,7 +276,7 @@ func NewConfigFromEnv() Config {
 		PrivateKey:             getEnvOrDefault("PRIVATE_KEY", "0x0000000000000000000000000000000000000000000000000000000000000000"),
 		ArbitrumTargetContract: getEnvOrDefault("ARBITRUM_TARGET_CONTRACT", "0x0000000000000000000000000000000000000000"),
 		AztecPXEURL:            getEnvOrDefault("AZTEC_PXE_URL", "http://localhost:8090"),
-		AztecTargetContract:    getEnvOrDefault("AZTEC_TARGET_CONTRACT", "0x0848d2af89dfd7c0e171238f9216399e61e908cd31b0222a920f1bf621a16ed6"),
+		AztecTargetContract:    getEnvOrDefault("AZTEC_TARGET_CONTRACT", "0x0000000000000000000000000000000000000000000000000000000000000000"),
 		VerificationServiceURL: getEnvOrDefault("VERIFICATION_SERVICE_URL", "http://localhost:8080"),
 	}
 }
@@ -728,6 +730,7 @@ func (r *Relayer) Close() {
 func (r *Relayer) Start(ctx context.Context) error {
 	// Print startup banner with UX formatting
 	logStartBanner(
+		r.config.WormholeContract,
 		r.aztecClient.GetWalletAddress(),
 		r.evmClient.GetAddress().Hex(),
 		r.config.VerificationServiceURL,
@@ -1050,6 +1053,14 @@ func (r *Relayer) parseAndLogPayload(payload []byte) {
 	}
 }
 
+// maskPrivateKey masks a private key for logging (shows first 6 and last 4 chars)
+func maskPrivateKey(key string) string {
+	if len(key) <= 10 {
+		return "***"
+	}
+	return key[:6] + "..." + key[len(key)-4:]
+}
+
 // Environment variable helpers
 func getEnvOrDefault(key, defaultValue string) string {
 	val, exists := os.LookupEnv(key)
@@ -1080,14 +1091,29 @@ func main() {
 	initLogger()
 	defer logger.Sync()
 
+	// Load .env file if it exists
+	if err := godotenv.Load(); err != nil {
+		logger.Warn("No .env file found, using environment variables")
+	} else {
+		logger.Info("Loaded .env file")
+	}
+
 	logger.Info("Starting bidirectional Aztec-Arbitrum Wormhole relayer")
 
 	// Load configuration from environment
 	config := NewConfigFromEnv()
 
-	logger.Info("DEBUG: Config loaded",
+	// Log loaded configuration
+	logger.Info("Configuration loaded",
+		zap.String("spyRPCHost", config.SpyRPCHost),
 		zap.Uint16("sourceChainID", config.SourceChainID),
-		zap.Uint16("destChainID", config.DestChainID))
+		zap.Uint16("destChainID", config.DestChainID),
+		zap.String("wormholeContract", config.WormholeContract),
+		zap.String("emitterAddress", config.EmitterAddress),
+		zap.String("arbitrumRPC", config.ArbitrumRPCURL),
+		zap.String("arbitrumTarget", config.ArbitrumTargetContract),
+		zap.String("privateKey", maskPrivateKey(config.PrivateKey)),
+	)
 
 	// Create relayer
 	relayer, err := NewRelayer(config)

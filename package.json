@@ -22,7 +22,10 @@
     "evm:test": "cd packages/evm && forge test",
     "e2e:test": "npm run test --workspace=packages/e2e-cross-chain",
     "e2e:test:watch": "npm run test:watch --workspace=packages/e2e-cross-chain",
-    "e2e:setup": "npm run setup --workspace=packages/e2e-cross-chain"
+    "e2e:setup": "npm run setup --workspace=packages/e2e-cross-chain",
+    "sst:dev": "sst dev",
+    "sst:deploy": "sst deploy",
+    "sst:remove": "sst remove"
   },
   "keywords": [],
   "author": "",

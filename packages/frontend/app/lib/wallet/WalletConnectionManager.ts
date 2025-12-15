@@ -1,7 +1,7 @@
 import type { IWalletProvider, IWalletAccount, IExtendedWalletProvider, WalletConnector } from "@/types/wallet";
 import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { AuthWitness } from "@aztec/stdlib/auth-witness";
-import { walletRegistry } from "./walletRegistry";
+import { walletRegistry } from "./WalletRegistry";
 
 /**
  * Manages wallet connections and interactions

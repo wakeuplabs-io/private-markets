@@ -2,6 +2,14 @@
 
 Cross-chain private prediction market: Aztec (private bets) + Arbitrum (public resolution) + Wormhole (messaging).
 
+## Prerequisites
+
+- **Node.js** >= 18
+- **Docker** (for Wormhole Spy)
+- **Go** >= 1.21 (for relayer)
+- **Foundry** (`curl -L https://foundry.paradigm.xyz | bash`)
+- **Aztec CLI** (`npm install -g @aztec/cli`) - for sandbox only
+
 ## Packages
 
 | Package | Description |
@@ -80,13 +88,12 @@ It requires two services running:
 
 #### Configuration
 
-Update the default values in `packages/relayer/relayer.go` (around line 191):
+Copy `.env.example` to `.env` and set your private key:
 
-```go
-PrivateKey:             "your_arbitrum_private_key",  // Signs txs to Arbitrum
-ArbitrumTargetContract: "0x01Bae5afDBCc24c4C903c7A323CE85A7A0791939",  // WormholeReceiver
-WormholeContract:       "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493",
-EmitterAddress:         "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493",
+```bash
+cd packages/relayer
+cp .env.example .env
+# Edit .env and set PRIVATE_KEY
 ```
 
 #### Run Spy Service
@@ -113,6 +120,7 @@ LOG_LEVEL=info go run relayer.go
 ```
 
 The relayer will log received VAAs and submit them to Arbitrum. You should see colored output showing the parsed payload structure (msgType, marketId, betId, amount).
+
 
 
 ### 4. Frontend
