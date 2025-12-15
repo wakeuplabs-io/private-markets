@@ -1,5 +1,5 @@
 // Core wallet management exports
-export { WalletRegistry, walletRegistry } from "./walletRegistry";
+export { WalletRegistry, walletRegistry } from "./WalletRegistry";
 export { WalletConnectionManager, walletConnectionManager } from "./WalletConnectionManager";
 
 // Types

@@ -18,7 +18,7 @@ import {
 export type { ContractMarket, MarketStats }
 import { BlockchainStatusService } from '../blockchain/blockchainStatusService'
 import { parseUnits } from 'viem'
-import { evmTokenService } from '../token/evmTokenService'
+import { evmTokenService } from '../token/EVMTokenService'
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS as `0x${string}`
 const USDC_ADDRESS = process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` // Arbitrum Sepolia USDC
@@ -103,7 +103,7 @@ export class MarketService {
       )
 
       if (currentAllowance < tokenAmount) {
-        await evmTokenService.approve(USDC_ADDRESS, TREASURY_ADDRESS, tokenAmount, userAddress)
+        await evmTokenService.approve(USDC_ADDRESS, TREASURY_ADDRESS, tokenAmount)
       }
 
       const hash = await writeContract(config, {
