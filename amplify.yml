@@ -7,7 +7,7 @@ frontend:
         - yarn install --ignore-engines
     build:
       commands:
-        - cd packages/frontend && yarn build
+        - cd packages/frontend && NODE_OPTIONS="--max-old-space-size=4096" yarn build
   artifacts:
     baseDirectory: packages/frontend/.next
     files:
