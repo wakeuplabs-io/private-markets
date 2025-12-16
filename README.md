@@ -163,15 +163,30 @@ Paste the output in the browser console. The frontend will detect the account on
 
 To place bets, users need tokens on both chains: Aztec tokens for private bets, USDC on Arbitrum for market creation and payouts.
 
-#### Aztec
+#### From the UI (Recommended)
+
+You can mint tokens for both Aztec and Arbitrum directly from the frontend:
+
+1. Click the **three dots menu** (Token Actions) in the header
+2. **Aztec section**: Enter amount and click "Mint Tokens" (uses connected Aztec wallet as recipient)
+3. **EVM section**: Enter amount and click "Mint EVM Tokens" (uses connected MetaMask wallet as recipient)
+
+> **Note**: After minting, you may need to refresh the page for the balance to update.
+
+#### CLI Alternative
+
+<details>
+<summary>Aztec (CLI)</summary>
 
 ```bash
 cd packages/avm
 npm run sandbox:interact:mint   # sandbox
 npm run interact:mint           # devnet
 ```
+</details>
 
-#### Arbitrum
+<details>
+<summary>Arbitrum (CLI)</summary>
 
 Update `packages/evm/script/MintTokens.s.sol`:
 
@@ -185,14 +200,15 @@ uint256 constant AMOUNT = 1000000000000000000000000;  // 1,000,000 tokens
 # From project root
 npm run evm:mint:testnet
 ```
+</details>
 
 ## Deployed Contracts (Devnet)
 
 ### Aztec
 
 ```
-TOKEN_CONTRACT_ADDRESS=0x0f46afec78d39de56e2d8406fafa3d2a326a78ea847c45ff10fc67e7ee20d0b6
-VAULT_CONTRACT_ADDRESS=0x14ecfc7bbfbff04e6553402f098760270b030a93d568ae01a2aaf8464c2c5689
+TOKEN_CONTRACT_ADDRESS=0x2e423e77e5ba229ba12ee5b8b3a731f446172c34c97ae717bfcad5bea9f55611
+VAULT_CONTRACT_ADDRESS=0x112783b081e36108def69e7bc254482c0993cd29a4b6174d97de1706a724da26
 WORMHOLE_CONTRACT_ADDRESS=0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493
 ```
 
