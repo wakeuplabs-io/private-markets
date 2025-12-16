@@ -28,10 +28,10 @@ export default function TokenActionsDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [isEditingAztecRecipient, setIsEditingAztecRecipient] = useState(false);
-  const [amount, setAmount] = useState("1000");
+  const [amount, setAmount] = useState("1000000");
   const [evmRecipient, setEvmRecipient] = useState("");
   const [isEditingEvmRecipient, setIsEditingEvmRecipient] = useState(false);
-  const [evmAmount, setEvmAmount] = useState("1000");
+  const [evmAmount, setEvmAmount] = useState("1000000");
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [successMessage, setSuccessMessage] = useState<{ type: 'aztec' | 'evm'; txHash: string } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -273,31 +273,6 @@ export default function TokenActionsDropdown({
 
               <div className="border-t border-border" />
 
-              <div className="space-y-2">
-                <Button
-                  size="sm"
-                  onClick={handleRefreshBalance}
-                  disabled={isRefreshing}
-                  className="w-full"
-                >
-                  {isRefreshing ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                      Refreshing...
-                    </span>
-                  ) : (
-                    "Refresh Balance"
-                  )}
-                </Button>
-
-                {balanceError && (
-                  <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
-                    {balanceError}
-                  </div>
-                )}
-              </div>
-
-              {/* EVM Section */}
               <div className="border-t border-border pt-4">
                 <h4 className="text-sm font-medium text-primary mb-3">EVM (Arbitrum)</h4>
 
