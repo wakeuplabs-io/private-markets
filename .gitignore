@@ -37,3 +37,6 @@ docs
 # SST
 .sst
 sst-env.d.ts
+
+# Scripts
+scripts/
