@@ -14,7 +14,6 @@ const localChain = {
 
 const arbitrumSepoliaRpcs = [
   'https://sepolia-rollup.arbitrum.io/rpc',
-  'https://arbitrum-sepolia.blockpi.network/v1/rpc/public',
 ]
 
 const createArbitrumTransport = () => {

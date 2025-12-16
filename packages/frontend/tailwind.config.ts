@@ -65,6 +65,15 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      keyframes: {
+        shrink: {
+          '0%': { width: '100%' },
+          '100%': { width: '0%' },
+        },
+      },
+      animation: {
+        shrink: 'shrink 3s linear forwards',
+      },
     },
   },
   plugins: [],
