@@ -45,7 +45,6 @@ export default function TokenActionsDropdown({
     isRefreshing,
     mintError,
     balanceError,
-    lastTxHash,
     clearErrors,
   } = useTokenActions(contractAddress);
 

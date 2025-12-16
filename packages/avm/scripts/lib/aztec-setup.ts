@@ -189,8 +189,9 @@ export class AztecSetup {
 
   
   /**
-   * Deploy SponsoredFPC in sandbox if not already deployed
-   * This is required for fee payment in sandbox mode
+   * Ensure SponsoredFPC is available for fee payment
+   * - In sandbox: Deploy if not exists
+   * - In testnet: Just register (already deployed globally by Aztec Labs)
    */
   private async ensureSponsoredFPCDeployed(): Promise<void> {
     if (!this.wallet || !this.pxe) {
@@ -207,14 +208,23 @@ export class AztecSetup {
         return;
       }
     } catch (error) {
-      console.error('Error checking SponsoredFPC deployment status:', error);
+      // Not found locally, continue
     }
 
-    console.log("  SponsoredFPC not found, deploying...");
+    // On testnet, SponsoredFPC is deployed globally - just register, don't deploy
+    if (this.network !== 'sandbox') {
+      console.log('  ℹ️ SponsoredFPC is managed globally on testnet, registering...');
+      await this.registerDeployedSponsoredFPCInWalletAndGetAddress(this.wallet);
+      console.log('  SponsoredFPC registered in wallet');
+      return;
+    }
+
+    // Sandbox only: Deploy SponsoredFPC
+    console.log("  SponsoredFPC not found, deploying in sandbox...");
 
     const accounts: AztecAddress[] = await registerInitialSandboxAccountsInWallet(this.wallet!);
     const deployerAddress = accounts[0];
-    console.log(`Using sandbox account ${deployerAddress.toString()} to deploy SponsoredFPC`);
+    console.log(`  Using sandbox account ${deployerAddress.toString()} to deploy SponsoredFPC`);
     const deployment = SponsoredFPCContract.deploy(this.wallet).send({
       from: deployerAddress,
       contractAddressSalt: new Fr(SPONSORED_FPC_SALT),
@@ -222,20 +232,21 @@ export class AztecSetup {
     });
     await deployment.wait();
     await this.registerDeployedSponsoredFPCInWalletAndGetAddress(this.wallet);
-    console.log('SponsoredFPC registered in wallet');
+    console.log('  SponsoredFPC registered in wallet');
   }
 
   /**
    * Check if an account contract is deployed on-chain
-   * Uses PXE to query the contract instance
+   * Uses the Aztec Node to query the network directly (not just local PXE)
+   * This is critical for testnet where accounts may exist globally but not in local PXE
    */
   private async isAccountDeployedOnChain(address: AztecAddress): Promise<boolean> {
-    if (!this.pxe) {
-      throw new Error("PXE not initialized");
+    if (!this.node) {
+      throw new Error("Node not initialized");
     }
 
     try {
-      const instance = await this.pxe.getContractInstance(address);
+      const instance = await this.node.getContract(address);
       return instance !== undefined;
     } catch (error) {
       return false;
