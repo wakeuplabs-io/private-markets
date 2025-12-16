@@ -262,34 +262,41 @@ contract WormholeReceiver {
     /**
      * @dev Reads amount from the amount chunk in Little Endian format
      *
-     * The amount is stored at the START of the chunk in Little Endian format.
-     * We read from the beginning of the chunk (fixedHeaderSize) and interpret
-     * all bytes as LE, where byte 0 is the LSB.
+     * Aztec format: [leading zero padding][value bytes in LE at END]
+     * We skip leading zeros and read the remaining bytes as LE.
      *
-     * Example for 10e18 (0x8ac7230489e80000):
-     *   LE: 00 00 e8 89 04 23 c7 8a (8 bytes)
-     *   Byte 0 (00) << 0 = 0
-     *   Byte 1 (00) << 8 = 0
-     *   Byte 2 (e8) << 16 = 0xe80000
-     *   ...
-     *   Result: 0x8ac7230489e80000 = 10e18
+     * Example for 10e18 in Aztec format:
+     *   Chunk (40 bytes): [34 zero bytes][e8 89 04 23 c7 8a]
+     *   Skip zeros, read 6 bytes in LE: e8 + (89<<8) + (04<<16) + (23<<24) + (c7<<32) + (8a<<40)
+     *   Result: 0x8ac7230489e8
+     *
+     * NOTE: Aztec compresses trailing zeros from the LE representation.
+     * 10e18 = 0x8ac7230489e80000 becomes 0x8ac7230489e8 (loses 2 bytes = factor of 65536)
      *
      * @param data The payload bytes
      * @param fixedHeaderSize Size of the fixed header before amount chunk
-     * @return The uint256 value
+     * @return The uint256 value (compressed - may need scaling)
      */
     function _readAmountChunk(bytes memory data, uint256 fixedHeaderSize) internal pure returns (uint256) {
         if (data.length <= fixedHeaderSize) {
             return 0;
         }
 
-        uint256 chunkSize = data.length - fixedHeaderSize;
-        uint256 bytesToRead = chunkSize > 32 ? 32 : chunkSize;
+        // Find first non-zero byte in the chunk (skip leading zeros)
+        uint256 valueStart = fixedHeaderSize;
+        while (valueStart < data.length && uint8(data[valueStart]) == 0) {
+            valueStart++;
+        }
 
-        // Read from the START of the chunk in Little Endian
+        // Calculate how many value bytes we have
+        uint256 valueBytes = data.length - valueStart;
+        if (valueBytes == 0) return 0;
+        if (valueBytes > 32) valueBytes = 32;
+
+        // Read the value bytes in Little Endian (byte 0 is LSB)
         uint256 result = 0;
-        for (uint256 i = 0; i < bytesToRead; i++) {
-            uint8 b = uint8(data[fixedHeaderSize + i]);
+        for (uint256 i = 0; i < valueBytes; i++) {
+            uint8 b = uint8(data[valueStart + i]);
             result |= uint256(b) << (i * 8);
         }
 

@@ -137,25 +137,32 @@ contract IntegrationBase is Test {
     }
 
     /**
-     * @dev Writes amount at the START of the amount chunk in Little Endian format.
+     * @dev Writes amount at the END of the amount chunk in Little Endian format.
      *
-     * The amount chunk starts at byte 96 (after fixed header).
-     * We write the value in Little Endian starting from byte 96.
+     * Matches real Aztec format: [leading zero padding][value bytes in LE at END]
+     * _readAmountChunk skips leading zeros and reads remaining bytes as LE.
      *
      * Example for 10e18 = 0x8ac7230489e80000:
      *   LE: 00 00 e8 89 04 23 c7 8a (8 bytes, LSB first)
-     *   Written at START: [00 00 e8 89 04 23 c7 8a][zeros padding...]
-     *
-     * _readAmountChunk reads from START of chunk in LE format.
+     *   Written at END: [zeros padding...][00 00 e8 89 04 23 c7 8a]
      */
     function _writeAmountAtEnd(bytes memory payload, uint256 value) internal pure {
-        // Amount chunk starts at byte 96 (fixed header size for BET payload)
-        uint256 amountChunkStart = 96;
+        // Calculate how many bytes we need for the value
+        uint256 bytesNeeded = 0;
+        uint256 temp = value;
+        if (temp == 0) {
+            bytesNeeded = 1;
+        } else {
+            while (temp > 0) {
+                bytesNeeded++;
+                temp >>= 8;
+            }
+        }
 
-        // Write value in LE at the START of the amount chunk
-        // (up to 32 bytes, remaining bytes stay as zero padding)
-        for (uint256 i = 0; i < 32 && (amountChunkStart + i) < payload.length; i++) {
-            payload[amountChunkStart + i] = bytes1(uint8(value >> (i * 8)));
+        // Write value at the END of payload in LE
+        uint256 writeStart = payload.length - bytesNeeded;
+        for (uint256 i = 0; i < bytesNeeded; i++) {
+            payload[writeStart + i] = bytes1(uint8(value >> (i * 8)));
         }
     }
 
