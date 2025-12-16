@@ -145,6 +145,39 @@ export class EVMTokenService {
     }
   }
 
+  /**
+   * Mint tokens to an address (only works with mintable tokens like MockERC20)
+   *
+   * @param tokenAddress - ERC20 token contract address (must have public mint)
+   * @param recipientAddress - Address to receive minted tokens
+   * @param amount - Amount to mint (in token's native decimals)
+   * @returns Transaction hash
+   */
+  async mint(
+    tokenAddress: `0x${string}`,
+    recipientAddress: `0x${string}`,
+    amount: bigint
+  ): Promise<string> {
+    try {
+      const hash = await writeContract(config, {
+        address: tokenAddress,
+        abi: ERC20_ABI,
+        functionName: 'mint',
+        args: [recipientAddress, amount],
+      })
+
+      await waitForTransactionReceipt(config, {
+        hash,
+        confirmations: 1,
+      })
+
+      return hash
+    } catch (error) {
+      console.error('Failed to mint tokens:', error)
+      throw error
+    }
+  }
+
   async getTokenInfo(tokenAddress: `0x${string}`): Promise<EVMTokenInfo> {
     try {
       // Fetch all metadata in parallel

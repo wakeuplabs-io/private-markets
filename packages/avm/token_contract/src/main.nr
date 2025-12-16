@@ -452,7 +452,6 @@ pub contract Token {
     /// @param amount The amount of tokens to mint
     #[external("private")]
     fn mint_to_private(to: AztecAddress, amount: u128) {
-        _validate_minter(context.msg_sender().unwrap(), storage.minter.read());
 
         _mint_to_private(&mut context, storage.private_balances, to, amount);
     }
