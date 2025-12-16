@@ -101,7 +101,7 @@ pub contract BetVault {
     #[external("private")]
     fn bet(
         market_id: Field,
-        outcome: u8,
+        outcome: u8,  // Must be 2 (NO) or 3 (YES) for robust serialization
         amount: u128,
         commitment: Field,
         bet_id: Field,
@@ -109,6 +109,7 @@ pub contract BetVault {
         from: AztecAddress,
     ) {
         assert(amount > 0, "Amount must be greater than 0");
+        assert((outcome == 2) | (outcome == 3), "Outcome must be 2 (NO) or 3 (YES)");
 
         let admin_address = storage.admin.read();
 

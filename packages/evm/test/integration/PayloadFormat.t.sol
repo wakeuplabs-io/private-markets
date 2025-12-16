@@ -353,8 +353,8 @@ contract PayloadFormatTest is IntegrationBase {
         // Byte 32: messageType = 0x01 (BET)
         payload[32] = 0x01;
 
-        // Byte 33: outcome = 0x01 (YES)
-        payload[33] = 0x01;
+        // Byte 33: outcome = 0x03 (YES, using 2-bit encoding: 2=NO, 3=YES)
+        payload[33] = 0x03;
 
         // Bytes 34-64: marketId in LE (31 bytes)
         for (uint256 i = 0; i < 31; i++) {
@@ -369,15 +369,13 @@ contract PayloadFormatTest is IntegrationBase {
         }
 
         // Bytes 96-135: amount chunk (40 bytes) in LE format
-        // Real Aztec format: leading zeros + LE value at END
+        // Write amount from START of chunk in Little Endian
         uint256 amount = 10 * 10**18;
         uint256 amountStart = 96; // Fixed header size
-        uint256 amountSize = 136 - amountStart; // 40 bytes
 
-        // Write amount at the LAST 32 bytes of the chunk (matching real testnet format)
-        uint256 valueStart = amountStart + (amountSize > 32 ? amountSize - 32 : 0); // 96 + 8 = 104
-        for (uint256 i = 0; i < 32 && (valueStart + i) < 136; i++) {
-            payload[valueStart + i] = bytes1(uint8(amount >> (i * 8)));
+        // Write amount at the START of the chunk (matching _readAmountChunk logic)
+        for (uint256 i = 0; i < 32 && (amountStart + i) < 136; i++) {
+            payload[amountStart + i] = bytes1(uint8(amount >> (i * 8)));
         }
 
         return payload;

@@ -68,7 +68,7 @@ export function MarketsPage() {
                     "0x279acb41a60fcce801cec69b3c7b23691e34cd3adb0149af2373acc8e08b97d2";
             }
 
-            const outcome = betData.option === "yes" ? 1 : 0;
+            const outcome = betData.option === "yes" ? 3 : 2;
 
             const txHash = await placeBet({
                 marketId: betData.marketId,

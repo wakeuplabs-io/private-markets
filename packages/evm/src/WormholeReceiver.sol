@@ -109,7 +109,7 @@ contract WormholeReceiver {
     // Payload format from Aztec Wormhole (real format discovered from testnet):
     // - Bytes 0-31: txId (32 bytes) - Aztec transaction hash
     // - Byte 32: messageType (0x01=BET, 0x02=CLAIM)
-    // - Byte 33: outcome (only for BET: 0x00=NO, 0x01=YES)
+    // - Byte 33: outcome (only for BET: 0x02=NO, 0x03=YES)
     // - Bytes 34-64: chunk1 - marketId in Little Endian (31 bytes)
     // - Bytes 65-95: chunk2 - betId/nullifier in Little Endian (31 bytes)
     // - Bytes 96-126: chunk3 - amount in Little Endian (31 bytes)
@@ -260,17 +260,19 @@ contract WormholeReceiver {
     }
 
     /**
-     * @dev Reads amount from the END of the payload in Little Endian format
+     * @dev Reads amount from the amount chunk in Little Endian format
      *
-     * Real Aztec/Wormhole format (from testnet):
-     *   Amount chunk is variable size (e.g., 40 bytes)
-     *   Value is written at the END of the chunk in Little Endian
-     *   Leading bytes are zeros (padding)
+     * The amount is stored at the START of the chunk in Little Endian format.
+     * We read from the beginning of the chunk (fixedHeaderSize) and interpret
+     * all bytes as LE, where byte 0 is the LSB.
      *
-     * Example for 10e18 = 0x8ac7230489e80000:
-     *   Chunk (40 bytes): [32 zeros][00 00 e8 89 04 23 c7 8a]
-     *   Read last 32 bytes in LE: 00 00 e8 89 04 23 c7 8a 00 00 ...
-     *   Result: 0x8ac7230489e80000
+     * Example for 10e18 (0x8ac7230489e80000):
+     *   LE: 00 00 e8 89 04 23 c7 8a (8 bytes)
+     *   Byte 0 (00) << 0 = 0
+     *   Byte 1 (00) << 8 = 0
+     *   Byte 2 (e8) << 16 = 0xe80000
+     *   ...
+     *   Result: 0x8ac7230489e80000 = 10e18
      *
      * @param data The payload bytes
      * @param fixedHeaderSize Size of the fixed header before amount chunk
@@ -282,15 +284,12 @@ contract WormholeReceiver {
         }
 
         uint256 chunkSize = data.length - fixedHeaderSize;
-
-        // Read up to 32 bytes from the END of the payload in Little Endian
         uint256 bytesToRead = chunkSize > 32 ? 32 : chunkSize;
-        uint256 valueStart = data.length - bytesToRead;
 
-        // Read bytes as Little Endian (byte[i] contributes to bits i*8 through i*8+7)
+        // Read from the START of the chunk in Little Endian
         uint256 result = 0;
         for (uint256 i = 0; i < bytesToRead; i++) {
-            uint8 b = uint8(data[valueStart + i]);
+            uint8 b = uint8(data[fixedHeaderSize + i]);
             result |= uint256(b) << (i * 8);
         }
 
@@ -319,9 +318,10 @@ contract WormholeReceiver {
         // Minimum: 97 bytes
         if (payload.length < 97) revert PayloadTooShort(payload.length, 97);
 
-        // Byte 33: outcome (right after messageType)
+        // Byte 33: outcome (2=NO, 3=YES for robust 2-bit encoding)
         uint8 outcomeRaw = uint8(payload[TX_ID_SIZE + 1]);
-        bool outcome = outcomeRaw > 0;
+        require(outcomeRaw == 2 || outcomeRaw == 3, "Invalid outcome: must be 2 (NO) or 3 (YES)");
+        bool outcome = outcomeRaw == 3;
 
         // Bytes 34-64: marketId in LE (31 bytes = CHUNK_SIZE)
         uint256 marketId = _readUint256LE(payload, TX_ID_SIZE + 2, CHUNK_SIZE);

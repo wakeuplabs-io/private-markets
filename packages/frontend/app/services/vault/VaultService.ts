@@ -140,7 +140,7 @@ export class VaultService implements IVaultService {
         commitment: fullParams.commitment,
         secret: fullParams.secret,
         amount: params.amount.toString(),
-        outcome: params.outcome === 1, // Convert to boolean (true = yes, false = no)
+        outcome: params.outcome === 3, // Convert to boolean (3 = yes/true, 2 = no/false)
         timestamp: Date.now(),
       };
 

@@ -1,7 +1,7 @@
 {
   "vault-BetVault.json": {
     "contractName": "BetVault",
-    "hash": "bb2833d0974539bf597c54408ce8c409e778597c094b2e12871b030306868bcc"
+    "hash": "29f3e6f7478f991a0fda36443883294fb7d7ed20ebae81f634cca029fe6835c0"
   },
   "token_contract-Token.json": {
     "contractName": "Token",

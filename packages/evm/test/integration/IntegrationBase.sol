@@ -99,7 +99,7 @@ contract IntegrationBase is Test {
      * Format (discovered from testnet, 136 bytes):
      *   Bytes 0-31: txId (32 bytes) - random hash for mock
      *   Byte 32: messageType (0x01 for BET)
-     *   Byte 33: outcome (0x00=NO, 0x01=YES)
+     *   Byte 33: outcome (0x02=NO, 0x03=YES)
      *   Bytes 34-64: marketId in Little Endian (31 bytes)
      *   Bytes 65-95: betId in Little Endian (31 bytes)
      *   Bytes 96-135: amount chunk (40 bytes = leading zeros + LE value at END)
@@ -121,8 +121,8 @@ contract IntegrationBase is Test {
         // Byte 32: messageType = 0x01 (BET)
         payload[TX_ID_SIZE] = 0x01;
 
-        // Byte 33: outcome
-        payload[TX_ID_SIZE + 1] = outcome ? bytes1(0x01) : bytes1(0x00);
+        // Byte 33: outcome (2=NO, 3=YES for robust 2-bit encoding)
+        payload[TX_ID_SIZE + 1] = outcome ? bytes1(0x03) : bytes1(0x02);
 
         // Bytes 34-64: marketId in LE (31 bytes)
         _writeChunkLE(payload, TX_ID_SIZE + 2, marketId);
@@ -137,28 +137,25 @@ contract IntegrationBase is Test {
     }
 
     /**
-     * @dev Writes amount at the END of the payload in Little Endian format.
+     * @dev Writes amount at the START of the amount chunk in Little Endian format.
      *
-     * Real Aztec/Wormhole format (from testnet):
-     *   Amount chunk is 40 bytes (bytes 96-135)
-     *   Value is written at the END in Little Endian
-     *   Leading bytes are zeros (padding)
+     * The amount chunk starts at byte 96 (after fixed header).
+     * We write the value in Little Endian starting from byte 96.
      *
      * Example for 10e18 = 0x8ac7230489e80000:
-     *   In LE: 00 00 e8 89 04 23 c7 8a (8 bytes)
-     *   Written at: payload[128..135] (last 8 bytes of 40-byte chunk)
-     *   Chunk: [32 zeros][00 00 e8 89 04 23 c7 8a]
+     *   LE: 00 00 e8 89 04 23 c7 8a (8 bytes, LSB first)
+     *   Written at START: [00 00 e8 89 04 23 c7 8a][zeros padding...]
+     *
+     * _readAmountChunk reads from START of chunk in LE format.
      */
     function _writeAmountAtEnd(bytes memory payload, uint256 value) internal pure {
-        // Write value in LE starting from the END of the payload
-        // We write up to 32 bytes (or less if payload is shorter)
-        uint256 bytesToWrite = 32;
-        if (bytesToWrite > payload.length) bytesToWrite = payload.length;
+        // Amount chunk starts at byte 96 (fixed header size for BET payload)
+        uint256 amountChunkStart = 96;
 
-        // Write from the end, in Little Endian (low byte first)
-        for (uint256 i = 0; i < bytesToWrite; i++) {
-            uint256 pos = payload.length - bytesToWrite + i;
-            payload[pos] = bytes1(uint8(value >> (i * 8)));
+        // Write value in LE at the START of the amount chunk
+        // (up to 32 bytes, remaining bytes stay as zero padding)
+        for (uint256 i = 0; i < 32 && (amountChunkStart + i) < payload.length; i++) {
+            payload[amountChunkStart + i] = bytes1(uint8(value >> (i * 8)));
         }
     }
 
