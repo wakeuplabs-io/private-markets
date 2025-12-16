@@ -44,7 +44,6 @@ export default function TokenActionsDropdown({
     isMinting,
     isRefreshing,
     mintError,
-    balanceError,
     clearErrors,
   } = useTokenActions(contractAddress);
 
@@ -109,17 +108,6 @@ export default function TokenActionsDropdown({
       }
     } catch (error) {
       console.error("Mint failed:", error);
-    }
-  };
-
-  const handleRefreshBalance = async () => {
-    clearErrors();
-
-    try {
-      await actions.refreshBalance();
-      setIsOpen(false);
-    } catch (error) {
-      console.error("Refresh failed:", error);
     }
   };
 
