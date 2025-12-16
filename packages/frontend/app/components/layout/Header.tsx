@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { useWallet } from '@/context'
 import { useAdmin } from '@/hooks/useAdmin'
 import { useDefaultTokenInfo } from '@/hooks/useTokenInfo'
+import { useUSDCBalance } from '@/hooks/useEVMTokenBalance'
 import TokenActionsDropdown from '@/components/ui/TokenActionsDropdown'
 import { AvatarButton } from './AvatarModal'
 
@@ -22,7 +23,9 @@ const Header: React.FC<HeaderProps> = ({
   const { wallet } = useWallet();
   useAdmin(wallet?.address);
   const tokenInfoResult = useDefaultTokenInfo();
+  const evmTokenResult = useUSDCBalance();
   const { refetch } = tokenInfoResult;
+  const { refetch: refetchEvmBalance } = evmTokenResult;
 
   return (
     <header
@@ -67,8 +70,10 @@ const Header: React.FC<HeaderProps> = ({
 
         <div className="flex items-center space-x-4">
           <TokenActionsDropdown
+            evmTokenAddress={process.env.NEXT_PUBLIC_USDC_ADDRESS as `0x${string}` | undefined}
             onSuccess={() => {
               refetch();
+              refetchEvmBalance();
             }}
           />
           <AvatarButton onClick={onAvatarClick} />

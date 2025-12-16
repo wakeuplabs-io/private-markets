@@ -62,6 +62,16 @@ export const ERC20_ABI = [
     outputs: [{ name: '', type: 'uint8' }],
     stateMutability: 'view',
     type: 'function'
+  },
+  {
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    name: 'mint',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
   }
 ] as const;
 
