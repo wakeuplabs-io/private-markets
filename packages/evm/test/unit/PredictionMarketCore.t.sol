@@ -256,14 +256,16 @@ contract PredictionMarketCoreTest is Test {
     // ============================================
 
     function test_claim_calculatesParimutuelCorrectly() public {
-        (uint256 marketId, uint256 totalPool, ) = _setupMarketWithBets();
+        (uint256 marketId, , ) = _setupMarketWithBets();
         _resolveMarket(marketId, true); // YES wins
 
+        // Setup: totalPool=1000, yesTotal=150, noTotal=100
+        // totalBetPool = 150 + 100 = 250
         // Winner bet: 150 USDC on YES
-        // Total YES bets: 150 USDC
-        // Formula: payout = (150 * 1000) / 150 = 1000 USDC (all pool)
+        // Formula: payout = (150 * 250) / 150 = 250 USDC
         bytes32 nullifier = keccak256("nullifier1");
         uint256 betAmount = 150 * 10**18;
+        uint256 expectedPayout = 250 * 10**18; // totalBetPool when winner takes all YES
 
         uint256 balanceBefore = usdc.balanceOf(user1);
 
@@ -276,17 +278,19 @@ contract PredictionMarketCoreTest is Test {
         );
 
         uint256 balanceAfter = usdc.balanceOf(user1);
-        assertEq(balanceAfter - balanceBefore, totalPool); // Winner takes all
+        assertEq(balanceAfter - balanceBefore, expectedPayout);
     }
 
     function test_claim_transfersUSDCToWinner() public {
         (uint256 marketId, , ) = _setupMarketWithBets();
         _resolveMarket(marketId, false); // NO wins
 
+        // Setup: totalPool=1000, yesTotal=150, noTotal=100
+        // totalBetPool = 150 + 100 = 250
         // Winner bet: 100 USDC on NO
-        // Total NO bets: 100 USDC
-        // Formula: payout = (100 * 1000) / 100 = 1000 USDC
+        // Formula: payout = (100 * 250) / 100 = 250 USDC
         bytes32 nullifier = keccak256("nullifier1");
+        uint256 expectedPayout = 250 * 10**18;
         uint256 balanceBefore = usdc.balanceOf(user2);
 
         vm.prank(wormholeReceiver);
@@ -298,7 +302,7 @@ contract PredictionMarketCoreTest is Test {
         );
 
         uint256 balanceAfter = usdc.balanceOf(user2);
-        assertEq(balanceAfter - balanceBefore, 1000 * 10**18);
+        assertEq(balanceAfter - balanceBefore, expectedPayout);
     }
 
     function test_claim_revertsIfNullifierUsed() public {

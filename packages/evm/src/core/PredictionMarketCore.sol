@@ -29,6 +29,9 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
     error ZeroRecipient();
     error NoWinningBets();
     error ChainIdMismatch();
+    error NoCollateralToReclaim();
+
+    event CollateralReclaimed(uint256 indexed marketId, address indexed owner, uint256 amount);
 
     constructor(
         uint16 chainId_,
@@ -198,16 +201,47 @@ contract PredictionMarketCore is PredictionMarketGetters, IPredictionMarket, Ree
         // Mark nullifier as consumed (anti-replay)
         _state.consumedNullifiers[marketId][nullifier] = true;
 
-        // CRITICAL: Calculate payout ON-CHAIN with pari-mutuel formula
+        // Winners split the total bet pool (yesTotal + noTotal), NOT the creator's totalPool
         uint256 winningTotal = market.winningOutcome ? market.yesTotal : market.noTotal;
         if (winningTotal == 0) revert NoWinningBets();
 
-        uint256 payout = (betAmount * market.totalPool) / winningTotal;
+        uint256 totalBetPool = market.yesTotal + market.noTotal;
+        uint256 payout = (betAmount * totalBetPool) / winningTotal;
 
         // Transfer USDC from Treasury
         treasuryContract().transferPayout(marketId, recipient, payout);
 
         emit ClaimProcessed(marketId, nullifier, recipient, payout);
+    }
+
+    /**
+     * @notice Allows market creator to reclaim unused collateral after market is resolved
+     * @dev Can only be called after market is resolved
+     * @dev Returns: totalPool - (yesTotal + noTotal)
+     * @param marketId Market identifier
+     */
+    function reclaimUnusedCollateral(uint256 marketId) external nonReentrant {
+        Market storage market = _state.markets[marketId];
+        if (market.owner == address(0)) revert MarketNotFound(marketId);
+        if (market.owner != msg.sender) revert MarketNotOwner(marketId);
+        if (!market.resolved) revert MarketNotResolved(marketId);
+
+        uint256 totalBetPool = market.yesTotal + market.noTotal;
+
+        // Nothing to reclaim if bets exceed or equal totalPool
+        if (totalBetPool >= market.totalPool) {
+            revert NoCollateralToReclaim();
+        }
+
+        uint256 unusedCollateral = market.totalPool - totalBetPool;
+
+        // Prevent double-claim by setting totalPool to totalBetPool
+        market.totalPool = totalBetPool;
+
+        // Transfer unused collateral back to creator
+        treasuryContract().transferPayout(marketId, msg.sender, unusedCollateral);
+
+        emit CollateralReclaimed(marketId, msg.sender, unusedCollateral);
     }
 
 }

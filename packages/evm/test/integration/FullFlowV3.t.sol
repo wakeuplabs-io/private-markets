@@ -57,9 +57,10 @@ contract FullFlowV3Test is Test {
      *  3. User2 bets 100 USDC on NO
      *  4. User3 bets 50 USDC on YES
      *  5. Market expires and resolves: YES wins
-     *  6. User1 claims: expects (150 * 1000) / 200 = 750 USDC
-     *  7. User3 claims: expects (50 * 1000) / 200 = 250 USDC
-     *  8. Total distributed: 750 + 250 = 1000 USDC ✅
+     *  6. User1 claims: expects (150 * 300) / 200 = 225 USDC (new pari-mutuel formula)
+     *  7. User3 claims: expects (50 * 300) / 200 = 75 USDC
+     *  8. Total distributed to winners: 225 + 75 = 300 USDC
+     *  9. Creator reclaims unused collateral: 1000 - 300 = 700 USDC
      */
     function test_fullMarketLifecycle_fromCreationToClaim() public {
         uint256 totalPool = 1000 * 10**18; // 1000 USDC
@@ -123,6 +124,8 @@ contract FullFlowV3Test is Test {
         // ============================================
         // Step 4: Process Claims - User1 (YES winner)
         // ============================================
+        // totalBetPool = yesTotal + noTotal = 200 + 100 = 300
+        uint256 totalBetPool = 300 * 10**18;
         {
             uint256 balanceBefore = usdc.balanceOf(user1);
 
@@ -136,8 +139,8 @@ contract FullFlowV3Test is Test {
 
             uint256 balanceAfter = usdc.balanceOf(user1);
 
-            // User1 payout = (150 * 1000) / 200 = 750 USDC
-            assertEq(balanceAfter - balanceBefore, 750 * 10**18);
+            // User1 payout = (150 * 300) / 200 = 225 USDC
+            assertEq(balanceAfter - balanceBefore, 225 * 10**18);
         }
 
         // ============================================
@@ -156,14 +159,30 @@ contract FullFlowV3Test is Test {
 
             uint256 balanceAfter = usdc.balanceOf(user3);
 
-            // User3 payout = (50 * 1000) / 200 = 250 USDC
-            assertEq(balanceAfter - balanceBefore, 250 * 10**18);
+            // User3 payout = (50 * 300) / 200 = 75 USDC
+            assertEq(balanceAfter - balanceBefore, 75 * 10**18);
         }
 
         // ============================================
-        // Step 6: Verify Total Distributed
+        // Step 6: Creator Reclaims Unused Collateral
         // ============================================
-        // 750 + 250 = 1000 USDC (all pool distributed) ✅
+        {
+            uint256 balanceBefore = usdc.balanceOf(marketOwner);
+
+            vm.prank(marketOwner);
+            predictionMarket.reclaimUnusedCollateral(marketId);
+
+            uint256 balanceAfter = usdc.balanceOf(marketOwner);
+
+            // Creator reclaims: totalPool - totalBetPool = 1000 - 300 = 700 USDC
+            assertEq(balanceAfter - balanceBefore, 700 * 10**18);
+        }
+
+        // ============================================
+        // Step 7: Verify Total Distributed
+        // ============================================
+        // 225 + 75 = 300 USDC to winners, 700 USDC back to creator
+        // Treasury should be empty
         assertEq(usdc.balanceOf(address(treasury)), 0);
     }
 }

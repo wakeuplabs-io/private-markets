@@ -143,11 +143,13 @@ contract WormholeReceiverTest is IntegrationBase {
     function test_receiveClaimMessage_transfersUSDC() public {
         // Setup: Process 2 bets
         // Bet 1: 150 YES
-        bytes memory bet1Payload = createBetPayload(marketId, keccak256("bet1"), true, 150 * 10**18);
+        uint256 yesBet = 150 * 10**18;
+        bytes memory bet1Payload = createBetPayload(marketId, keccak256("bet1"), true, yesBet);
         wormholeReceiver.verify(createMockVaa(bet1Payload));
 
         // Bet 2: 100 NO
-        bytes memory bet2Payload = createBetPayload(marketId, keccak256("bet2"), false, 100 * 10**18);
+        uint256 noBet = 100 * 10**18;
+        bytes memory bet2Payload = createBetPayload(marketId, keccak256("bet2"), false, noBet);
         wormholeReceiver.verify(createMockVaa(bet2Payload));
 
         // Resolve: YES wins
@@ -155,16 +157,25 @@ contract WormholeReceiverTest is IntegrationBase {
         vm.prank(address(wormholeReceiver));
         predictionMarket.resolveMarket(marketId, true);
 
-        // Claim: betAmount=150, totalPool=1000, winningTotal=150
-        // Expected payout = (150 * 1000) / 150 = 1000 USDC
-        bytes memory claimPayload = createClaimPayload(marketId, keccak256("nullifier1"), 150 * 10**18, user2);
+        // NEW pari-mutuel formula: winners split totalBetPool (yesTotal + noTotal)
+        // scaledYes = _computeScaledAmount(150e18), scaledNo = _computeScaledAmount(100e18)
+        // totalBetPool = scaledYes + scaledNo
+        // payout = (scaledBetAmount * totalBetPool) / winningTotal
+        uint256 scaledYes = _computeScaledAmount(yesBet);
+        uint256 scaledNo = _computeScaledAmount(noBet);
+        uint256 totalBetPool = scaledYes + scaledNo;
+        uint256 scaledBetAmount = _computeScaledAmount(yesBet);
+        // Formula: (scaledBetAmount * totalBetPool) / scaledYes = totalBetPool (when sole winner)
+        uint256 expectedPayout = (scaledBetAmount * totalBetPool) / scaledYes;
+
+        bytes memory claimPayload = createClaimPayload(marketId, keccak256("nullifier1"), yesBet, user2);
 
         uint256 balanceBefore = mockErc20.balanceOf(user2);
 
         wormholeReceiver.verify(createMockVaa(claimPayload));
 
         uint256 balanceAfter = mockErc20.balanceOf(user2);
-        assertEq(balanceAfter - balanceBefore, TOTAL_POOL); // Winner takes all
+        assertEq(balanceAfter - balanceBefore, expectedPayout);
     }
 
     function test_receiveClaimMessage_revertsIfUnregisteredSender() public {

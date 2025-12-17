@@ -184,8 +184,12 @@ contract PayloadFormatTest is IntegrationBase {
         wormholeReceiver.verify(createMockVaa(claimPayload));
         uint256 balanceAfter = mockErc20.balanceOf(recipient);
 
-        // Winner should receive full pool (only one bettor)
-        assertEq(balanceAfter - balanceBefore, TOTAL_POOL, "Recipient should receive payout");
+        // NEW pari-mutuel formula: winners split totalBetPool (yesTotal + noTotal)
+        // Since only one bet was placed (YES), totalBetPool = yesTotal = scaledBetAmount
+        // payout = (betAmount * totalBetPool) / yesTotal = totalBetPool (sole winner gets all bets)
+        uint256 scaledBetAmount = _computeScaledAmount(betAmount);
+        uint256 expectedPayout = scaledBetAmount; // sole winner gets all bet pool
+        assertEq(balanceAfter - balanceBefore, expectedPayout, "Recipient should receive payout");
     }
 
     /**
