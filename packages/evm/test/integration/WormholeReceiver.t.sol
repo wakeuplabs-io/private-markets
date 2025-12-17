@@ -18,11 +18,14 @@ contract WormholeReceiverTest is IntegrationBase {
         vm.stopPrank();
     }
 
+    // Scale factor used by WormholeReceiver to restore compressed amounts
+    uint256 constant AMOUNT_SCALE_FACTOR = 65536;
+
     /**
-     * @dev Computes the expected compressed amount after Aztec serialization.
-     * Aztec strips trailing zeros from the LE representation.
+     * @dev Computes the expected scaled amount after WormholeReceiver processing.
+     * WormholeReceiver reads compressed amount and multiplies by AMOUNT_SCALE_FACTOR.
      */
-    function _computeCompressedAmount(uint256 value) internal pure returns (uint256) {
+    function _computeScaledAmount(uint256 value) internal pure returns (uint256) {
         if (value == 0) return 0;
 
         uint256 temp = value;
@@ -32,7 +35,8 @@ contract WormholeReceiverTest is IntegrationBase {
             temp >>= 8;
         }
 
-        return value >> (trailingZeroBytes * 8);
+        uint256 compressed = value >> (trailingZeroBytes * 8);
+        return compressed * AMOUNT_SCALE_FACTOR;
     }
 
     // ============================================
@@ -50,8 +54,8 @@ contract WormholeReceiverTest is IntegrationBase {
         bytes memory encodedVm = createMockVaa(payload);
         wormholeReceiver.verify(encodedVm);
 
-        // Verify bet was processed (amount is compressed due to Aztec serialization)
-        uint256 expectedAmount = _computeCompressedAmount(betAmount);
+        // Verify bet was processed (WormholeReceiver scales compressed amounts)
+        uint256 expectedAmount = _computeScaledAmount(betAmount);
         (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(marketId);
         assertEq(yesTotal, expectedAmount);
     }
@@ -69,9 +73,9 @@ contract WormholeReceiverTest is IntegrationBase {
         bytes memory payload2 = createBetPayload(marketId, bet2Id, false, noAmount);
         wormholeReceiver.verify(createMockVaa(payload2));
 
-        // Verify totals updated correctly (amounts are compressed due to Aztec serialization)
-        uint256 expectedYes = _computeCompressedAmount(yesAmount);
-        uint256 expectedNo = _computeCompressedAmount(noAmount);
+        // Verify totals updated correctly (WormholeReceiver scales compressed amounts)
+        uint256 expectedYes = _computeScaledAmount(yesAmount);
+        uint256 expectedNo = _computeScaledAmount(noAmount);
         (, , , uint256 yesTotal, uint256 noTotal, , , , ) = predictionMarket.getMarket(marketId);
         assertEq(yesTotal, expectedYes);
         assertEq(noTotal, expectedNo);

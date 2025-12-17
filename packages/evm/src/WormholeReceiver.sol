@@ -119,6 +119,12 @@ contract WormholeReceiver {
     uint256 constant TX_ID_SIZE = 32;
     uint256 constant CHUNK_SIZE = 31;
 
+    // Scale factor to restore compressed amounts from Aztec serialization
+    // Aztec strips trailing zero bytes from LE representation
+    // For 18-decimal tokens, amounts typically have 2 trailing zero bytes
+    // Factor: 65536 (decimal) = 0x10000 (hex) = 2^16
+    uint256 constant AMOUNT_SCALE_FACTOR = 65536;
+
     /**
      * @dev Constructor initializes WormholeReceiver with necessary addresses
      * @param wormholeCoreAddr Address of the Wormhole Core contract (for VAA verification)
@@ -339,7 +345,10 @@ contract WormholeReceiver {
         // Bytes 96+: amount chunk (entire chunk is the amount in LE format)
         // Fixed header = txId(32) + type(1) + outcome(1) + marketId(31) + betId(31) = 96
         uint256 BET_FIXED_HEADER = TX_ID_SIZE + 2 + CHUNK_SIZE + CHUNK_SIZE; // 96
-        uint256 amount = _readAmountChunk(payload, BET_FIXED_HEADER);
+        uint256 compressedAmount = _readAmountChunk(payload, BET_FIXED_HEADER);
+
+        // Scale up to restore original amount (Aztec strips 2 trailing zero bytes)
+        uint256 amount = compressedAmount * AMOUNT_SCALE_FACTOR;
 
         if (betId == bytes32(0)) revert InvalidBetId();
         if (amount == 0) revert ZeroAmount();
@@ -364,10 +373,6 @@ contract WormholeReceiver {
         if (isFork()) revert ChainIdMismatch();
 
         // CLAIM message needs at least: txId(32) + type(1) + marketId(31) + nullifier(31) + recipient(31) + amount(1)
-        // Minimum: 97 bytes
-        if (payload.length < 157) revert PayloadTooShort(payload.length, 157);
-
-        // messageType (byte 32) already validated in verify()
 
         // Bytes 33-63: marketId in LE (31 bytes)
         uint256 marketId = _readUint256LE(payload, TX_ID_SIZE + 1, CHUNK_SIZE);
@@ -380,7 +385,10 @@ contract WormholeReceiver {
 
         // Bytes 126+: betAmount - VARIABLE SIZE, read from END of payload
         uint256 fixedHeaderSize = TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE + CHUNK_SIZE; // 126
-        uint256 betAmount = _readAmountChunk(payload, fixedHeaderSize);
+        uint256 compressedBetAmount = _readAmountChunk(payload, fixedHeaderSize);
+
+        // Scale up to restore original amount (Aztec strips 2 trailing zero bytes)
+        uint256 betAmount = compressedBetAmount * AMOUNT_SCALE_FACTOR;
 
         // Validate extracted data
         if (nullifier == bytes32(0)) revert InvalidNullifier();

@@ -25,7 +25,7 @@ const AmountInput: React.FC<AmountInputProps> = ({
     <div className={cn('space-y-3', className)}>
       <Input
         type="number"
-        label="Bet Amount (USDC)"
+        label="Bet Amount (tokens)"
         placeholder={`Enter amount (${min}-${max})`}
         value={amount}
         onChange={(e) => onAmountChange(e.target.value)}

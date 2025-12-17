@@ -30,18 +30,18 @@ contract PayloadFormatTest is IntegrationBase {
         vm.stopPrank();
     }
 
+    // Scale factor used by WormholeReceiver to restore compressed amounts
+    uint256 constant AMOUNT_SCALE_FACTOR = 65536;
+
     /**
-     * @dev Computes the expected compressed amount after Aztec serialization.
-     * Aztec strips trailing zeros from the LE representation, so the parsed amount
-     * will be smaller by a factor of 2^(8*trailingZeros).
-     *
-     * Example: 10e18 = 0x8ac7230489e80000 has 2 trailing zero bytes
-     *          After compression: 0x8ac7230489e8 (shifted right by 16 bits)
+     * @dev Computes the expected scaled amount after WormholeReceiver processing.
+     * WormholeReceiver reads compressed amount and multiplies by AMOUNT_SCALE_FACTOR.
+     * This simulates the round-trip: compress (write) -> scale up (read).
      */
-    function _computeCompressedAmount(uint256 value) internal pure returns (uint256) {
+    function _computeScaledAmount(uint256 value) internal pure returns (uint256) {
         if (value == 0) return 0;
 
-        // Count trailing zero bytes in the value
+        // Count trailing zero bytes in the value (simulates Aztec compression)
         uint256 temp = value;
         uint256 trailingZeroBytes = 0;
         while (temp > 0 && (temp & 0xFF) == 0) {
@@ -49,8 +49,11 @@ contract PayloadFormatTest is IntegrationBase {
             temp >>= 8;
         }
 
-        // The compressed value is the original right-shifted by trailing zeros
-        return value >> (trailingZeroBytes * 8);
+        // Compressed value (what Aztec sends)
+        uint256 compressed = value >> (trailingZeroBytes * 8);
+
+        // WormholeReceiver scales it back up by AMOUNT_SCALE_FACTOR
+        return compressed * AMOUNT_SCALE_FACTOR;
     }
 
     // ============================================
@@ -61,8 +64,8 @@ contract PayloadFormatTest is IntegrationBase {
      * @notice Tests that BET payload in Field format is correctly decoded
      * @dev Simulates the format that arrives from Wormhole after Aztec encoding
      *
-     * NOTE: Aztec serialization compresses trailing zeros from LE representation,
-     * so the parsed amount will be the compressed value (original >> trailingZeroBits).
+     * NOTE: WormholeReceiver scales compressed amounts by AMOUNT_SCALE_FACTOR (65536)
+     * to restore approximate original values.
      */
     function test_betPayload_encodingMatchesAztecFormat() public {
         // Test parameters
@@ -82,15 +85,15 @@ contract PayloadFormatTest is IntegrationBase {
         wormholeReceiver.verify(vaa);
 
         // Verify market state was updated correctly
-        // NOTE: Amount will be compressed due to Aztec's trailing-zero stripping
-        uint256 expectedAmount = _computeCompressedAmount(testAmount);
+        // WormholeReceiver scales compressed amount by AMOUNT_SCALE_FACTOR
+        uint256 expectedAmount = _computeScaledAmount(testAmount);
         (, , , uint256 yesTotal, uint256 noTotal, , , , ) = predictionMarket.getMarket(testMarketId);
 
         if (testOutcome) {
-            assertEq(yesTotal, expectedAmount, "yesTotal should match compressed bet amount");
+            assertEq(yesTotal, expectedAmount, "yesTotal should match scaled bet amount");
             assertEq(noTotal, 0, "noTotal should be 0");
         } else {
-            assertEq(noTotal, expectedAmount, "noTotal should match compressed bet amount");
+            assertEq(noTotal, expectedAmount, "noTotal should match scaled bet amount");
             assertEq(yesTotal, 0, "yesTotal should be 0");
         }
     }
@@ -130,12 +133,12 @@ contract PayloadFormatTest is IntegrationBase {
             bytes memory payload = createBetPayload(marketId, betId, outcome, amounts[i]);
             wormholeReceiver.verify(createMockVaa(payload));
 
-            // Use compressed amount for expected totals
-            uint256 compressedAmount = _computeCompressedAmount(amounts[i]);
+            // Use scaled amount for expected totals
+            uint256 scaledAmount = _computeScaledAmount(amounts[i]);
             if (outcome) {
-                expectedYesTotal += compressedAmount;
+                expectedYesTotal += scaledAmount;
             } else {
-                expectedNoTotal += compressedAmount;
+                expectedNoTotal += scaledAmount;
             }
         }
 
@@ -308,17 +311,17 @@ contract PayloadFormatTest is IntegrationBase {
         bytes memory vaa = createMockVaa(testPayload);
         wormholeReceiver.verify(vaa);
 
-        // Verify the bet was processed with compressed amount
-        // 10e18 = 0x8ac7230489e80000 has 2 trailing zero bytes, so compressed to 0x8ac7230489e8
-        uint256 expectedAmount = _computeCompressedAmount(10 * 10**18);
+        // Verify the bet was processed with scaled amount
+        // 10e18 compressed then scaled by 65536 = 10e18 (restored)
+        uint256 expectedAmount = _computeScaledAmount(10 * 10**18);
         (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(createdMarketId);
-        assertEq(yesTotal, expectedAmount, "Amount should be compressed 10e18");
+        assertEq(yesTotal, expectedAmount, "Amount should be scaled 10e18");
     }
 
     /**
      * @notice Tests that small amounts (1 token) are correctly parsed
      * @dev Small amounts use fewer significant bytes in LE format
-     *      Amounts are compressed due to Aztec's trailing-zero stripping
+     *      WormholeReceiver scales compressed amounts by AMOUNT_SCALE_FACTOR
      */
     function test_betPayload_smallAmount_parsesCorrectly() public {
         uint256 smallAmount = 1 * 10**18; // 1 token (0xDE0B6B3A7640000 = 8 bytes)
@@ -329,15 +332,15 @@ contract PayloadFormatTest is IntegrationBase {
         bytes memory vaa = createMockVaa(payload);
         wormholeReceiver.verify(vaa);
 
-        uint256 expectedAmount = _computeCompressedAmount(smallAmount);
+        uint256 expectedAmount = _computeScaledAmount(smallAmount);
         (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(marketId);
-        assertEq(yesTotal, expectedAmount, "Small amount should be parsed correctly (compressed)");
+        assertEq(yesTotal, expectedAmount, "Small amount should be parsed correctly (scaled)");
     }
 
     /**
      * @notice Tests that large amounts (10000 tokens) are correctly parsed
      * @dev Large amounts use more significant bytes in LE format
-     *      Amounts are compressed due to Aztec's trailing-zero stripping
+     *      WormholeReceiver scales compressed amounts by AMOUNT_SCALE_FACTOR
      */
     function test_betPayload_largeAmount_parsesCorrectly() public {
         uint256 largeAmount = 10000 * 10**18; // 10000 tokens (0x21E19E0C9BAB2400000 = 11 bytes)
@@ -355,17 +358,18 @@ contract PayloadFormatTest is IntegrationBase {
         bytes memory vaa = createMockVaa(payload);
         wormholeReceiver.verify(vaa);
 
-        uint256 expectedAmount = _computeCompressedAmount(largeAmount);
+        uint256 expectedAmount = _computeScaledAmount(largeAmount);
         (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(largeMarketId);
-        assertEq(yesTotal, expectedAmount, "Large amount should be parsed correctly (compressed)");
+        assertEq(yesTotal, expectedAmount, "Large amount should be parsed correctly (scaled)");
     }
 
     /**
      * @notice Tests that very small amounts (1 wei) are correctly parsed
      * @dev Edge case: minimal amount that should still work
+     *      NOTE: Values without trailing zeros (like 1) get scaled up by AMOUNT_SCALE_FACTOR
      */
     function test_betPayload_verySmallAmount_parsesCorrectly() public {
-        uint256 tinyAmount = 1; // 1 wei (0x01 = 1 byte)
+        uint256 tinyAmount = 1; // 1 wei (0x01 = 1 byte, no trailing zeros)
 
         bytes32 betId = keccak256("tiny_bet");
         bytes memory payload = createBetPayload(marketId, betId, true, tinyAmount);
@@ -373,8 +377,10 @@ contract PayloadFormatTest is IntegrationBase {
         bytes memory vaa = createMockVaa(payload);
         wormholeReceiver.verify(vaa);
 
+        // 1 has no trailing zeros, so compressed = 1, scaled = 1 * 65536 = 65536
+        uint256 expectedAmount = _computeScaledAmount(tinyAmount);
         (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(marketId);
-        assertEq(yesTotal, tinyAmount, "Tiny amount should be parsed correctly");
+        assertEq(yesTotal, expectedAmount, "Tiny amount should be parsed correctly (scaled)");
     }
 
     /**
