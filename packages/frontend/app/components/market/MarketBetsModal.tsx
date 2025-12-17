@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useMarketBets } from '@/hooks/useMarketBets'
 import { MarketBetsService } from '@/services/market'
 import { Market, ProcessedBet } from '@/types'
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 
 interface MarketBetsModalProps {
   isOpen: boolean
