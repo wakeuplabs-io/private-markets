@@ -2,7 +2,6 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useWallet } from '@/context'
 import { useAdmin } from '@/hooks/useAdmin'
@@ -60,10 +59,9 @@ const Header: React.FC<HeaderProps> = ({
 
             <Link
               href="/admin"
-              className="flex items-center space-x-2 px-3 py-2 text-xs bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-md transition-colors"
+              className="px-3 py-2 text-xs bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-md transition-colors"
             >
-              <Settings className="w-4 h-4" />
-              <span>Admin</span>
+              Create Market
             </Link>
           </nav>
         </div>

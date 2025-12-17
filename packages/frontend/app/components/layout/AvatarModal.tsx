@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import ConnectButton from '@/components/ui/ConnectButton'
 import { TokenInfoBadge } from '@/components/ui/TokenInfo'
@@ -8,89 +8,23 @@ import { EVMTokenBalance } from '@/components/ui/EVMTokenBalance'
 import { useDefaultTokenInfo } from '@/hooks/useTokenInfo'
 import { useUSDCBalance } from '@/hooks/useEVMTokenBalance'
 import { useWallet } from '@/context'
-import { AztecConnectionBadge } from '@/components/AztecConnectionStatus'
 import { usePXEManager } from '@/hooks/pxe/usePXEManager'
 import dynamic from 'next/dynamic'
 import { useAccount } from 'wagmi'
+import { RefreshCw, X } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 
 const EvmConnectButton = dynamic(
   () => import('@/components/ui/EvmConnectButton').then(mod => ({ default: mod.EvmConnectButton })),
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center space-x-2">
-        <div className="px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md">
-          Loading...
-        </div>
+      <div className="px-3 py-2 text-sm text-muted-foreground bg-muted rounded-md">
+        Loading...
       </div>
     )
   }
 )
-
-const NetworkBadge = () => {
-  const { chain, isConnected } = useAccount()
-
-  if (!isConnected || !chain) {
-    return (
-      <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg">
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-          <span className="text-sm text-muted-foreground">Not connected</span>
-        </div>
-      </div>
-    )
-  }
-
-  const getNetworkInfo = () => {
-    switch (chain.id) {
-      case 421614:
-        return {
-          name: 'Arbitrum Sepolia',
-          color: 'blue',
-          bgColor: 'bg-blue-500/20',
-          borderColor: 'border-blue-500/30',
-          textColor: 'text-blue-400',
-          dotColor: 'bg-blue-400'
-        }
-      case 31337:
-        return {
-          name: 'Anvil Local',
-          color: 'purple',
-          bgColor: 'bg-purple-500/20',
-          borderColor: 'border-purple-500/30',
-          textColor: 'text-purple-400',
-          dotColor: 'bg-purple-400'
-        }
-      default:
-        return {
-          name: chain.name,
-          color: 'gray',
-          bgColor: 'bg-gray-500/20',
-          borderColor: 'border-gray-500/30',
-          textColor: 'text-gray-400',
-          dotColor: 'bg-gray-400'
-        }
-    }
-  }
-
-  const networkInfo = getNetworkInfo()
-
-  return (
-    <div className={cn('px-4 py-3 border rounded-lg', networkInfo.bgColor, networkInfo.borderColor)}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className={cn('w-2 h-2 rounded-full', networkInfo.dotColor)}></div>
-          <span className={cn('text-sm font-medium', networkInfo.textColor)}>
-            {networkInfo.name}
-          </span>
-        </div>
-        <span className={cn('text-xs', networkInfo.textColor, 'opacity-70')}>
-          Chain ID: {chain.id}
-        </span>
-      </div>
-    </div>
-  )
-}
 
 interface AvatarButtonProps {
   className?: string
@@ -130,28 +64,42 @@ interface AvatarModalProps {
 }
 
 const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
-  const { status: walletStatus, isConnected, disconnectWallet } = useWallet()
+  const { status: walletStatus, isConnected } = useWallet()
   const tokenInfoResult = useDefaultTokenInfo()
   const evmTokenResult = useUSDCBalance()
   const pxeState = usePXEManager()
-  const connectionKey = `${walletStatus}-${isConnected}`
-  const { tokenInfo, isLoading, error } = tokenInfoResult
+  const { isConnected: isEvmConnected } = useAccount()
 
-  const clearLocalStorage = () => {
+  const connectionKey = `${walletStatus}-${isConnected}`
+  const { tokenInfo, isLoading, error, refetch: refetchAztec } = tokenInfoResult
+  const { refetch: refetchEvm } = evmTokenResult
+
+  // State for clear cache confirmation
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+
+  // Auto-refresh when pxeState.busy changes from true to false
+  const prevBusy = useRef(pxeState.busy)
+  useEffect(() => {
+    if (prevBusy.current && !pxeState.busy) {
+      refetchAztec()
+      refetchEvm()
+    }
+    prevBusy.current = pxeState.busy
+  }, [pxeState.busy, refetchAztec, refetchEvm])
+
+  // Refetch on modal open
+  useEffect(() => {
+    if (isOpen) {
+      refetchAztec()
+      refetchEvm()
+    }
+  }, [isOpen, refetchAztec, refetchEvm])
+
+  const handleClearCache = () => {
     if (typeof window !== 'undefined') {
       localStorage.clear()
       window.location.reload()
     }
-  }
-
-  const handleDisconnect = () => {
-    disconnectWallet()
-    onClose()
-  }
-
-  const handleClearCache = () => {
-    clearLocalStorage()
-    onClose()
   }
 
   if (!isOpen) return null
@@ -161,114 +109,135 @@ const AvatarModal: React.FC<AvatarModalProps> = ({ isOpen, onClose }) => {
       <div
         className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
         onClick={(e) => {
-          e.stopPropagation();
-          onClose();
+          e.stopPropagation()
+          onClose()
         }}
       />
-      
+
       <div
-        className="fixed top-20 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 min-h-[400px] z-50 bg-card border border-border rounded-lg shadow-lg p-4 space-y-4"
+        className="fixed top-20 right-4 w-80 max-h-[calc(100vh-100px)] overflow-y-auto overflow-x-hidden z-50 bg-card border border-border rounded-lg shadow-lg p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-foreground">User Menu</h3>
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-border">
+          <h3 className="font-semibold text-foreground">Wallet Manager</h3>
           <button
             onClick={(e) => {
-              e.stopPropagation();
-              onClose();
+              e.stopPropagation()
+              onClose()
             }}
             className="p-1 hover:bg-muted rounded-md transition-colors"
             type="button"
           >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">Active Network</div>
-          <NetworkBadge />
-          <EvmConnectButton />
-
-        </div>
-
-        <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">Aztec Network</div>
-          <div className="space-y-2">
-            <AztecConnectionBadge />
-          </div>
-        </div>
-
+        {/* Operation Status - Show when busy */}
         {pxeState.busy && (
-          <div className="space-y-3">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Operation Status
+          <div className="py-3 border-b border-border">
+            <div className="flex items-center space-x-3">
+              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span className="text-sm text-foreground">
+                {pxeState.message}
+              </span>
             </div>
-            <div className="px-4 py-3 bg-primary/10 border border-primary/30 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                <span className="text-sm text-foreground font-medium">
-                  {pxeState.message}
-                </span>
+            {pxeState.queue.length > 0 && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                {pxeState.queue.length} operation{pxeState.queue.length > 1 ? 's' : ''} queued
               </div>
-              {pxeState.queue.length > 0 && (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  {pxeState.queue.length} operation{pxeState.queue.length > 1 ? 's' : ''} queued
-                </div>
-              )}
-            </div>
+            )}
           </div>
         )}
 
-        <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">Token Information (Aztec)</div>
-          <TokenInfoBadge
-            tokenInfo={tokenInfo}
-            loading={isLoading}
-            error={error}
-            key={connectionKey}
-          />
+        {/* AZTEC SECTION */}
+        <div className="space-y-3 py-3">
+          <h4 className="text-sm font-medium text-primary">Aztec</h4>
+
+          <ConnectButton />
+
+          {/* Balance with refresh */}
+          {isConnected && (
+            <div className="flex items-center justify-between">
+              <TokenInfoBadge
+                tokenInfo={tokenInfo}
+                loading={isLoading}
+                error={error}
+                key={connectionKey}
+              />
+              <button
+                onClick={() => refetchAztec()}
+                disabled={isLoading}
+                className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5 text-muted-foreground", isLoading && "animate-spin")} />
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">EVM Token Balance</div>
-          <EVMTokenBalance
-            tokenInfo={evmTokenResult.tokenInfo}
-            balance={evmTokenResult.balance}
-            loading={evmTokenResult.isLoading}
-            error={evmTokenResult.error}
-          />
+        <div className="border-t border-border" />
+
+        {/* EVM SECTION */}
+        <div className="space-y-3 py-3">
+          <h4 className="text-sm font-medium text-primary">EVM</h4>
+
+          <EvmConnectButton />
+
+          {/* Balance with refresh */}
+          {isEvmConnected && (
+            <div className="flex items-center justify-between">
+              <EVMTokenBalance
+                tokenInfo={evmTokenResult.tokenInfo}
+                balance={evmTokenResult.balance}
+                loading={evmTokenResult.isLoading}
+                error={evmTokenResult.error}
+              />
+              <button
+                onClick={() => refetchEvm()}
+                disabled={evmTokenResult.isLoading}
+                className="p-1 hover:bg-muted rounded transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5 text-muted-foreground", evmTokenResult.isLoading && "animate-spin")} />
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">Actions</div>
-          <div className="space-y-2">
+        <div className="border-t border-border" />
+
+        {/* Footer - Clear Cache with confirmation */}
+        <div className="pt-3">
+          {showClearConfirm ? (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Clear all data?</span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowClearConfirm(false)}
+                  className="h-7 px-2 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleClearCache}
+                  className="h-7 px-2 text-xs"
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          ) : (
             <button
-              onClick={handleDisconnect}
-              className="w-full px-3 py-2 text-sm bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 rounded-md transition-colors text-left"
-            >
-              Disconnect Aztec
-            </button>
-            <button
-              onClick={handleClearCache}
-              className="w-full px-3 py-2 text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-md transition-colors text-left"
+              onClick={() => setShowClearConfirm(true)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               Clear Cache
             </button>
-            <div className="pt-2">
-              <ConnectButton />
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </>

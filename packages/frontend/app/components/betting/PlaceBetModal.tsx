@@ -3,9 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-// Bet option now comes from MarketCard click; selector removed
 import { AmountInput } from './AmountInput'
-import { SafeRender, InvalidDataState, LoadingState } from '@/components/ui/Fallbacks'
+import { SafeRender, InvalidDataState } from '@/components/ui/Fallbacks'
 import { cn } from '@/lib/utils'
 import { Clock, Lock } from 'lucide-react'
 import { Market, MarketOption, PlaceBetData } from '@/types'
@@ -23,7 +22,6 @@ interface PlaceBetModalProps {
   market: Market | null | undefined
   selectedOption: MarketOption | null
   onPlaceBet: (betData: PlaceBetData) => Promise<void>
-  isLoading?: boolean
   className?: string
 }
 
@@ -33,20 +31,40 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
   market,
   selectedOption: selectedOptionProp,
   onPlaceBet,
-  isLoading = false,
   className
 }) => {
-  // Option now provided externally
   const [selectedOption, setSelectedOption] = useState<MarketOption | null>(null)
-  
+  const [amount, setAmount] = useState('')
+  const [error, setError] = useState('')
+
+  // Progress state - managed here to persist across renders
+  const [progress, setProgress] = useState(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   // Sync selected option from parent when modal opens or prop changes
   useEffect(() => {
     if (isOpen) {
       setSelectedOption(selectedOptionProp ?? null)
     }
   }, [isOpen, selectedOptionProp])
-  const [amount, setAmount] = useState('')
-  const [error, setError] = useState('')
+
+  // Progress animation for 1 minute wait
+  useEffect(() => {
+    if (!isSubmitting) {
+      setProgress(0)
+      return
+    }
+
+    const duration = 80000 // 80 seconds
+    const interval = 100 // Update every 100ms
+    const increment = (interval / duration) * 100
+
+    const timer = setInterval(() => {
+      setProgress(prev => prev >= 100 ? 100 : prev + increment)
+    }, interval)
+
+    return () => clearInterval(timer)
+  }, [isSubmitting])
 
   const validateAmount = (value: string) => {
     const numValue = parseFloat(value)
@@ -88,6 +106,7 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
       return
     }
 
+    setIsSubmitting(true)
     try {
       await onPlaceBet({
         marketId: market.id,
@@ -100,11 +119,13 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to place bet')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleClose = () => {
-    if (!isLoading) {
+    if (!isSubmitting) {
       setSelectedOption(null)
       setAmount('')
       setError('')
@@ -154,8 +175,9 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
               amount={amount}
               handleAmountChange={handleAmountChange}
               error={error}
-              isValid={isValid || false}
-              isLoading={isLoading}
+              isValid={!!isValid}
+              isSubmitting={isSubmitting}
+              progress={progress}
               handleSubmit={handleSubmit}
               handleClose={handleClose}
             />
@@ -166,15 +188,15 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
   )
 }
 
-// Separate content component for better organization
 interface PlaceBetModalContentProps {
   market: Market
   selectedOption: MarketOption | null
   amount: string
   handleAmountChange: (amount: string) => void
   error: string
-  isValid: boolean | string
-  isLoading: boolean
+  isValid: boolean
+  isSubmitting: boolean
+  progress: number
   handleSubmit: () => void
   handleClose: () => void
 }
@@ -186,7 +208,8 @@ const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
   handleAmountChange,
   error,
   isValid,
-  isLoading,
+  isSubmitting,
+  progress,
   handleSubmit,
   handleClose
 }) => {
@@ -209,19 +232,19 @@ const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
         <h3 className="font-semibold text-foreground text-lg">
           {market.question || 'Untitled Market'}
         </h3>
-        
+
         <div className="space-y-2">
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Selected option:</span>
             <span className="font-medium text-foreground">{selectedOption ? selectedOption === 'yes' ? 'Yes' : 'No' : '—'}</span>
           </div>
-          
+
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Closing date:</span>
             <span className="font-medium text-foreground">{formatClosingDate()}</span>
           </div>
         </div>
-        
+
         {market.disclaimer && (
           <div className="text-xs text-muted-foreground italic pt-2 border-t border-border/50">
             {market.disclaimer}
@@ -240,7 +263,7 @@ const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
           variant="secondary"
           size="md"
           onClick={handleClose}
-          disabled={isLoading}
+          disabled={isSubmitting}
           className="flex-1"
         >
           Cancel
@@ -249,18 +272,24 @@ const PlaceBetModalContent: React.FC<PlaceBetModalContentProps> = ({
           variant="default"
           size="md"
           onClick={handleSubmit}
-          disabled={!isValid || isLoading}
-          className="flex-1"
-        >
-          {isLoading ? (
-            <LoadingState
-              message="Placing..."
-              variant="minimal"
-              className="justify-center"
-            />
-          ) : (
-            'Place Bet'
+          disabled={!isValid || isSubmitting}
+          className={cn(
+            "flex-1 relative overflow-hidden",
+            isSubmitting && "disabled:opacity-100 bg-primary/60"
           )}
+        >
+          {isSubmitting && (
+            <div
+              className="absolute inset-0 transition-all duration-100 ease-linear"
+              style={{
+                width: `${progress}%`,
+                background: 'linear-gradient(90deg, hsl(var(--accent)) 0%, hsl(var(--accent) / 0.7) 100%)'
+              }}
+            />
+          )}
+          <span className="relative z-10">
+            {isSubmitting ? `Placing... ${Math.round(progress)}%` : 'Place Bet'}
+          </span>
         </Button>
       </div>
     </div>

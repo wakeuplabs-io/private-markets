@@ -89,12 +89,12 @@ export class MarketService {
 
     if (!userAddress) {
       throw new Error('User address is required')
-    }
+    } 
 
     try {
       const closingTimestamp = BigInt(Math.floor(closingTime.getTime() / 1000))
-      // USDC has 6 decimals
-      const tokenAmount = parseUnits(totalPool.toString(), 6)
+      const TOKEN_DECIMALS = await evmTokenService.getTokenDecimals(USDC_ADDRESS as `0x${string}`)
+      const tokenAmount = parseUnits(totalPool.toString(), TOKEN_DECIMALS)
 
       const currentAllowance = await evmTokenService.checkAllowance(
         USDC_ADDRESS,

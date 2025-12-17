@@ -219,6 +219,15 @@ export function CreateMarketModal({
                         </p>
                     </div>
 
+                    <div className="bg-primary/10 border border-primary/20 rounded-lg p-3">
+                        <p className="text-sm text-primary font-medium">
+                            Pool Funding: 1,000 tokens
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            This market will be funded with 1,000 tokens from your EVM wallet to pay winning bettors.
+                        </p>
+                    </div>
+
                     <div className="flex justify-end space-x-3 pt-4 flex-nowrap">
                         <Button
                             type="button"

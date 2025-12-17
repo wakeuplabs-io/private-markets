@@ -177,6 +177,19 @@ export class EVMTokenService {
       throw error
     }
   }
+  async getTokenDecimals(tokenAddress: `0x${string}`): Promise<number> {
+    try {
+      const decimals = await readContract(config, {
+        address: tokenAddress,
+        abi: ERC20_ABI,
+        functionName: 'decimals',
+      })
+      return Number(decimals)
+    } catch (error) {
+      console.error('Failed to get token decimals:', error)
+      throw new Error(`Failed to get token decimals: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
 
   async getTokenInfo(tokenAddress: `0x${string}`): Promise<EVMTokenInfo> {
     try {

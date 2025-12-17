@@ -51,47 +51,49 @@ export function EvmConnectButton({ className }: EvmConnectButtonProps) {
     // Show switch network button if on wrong network
     if (isWrongNetwork) {
       return (
-        <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-2 px-3 py-2 bg-yellow-500/20 border border-yellow-500/30 rounded-md">
-            <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-            <span className="text-xs text-yellow-400 font-medium">
-              Wrong Network
-            </span>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+              <span className="text-xs text-yellow-400 font-medium">
+                Wrong Network
+              </span>
+            </div>
+            <button
+              onClick={() => disconnect()}
+              className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              title="Disconnect EVM wallet"
+            >
+              Disconnect
+            </button>
           </div>
           <button
             onClick={handleSwitchToArbitrum}
-            className="px-3 py-2 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-md transition-colors"
+            className="w-full px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 rounded-md transition-colors"
             title="Switch to Arbitrum Sepolia"
           >
-            Switch to Arbitrum
-          </button>
-          <button
-            onClick={() => disconnect()}
-            className="px-3 py-2 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-md transition-colors"
-            title="Disconnect EVM wallet"
-          >
-            Disconnect
+            Switch to Arbitrum Sepolia
           </button>
         </div>
       )
     }
 
     return (
-      <div className="flex items-center space-x-2">
-        <div className="flex items-center space-x-2 px-3 py-2 bg-green-500/20 border border-green-500/30 rounded-md">
-          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-          <span className="text-xs text-green-400 font-medium">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+          <span className="text-xs text-green-400 font-medium truncate">
             {formatAddress(address)}
           </span>
           {chain && (
-            <span className="text-xs text-green-400/70">
-              ({getChainDisplay()})
+            <span className="text-xs text-muted-foreground truncate">
+              {getChainDisplay()}
             </span>
           )}
         </div>
         <button
           onClick={() => disconnect()}
-          className="px-3 py-2 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-md transition-colors"
+          className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
           title="Disconnect EVM wallet"
         >
           Disconnect

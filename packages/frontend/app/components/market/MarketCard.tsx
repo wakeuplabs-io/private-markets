@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import {
     SafeRender,
@@ -80,6 +80,33 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
     onSelectMarket,
 }) => {
     const closingDate = safeGetMarketClosingDate(market);
+    const [timeRemaining, setTimeRemaining] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!closingDate) return;
+
+        const updateCountdown = () => {
+            const now = new Date();
+            const diff = closingDate.getTime() - now.getTime();
+
+            // If more than 24 hours or already closed, no countdown
+            if (diff <= 0 || diff > 24 * 60 * 60 * 1000) {
+                setTimeRemaining(null);
+                return;
+            }
+
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+            setTimeRemaining(`${hours}h ${minutes}m ${seconds}s`);
+        };
+
+        updateCountdown();
+        const interval = setInterval(updateCountdown, 1000);
+
+        return () => clearInterval(interval);
+    }, [closingDate]);
 
     const formatDate = (date: Date | null | undefined) => {
         return safeFormatDate(
@@ -168,7 +195,11 @@ const MarketCardContent: React.FC<MarketCardContentProps> = ({
                         <polyline points="12,6 12,12 16,14" />
                     </svg>
                     <span className="text-xs text-muted-foreground">
-                        {formatDate(closingDate)}
+                        {timeRemaining ? (
+                            <span className="text-orange-400 font-medium">{timeRemaining}</span>
+                        ) : (
+                            formatDate(closingDate)
+                        )}
                     </span>
                 </div>
 

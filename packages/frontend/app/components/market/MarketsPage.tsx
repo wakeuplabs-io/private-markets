@@ -42,7 +42,7 @@ export function MarketsPage() {
     } | null>(null);
 
     const { activeMarkets, isLoading } = useUserMarkets();
-    const { placeBet, isLoading: isPlacingBet, clearError } = useVault();
+    const { placeBet, clearError } = useVault();
     const { wallet, connectWallet, isConnected } = useWallet();
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -143,7 +143,6 @@ export function MarketsPage() {
                     market={selectedMarket}
                     selectedOption={selectedOption}
                     onPlaceBet={handlePlaceBet}
-                    isLoading={isPlacingBet}
                 />
                 <BetSuccessModal
                     isOpen={isSuccessModalOpen}
