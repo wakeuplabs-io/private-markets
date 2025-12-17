@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { LoadingState } from '@/components/ui/Fallbacks'
 import { cn } from '@/lib/utils'
 import { UserBet } from '@/types'
 import { useAccount } from 'wagmi'
@@ -45,6 +44,7 @@ const ClaimRecipientModal: React.FC<ClaimRecipientModalProps> = ({
   const [recipientOption, setRecipientOption] = useState<RecipientOption>('connected')
   const [customAddress, setCustomAddress] = useState('')
   const [error, setError] = useState('')
+  const [progress, setProgress] = useState(0)
 
   // Reset state when modal opens
   useEffect(() => {
@@ -52,8 +52,27 @@ const ClaimRecipientModal: React.FC<ClaimRecipientModalProps> = ({
       setRecipientOption(isConnected ? 'connected' : 'custom')
       setCustomAddress('')
       setError('')
+      setProgress(0)
     }
   }, [isOpen, isConnected])
+
+  // Progress animation for 80 seconds wait
+  useEffect(() => {
+    if (!isLoading) {
+      setProgress(0)
+      return
+    }
+
+    const duration = 80000 // 80 seconds
+    const interval = 100 // Update every 100ms
+    const increment = (interval / duration) * 100
+
+    const timer = setInterval(() => {
+      setProgress(prev => prev >= 100 ? 100 : prev + increment)
+    }, interval)
+
+    return () => clearInterval(timer)
+  }, [isLoading])
 
   const validateCustomAddress = (address: string): string => {
     if (!address) return 'Address is required'
@@ -140,14 +159,14 @@ const ClaimRecipientModal: React.FC<ClaimRecipientModalProps> = ({
               </span>
             </div>
 
-            {bet.potentialReward && (
+            {/* {bet.potentialReward && (
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground">Potential reward:</span>
                 <span className="font-medium text-green-400">
                   ~{bet.potentialReward.toFixed(2)} USDC
                 </span>
               </div>
-            )}
+            )} */}
           </div>
         </div>
 
@@ -202,7 +221,6 @@ const ClaimRecipientModal: React.FC<ClaimRecipientModalProps> = ({
             </div>
           </div>
 
-          {/* Option: Custom Address */}
           <div
             className={cn(
               "p-4 rounded-lg border transition-all",
@@ -273,17 +291,23 @@ const ClaimRecipientModal: React.FC<ClaimRecipientModalProps> = ({
             size="md"
             onClick={handleSubmit}
             disabled={!isValid || isLoading}
-            className="flex-1"
-          >
-            {isLoading ? (
-              <LoadingState
-                message="Claiming..."
-                variant="minimal"
-                className="justify-center"
-              />
-            ) : (
-              'Claim Reward'
+            className={cn(
+              "flex-1 relative overflow-hidden",
+              isLoading && "disabled:opacity-100 bg-primary/60"
             )}
+          >
+            {isLoading && (
+              <div
+                className="absolute inset-0 transition-all duration-100 ease-linear"
+                style={{
+                  width: `${progress}%`,
+                  background: 'linear-gradient(90deg, hsl(var(--accent)) 0%, hsl(var(--accent) / 0.7) 100%)'
+                }}
+              />
+            )}
+            <span className="relative z-10">
+              {isLoading ? `Claiming... ${Math.round(progress)}%` : 'Claim Reward'}
+            </span>
           </Button>
         </div>
       </div>
