@@ -25,6 +25,8 @@ export type {
   ClaimReward,
   UserBet,
   UserActivityData,
+  ProcessedBet,
+  ProcessedBetStats,
 } from './betting'
 
 // Wallet types

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { MarketGrid } from "./MarketGrid";
+import { MarketBetsModal } from "./MarketBetsModal";
 import { PlaceBetModal, BetSuccessModal } from "@/components/betting";
 import { Market, PlaceBetData, MarketOption } from "@/types";
 import { useVault } from "@/hooks/useVault";
@@ -31,6 +32,7 @@ const MarketsEmptyState = () => {
 export function MarketsPage() {
     const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
     const [isBetModalOpen, setIsBetModalOpen] = useState(false);
+    const [isBetsModalOpen, setIsBetsModalOpen] = useState(false);
     const [selectedOption, setSelectedOption] = useState<MarketOption | null>(null);
 
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
@@ -115,6 +117,14 @@ export function MarketsPage() {
         }
     };
 
+    const handleSelectMarket = (market: Market) => {
+        setSelectedMarket(market);
+        setIsBetsModalOpen(true);
+    };
+
+    const handleCloseBetsModal = () => {
+        setIsBetsModalOpen(false);
+    };
 
     return (
         <>
@@ -132,6 +142,7 @@ export function MarketsPage() {
                 <MarketGrid
                     markets={activeMarkets}
                     onOptionClick={handleOptionClick}
+                    onSelectMarket={handleSelectMarket}
                     onConnectWallet={handleConnectWallet}
                     isWalletConnected={isConnected}
                     isLoading={isLoading}
@@ -151,6 +162,11 @@ export function MarketsPage() {
                     selectedOption={successBetData?.option ?? null}
                     amount={successBetData?.amount ?? 0}
                     txHash={successBetData?.txHash}
+                />
+                <MarketBetsModal
+                    isOpen={isBetsModalOpen}
+                    onClose={handleCloseBetsModal}
+                    market={selectedMarket}
                 />
             </div>
         </>

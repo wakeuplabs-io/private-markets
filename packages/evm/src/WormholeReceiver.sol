@@ -360,19 +360,23 @@ contract WormholeReceiver {
 
     /**
      * @dev Processes claim authorization payload from Aztec Wormhole
-     * Payload format:
+     * Payload format (compressed, trailing zeros removed from chunks):
      *   Bytes 0-31: txId (32 bytes)
-     *   Byte 32: messageType (0x02) - already validated in verify()
+     *   Byte 32: messageType (0x02)
      *   Bytes 33-63: marketId in Little Endian (31 bytes)
      *   Bytes 64-94: nullifier in Little Endian (31 bytes)
-     *   Bytes 95-125: recipient in Little Endian (20 bytes for address) - FIXED SIZE
-     *   Bytes 126+: betAmount in Little Endian (variable, at END)
+     *   Bytes 95+: recipient chunk (variable, ~21 bytes with leading zeros)
+     *   After recipient: betAmount chunk (variable, ~8 bytes with leading zeros)
+     *
+     * NOTE: Recipient and amount chunks have leading zero padding that must be skipped.
+     * The recipient is a 20-byte ETH address in LE format.
      */
     function _processClaimAuthPayload(bytes memory payload) internal {
         // Verify we're not running on a fork
         if (isFork()) revert ChainIdMismatch();
 
-        // CLAIM message needs at least: txId(32) + type(1) + marketId(31) + nullifier(31) + recipient(31) + amount(1)
+        // CLAIM minimum: txId(32) + type(1) + marketId(31) + nullifier(31) + recipient(~21) + amount(1) = 117
+        if (payload.length < 117) revert PayloadTooShort(payload.length, 117);
 
         // Bytes 33-63: marketId in LE (31 bytes)
         uint256 marketId = _readUint256LE(payload, TX_ID_SIZE + 1, CHUNK_SIZE);
@@ -380,12 +384,22 @@ contract WormholeReceiver {
         // Bytes 64-94: nullifier in LE (31 bytes)
         bytes32 nullifier = _readBytes32LE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE, CHUNK_SIZE);
 
-        // Bytes 95-125: recipient in LE (20 bytes address in 31-byte chunk) - FIXED SIZE
-        address recipient = _readAddressLE(payload, TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE);
+        // Bytes 95+: recipient chunk (variable, ~21 bytes with leading zero padding)
+        // Skip the leading zero bytes and read 20 bytes for the address
+        uint256 recipientChunkStart = TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE; // 95
 
-        // Bytes 126+: betAmount - VARIABLE SIZE, read from END of payload
-        uint256 fixedHeaderSize = TX_ID_SIZE + 1 + CHUNK_SIZE + CHUNK_SIZE + CHUNK_SIZE; // 126
-        uint256 compressedBetAmount = _readAmountChunk(payload, fixedHeaderSize);
+        // Find first non-zero byte in recipient chunk (skip leading zeros)
+        uint256 addrStart = recipientChunkStart;
+        while (addrStart < payload.length && uint8(payload[addrStart]) == 0) {
+            addrStart++;
+        }
+
+        // Read 20 bytes as address in LE
+        address recipient = _readAddressLE(payload, addrStart);
+
+        // Amount starts 20 bytes after addrStart
+        uint256 amountStart = addrStart + 20;
+        uint256 compressedBetAmount = _readAmountChunk(payload, amountStart);
 
         // Scale up to restore original amount (Aztec strips 2 trailing zero bytes)
         uint256 betAmount = compressedBetAmount * AMOUNT_SCALE_FACTOR;

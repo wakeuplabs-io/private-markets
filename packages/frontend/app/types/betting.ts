@@ -69,3 +69,30 @@ export interface UserActivityData {
   totalClaimable: number
   totalClaimed: number
 }
+
+/**
+ * Represents a bet that has been processed on-chain (from BetProcessed event)
+ * This is different from UserBet which is stored locally
+ */
+export interface ProcessedBet {
+  marketId: string
+  betId: string
+  outcome: boolean  // true = Yes, false = No
+  amount: bigint
+  blockNumber: bigint
+  transactionHash: string
+  timestamp?: number  // Optional, requires extra call to get block timestamp
+}
+
+/**
+ * Statistics calculated from ProcessedBet events for a market
+ */
+export interface ProcessedBetStats {
+  totalBets: number
+  yesBetsCount: number
+  noBetsCount: number
+  totalYesAmount: bigint
+  totalNoAmount: bigint
+  totalAmount: bigint
+  yesPercentage: number
+}

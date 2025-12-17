@@ -6,3 +6,5 @@
 
 export { MarketService } from './marketService';
 export type { ContractMarket, MarketStats } from './marketService';
+
+export { MarketBetsService } from './MarketBetsService';

@@ -75,10 +75,10 @@ const PlaceBetModal: React.FC<PlaceBetModalProps> = ({
       return 'Amount must be greater than 0'
     }
     if (numValue < 1) {
-      return 'Minimum bet is 1 USDC'
+      return 'Minimum bet is 1 token'
     }
     if (numValue > 254) {
-      return 'Maximum bet is 254 USDC'
+      return 'Maximum bet is 254 tokens'
     }
     return ''
   }
