@@ -1,0 +1,18 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - nvm use 22
+        - yarn install --ignore-engines
+    build:
+      commands:
+        - cd packages/frontend && NODE_OPTIONS="--max-old-space-size=4096" yarn build
+  artifacts:
+    baseDirectory: packages/frontend/out
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+      - packages/frontend/node_modules/**/*

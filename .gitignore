@@ -1,4 +1,42 @@
 packages/aztec-contracts/emitter/target
-/node_modules
+**/node_modules
 .DS_Store
 package-lock.json
+CLAUDE.md
+.claude
+
+**/target
+!packages/frontend/app/lib/target
+
+
+# Foundry files
+**/cache
+out-via-ir
+lcov.info
+
+# Config files
+.env
+
+# Avoid ignoring gitkeep
+!/**/.gitkeep
+
+# Keep the latest deployment only
+**/broadcast/*/*/*
+
+# Out dir
+**/out
+crytic-export
+
+docs
+
+*.mdb
+
+# Aztec PXE store
+**/pxe-store
+
+# SST
+.sst
+sst-env.d.ts
+
+# Scripts
+scripts/

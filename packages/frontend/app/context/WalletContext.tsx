@@ -1,0 +1,311 @@
+'use client'
+
+import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
+import { walletService, type WalletInfo } from "@/services/wallet"
+import type { AccountStatus } from "@/types/wallet"
+import { tokenService } from "@/services/token"
+import { vaultService } from "@/services/vault"
+import { CONTRACT_ADDRESSES } from "@/config/contracts"
+import type { WalletConnector } from "@/lib/wallet"
+
+interface WalletContextType {
+  status: 'disconnected' | 'connecting' | 'connected' | 'error'
+  accountStatus: AccountStatus
+  wallet: WalletInfo | null
+  error: string | null
+  connectWallet: (connector: WalletConnector) => Promise<void>
+  createAccount: (connector: WalletConnector) => Promise<void>
+  checkAccountStatus: (connector: WalletConnector) => Promise<void>
+  disconnectWallet: () => void
+  clearAccount: () => void
+  resetWallet: () => void
+  isConnected: boolean
+  isConnecting: boolean
+  isCheckingAccount: boolean
+  isCreatingAccount: boolean
+  isInitializingProvider: boolean
+}
+
+const WalletContext = createContext<WalletContextType | undefined>(undefined)
+
+type WalletAction =
+  | { type: 'CONNECT_START' }
+  | { type: 'CONNECT_SUCCESS'; payload: WalletInfo }
+  | { type: 'CONNECT_ERROR'; payload: string }
+  | { type: 'CREATE_ACCOUNT_START' }
+  | { type: 'CREATE_ACCOUNT_SUCCESS'; payload: WalletInfo }
+  | { type: 'CREATE_ACCOUNT_ERROR'; payload: string }
+  | { type: 'CHECK_ACCOUNT_START' }
+  | { type: 'CHECK_ACCOUNT_SUCCESS'; payload: AccountStatus }
+  | { type: 'CHECK_ACCOUNT_ERROR'; payload: string }
+  | { type: 'DISCONNECT' }
+  | { type: 'RESET' }
+  | { type: 'INITIALIZING_PROVIDER'; payload: boolean }
+
+type WalletState = {
+  status: 'disconnected' | 'connecting' | 'connected' | 'error'
+  accountStatus: AccountStatus
+  wallet: WalletInfo | null
+  error: string | null
+  isInitializingProvider: boolean
+}
+
+const initialState: WalletState = {
+  status: 'disconnected',
+  accountStatus: 'checking',
+  wallet: null,
+  error: null,
+  isInitializingProvider: false
+}
+
+function walletReducer(state: WalletState, action: WalletAction): WalletState {
+  switch (action.type) {
+    case 'CONNECT_START':
+      return {
+        ...state,
+        status: 'connecting',
+        error: null
+      }
+    case 'CONNECT_SUCCESS':
+      return {
+        ...state,
+        status: 'connected',
+        accountStatus: 'connected',
+        wallet: action.payload,
+        error: null
+      }
+    case 'CONNECT_ERROR':
+      return {
+        ...state,
+        status: 'error',
+        wallet: null,
+        error: action.payload
+      }
+    case 'CREATE_ACCOUNT_START':
+      return {
+        ...state,
+        status: 'connecting',
+        accountStatus: 'checking',
+        error: null
+      }
+    case 'CREATE_ACCOUNT_SUCCESS':
+      return {
+        ...state,
+        status: 'connected',
+        accountStatus: 'connected',
+        wallet: action.payload,
+        error: null
+      }
+    case 'CREATE_ACCOUNT_ERROR':
+      return {
+        ...state,
+        status: 'error',
+        accountStatus: 'none',
+        error: action.payload
+      }
+    case 'CHECK_ACCOUNT_START':
+      return {
+        ...state,
+        accountStatus: 'checking',
+        error: null
+      }
+    case 'CHECK_ACCOUNT_SUCCESS':
+      return {
+        ...state,
+        accountStatus: action.payload,
+        error: null
+      }
+    case 'CHECK_ACCOUNT_ERROR':
+      return {
+        ...state,
+        accountStatus: 'none',
+        error: action.payload
+      }
+    case 'DISCONNECT':
+      return {
+        ...state,
+        status: 'disconnected',
+        accountStatus: 'none',
+        wallet: null,
+        error: null
+      }
+    case 'RESET':
+      return {
+        ...state,
+        status: 'disconnected',
+        accountStatus: 'none',
+        wallet: null,
+        error: null
+      }
+    case 'INITIALIZING_PROVIDER':
+      return {
+        ...state,
+        isInitializingProvider: action.payload
+      }
+    default:
+      return state
+  }
+}
+
+interface WalletProviderProps {
+  children: ReactNode
+}
+
+export function WalletProvider({ children }: WalletProviderProps) {
+  const [state, dispatch] = useReducer(walletReducer, initialState)
+
+  // Poll for initialization status
+  useEffect(() => {
+    const checkInitStatus = () => {
+      const isInitializing = walletService.isProviderInitializing('aztec')
+      dispatch({ type: 'INITIALIZING_PROVIDER', payload: isInitializing })
+    }
+
+    // Check immediately
+    checkInitStatus()
+
+    // Poll every 500ms while initializing
+    const interval = setInterval(checkInitStatus, 500)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const checkAccountStatus = async (connector: WalletConnector) => {
+    try {
+      dispatch({ type: 'CHECK_ACCOUNT_START' })
+
+      const accountStatus = await walletService.getAccountStatus(connector)
+      dispatch({ type: 'CHECK_ACCOUNT_SUCCESS', payload: accountStatus })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to check account status'
+      dispatch({ type: 'CHECK_ACCOUNT_ERROR', payload: errorMessage })
+    }
+  }
+
+  // Auto-detect account status and reconnect on component mount
+  useEffect(() => {
+    const checkInitialAccountStatusAndReconnect = async () => {
+      try {
+        // Use 'aztec' as the default connector for auto-detection
+        const accountStatus = await walletService.getAccountStatus('aztec')
+        
+        // If an account exists but we're not connected, try to reconnect automatically
+        if (accountStatus === 'exists') {
+          console.log('Found existing account, attempting to reconnect...')
+          // Start connecting state immediately to prevent showing "Connect Wallet" button
+          dispatch({ type: 'CONNECT_START' })
+          
+          try {
+            const walletInfo = await walletService.connectWithPersistence('aztec')
+            console.log('[WalletContext] Auto-reconnect successful:', walletInfo)
+            
+            if (CONTRACT_ADDRESSES.TOKEN) {
+              tokenService.initialize(CONTRACT_ADDRESSES.TOKEN)
+            }
+            
+            dispatch({ type: 'CONNECT_SUCCESS', payload: walletInfo })
+          } catch (reconnectError) {
+            console.warn('Auto-reconnect failed, user will need to connect manually:', reconnectError)
+            // Set account status to 'exists' so user can manually connect
+            dispatch({ type: 'CHECK_ACCOUNT_SUCCESS', payload: 'exists' })
+          }
+        } else {
+          // No account exists, just set the status
+          dispatch({ type: 'CHECK_ACCOUNT_SUCCESS', payload: accountStatus })
+        }
+      } catch (error) {
+        console.warn('Failed to check initial account status:', error)
+        // Set to 'none' if check fails to prevent infinite loading
+        dispatch({ type: 'CHECK_ACCOUNT_SUCCESS', payload: 'none' })
+      }
+    }
+
+    // Only run auto-check on initial mount, not on every re-render
+    checkInitialAccountStatusAndReconnect()
+  }, []) // Empty dependency array ensures this only runs once on mount
+
+  const connectWallet = async (connector: WalletConnector) => {
+    try {
+      dispatch({ type: 'CONNECT_START' })
+
+      // Connect using wallet service
+      const walletInfo = await walletService.connectWithPersistence(connector)
+      console.log('[WalletContext] connectWallet - walletInfo:', walletInfo)
+
+      if (CONTRACT_ADDRESSES.TOKEN) {
+        tokenService.initialize(CONTRACT_ADDRESSES.TOKEN)
+      }
+
+      dispatch({ type: 'CONNECT_SUCCESS', payload: walletInfo })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect wallet'
+      dispatch({ type: 'CONNECT_ERROR', payload: errorMessage })
+    }
+  }
+
+  const disconnectWallet = () => {
+    walletService.disconnect()
+    tokenService.clearCache()
+    vaultService.clearCache()
+    dispatch({ type: 'DISCONNECT' })
+  }
+
+  const clearAccount = () => {
+    walletService.clearAccount()
+    tokenService.clearCache()
+    vaultService.clearCache()
+    dispatch({ type: 'RESET' })
+  }
+
+  const createAccount = async (connector: WalletConnector) => {
+    try {
+      dispatch({ type: 'CREATE_ACCOUNT_START' })
+
+      // Create account using wallet service
+      const walletInfo = await walletService.createAccount(connector)
+      console.log('[WalletContext] createAccount - walletInfo:', walletInfo)
+
+      if (CONTRACT_ADDRESSES.TOKEN) {
+        tokenService.initialize(CONTRACT_ADDRESSES.TOKEN)
+      }
+
+      dispatch({ type: 'CREATE_ACCOUNT_SUCCESS', payload: walletInfo })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create account'
+      dispatch({ type: 'CREATE_ACCOUNT_ERROR', payload: errorMessage })
+    }
+  }
+
+  const resetWallet = () => {
+    dispatch({ type: 'RESET' })
+  }
+
+  const contextValue: WalletContextType = {
+    ...state,
+    connectWallet,
+    createAccount,
+    checkAccountStatus,
+    disconnectWallet,
+    clearAccount,
+    resetWallet,
+    isConnected: state.status === 'connected',
+    isConnecting: state.status === 'connecting',
+    isCheckingAccount: state.accountStatus === 'checking',
+    isCreatingAccount: state.status === 'connecting' && state.accountStatus === 'checking',
+    isInitializingProvider: state.isInitializingProvider
+  }
+
+  return (
+    <WalletContext.Provider value={contextValue}>
+      {children}
+    </WalletContext.Provider>
+  )
+}
+
+export function useWallet() {
+  const context = useContext(WalletContext)
+  if (context === undefined) {
+    throw new Error('useWallet must be used within a WalletProvider')
+  }
+  return context
+}

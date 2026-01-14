@@ -1,0 +1,80 @@
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { BetVaultContractArtifact } from "../../artifacts/BetVault.js";
+import { aztecSetup } from "../lib/aztec-setup.js";
+import { ContractDeployer } from "@aztec/aztec.js/deployment";
+import { Fr } from "@aztec/aztec.js/fields";
+
+async function main(): Promise<void> {
+  console.log("🚀 Starting BetVault deployment...\n");
+
+  // Get Wormhole address from environment variable
+  // const WORMHOLE_ADDRESS = process.env.WORMHOLE_ADDRESS;
+  const WORMHOLE_ADDRESS = "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493";
+
+  await aztecSetup.initialize();
+
+  const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
+  console.log("Deployer address:", deployerAddress.toString());
+
+  const wallet = aztecSetup.getWallet();
+
+  const network = aztecSetup.getNetwork();
+
+  const providedTokenAddress = process.argv[2];
+  let tokenAddress: string;
+  if (providedTokenAddress) {
+    console.log(">> Using token address from argument:", providedTokenAddress);
+    tokenAddress = providedTokenAddress;
+  } else {
+    const existingTokenAddress = aztecSetup.loadContractAddress("token");
+    if (!existingTokenAddress) {
+      console.error("  No token address found. Please:");
+      console.error("   1. Run 'npm run deploy:token' first, OR");
+      console.error("   2. Provide token address as argument: npm run deploy:vault <TOKEN_ADDRESS>");
+      process.exit(1);
+    }
+    console.log(">> Using token address from contracts.json:", existingTokenAddress);
+    tokenAddress = existingTokenAddress;
+  }
+
+  console.log("\n>> Deploying BetVault contract...");
+  const salt = Fr.random();
+
+  const sponsoredPaymentMethod = await aztecSetup.getSponsoredPaymentMethod();
+
+  const deployer = new ContractDeployer(BetVaultContractArtifact, wallet);
+  const tx = deployer.deploy(
+    AztecAddress.fromString(tokenAddress),
+    AztecAddress.fromString(WORMHOLE_ADDRESS),
+    deployerAddress,
+  ).send({
+    contractAddressSalt: salt,
+    from: deployerAddress,
+    ...(sponsoredPaymentMethod ? { fee: { paymentMethod: sponsoredPaymentMethod } } : {}),
+  });
+
+  console.log("Deployment transaction sent, waiting for confirmation...");
+  console.log("   (This may take several minutes on testnet)");
+
+  const receiptAfterMined = await tx.wait({ wallet: wallet });
+  const contract = receiptAfterMined.contract;
+
+  console.log("\n[OK] BetVault deployed successfully!");
+  console.log("   Address:", contract.address.toString());
+
+  aztecSetup.saveContractAddress("vault", contract.address.toString());
+
+  console.log("\n=== DEPLOYMENT SUMMARY ===");
+  console.log("  Network:         ", network);
+  console.log("  Token Contract:  ", tokenAddress);
+  console.log("  Wormhole Address:", WORMHOLE_ADDRESS);
+  console.log("  BetVault Contract:", contract.address.toString());
+  console.log("  Saved to:        ", `deployments/${network}/contracts.json`);
+  console.log("==========================\n");
+}
+
+main().catch((err) => {
+  console.error("\n[ERROR] Error deploying BetVault:");
+  console.error(err);
+  process.exit(1);
+});

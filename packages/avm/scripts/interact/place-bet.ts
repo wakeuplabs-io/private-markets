@@ -1,0 +1,203 @@
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { Fr } from "@aztec/aztec.js/fields";
+import { TokenContract } from "../../artifacts/Token.ts";
+import { BetVaultContract } from "../../artifacts/BetVault.ts";
+import { WormholeContract } from "../../artifacts/Wormhole.ts";
+import { aztecSetup } from "../lib/aztec-setup.js";
+
+// Wormhole Core contract address on Aztec testnet (must match deployment)
+const WORMHOLE_ADDRESS = "0x2b13cff4daef709134419f1506ccae28956e02102a5ef5f2d0077e4991a9f493";
+
+// Maximum value for 248 bits (31 bytes) - required for Wormhole payload encoding
+const MAX_248_BITS = (1n << 248n) - 1n;
+
+/**
+ * Generates a random Fr value that fits in 31 bytes (248 bits).
+ * This is required because Wormhole payload encoding uses to_le_bytes::<31>()
+ * which only supports values up to 248 bits.
+ */
+function generateRandom248BitFr(): Fr {
+  const random = Fr.random();
+  const randomBigInt = random.toBigInt();
+  // Mask to 248 bits (clear the top 8 bits)
+  const masked = randomBigInt & MAX_248_BITS;
+  return new Fr(masked);
+}
+
+async function main(): Promise<void> {
+  console.log("🎲 Starting Place Bet Script...\n");
+
+  // Initialize Aztec setup (Node → PXE → Wallet)
+  await aztecSetup.initialize();
+  const network = aztecSetup.getNetwork();
+  console.log(`Network: ${network.toUpperCase()}\n`);
+
+  // Get or create accounts
+  const deployerAddress = await aztecSetup.getOrCreateAccount("deployer");
+  const executorAddress = await aztecSetup.getOrCreateAccount("executor");
+
+  // Get wallet instance
+  const wallet = aztecSetup.getWallet();
+
+  console.log("✅ Deployer address:", deployerAddress.toString());
+  console.log("✅ Executor address:", executorAddress.toString());
+
+  const tokenAddress = aztecSetup.loadContractAddress("token");
+  if (!tokenAddress) {
+    console.error("No token address found. Run 'npm run deploy:token' first.");
+    process.exit(1);
+  }
+  console.log("Token address:", tokenAddress);
+
+  const vaultAddress = aztecSetup.loadContractAddress("vault");
+  if (!vaultAddress) {
+    console.error("No vault address found. Run 'npm run deploy:vault' first.");
+    process.exit(1);
+  }
+  console.log("Vault address:", vaultAddress);
+
+  console.log("\n📝 Registering contracts with wallet...");
+  const tokenAddr = AztecAddress.fromString(tokenAddress);
+  const vaultAddr = AztecAddress.fromString(vaultAddress);
+  const wormholeAddr = AztecAddress.fromString(WORMHOLE_ADDRESS);
+
+  await aztecSetup.registerContract(tokenAddr, TokenContract.artifact);
+  await aztecSetup.registerContract(vaultAddr, BetVaultContract.artifact);
+  await aztecSetup.registerContract(wormholeAddr, WormholeContract.artifact);
+  console.log("✅ Registered Token, BetVault, and Wormhole contracts");
+
+  const token = await TokenContract.at(tokenAddr, wallet);
+  const vault = await BetVaultContract.at(vaultAddr, wallet);
+
+  // Use 248-bit values for marketId and betId (required for Wormhole payload encoding)
+  // The marketId should match the one created on EVM side
+  const marketId = Fr.fromString("0x0071ca334e309a6b0bcff8655c043fa6b5fc00972c29f315e249abaff425cde4"); // Replace with actual market ID from EVM
+  const outcome = 1n; // 1 = YES, 0 = NO
+  const amount = 10n * 10n ** 18n; // 10 tokens
+  const commitment = generateRandom248BitFr(); // 248-bit for potential cross-chain use
+  const betId = generateRandom248BitFr(); // Must be 248-bit for Wormhole encoding
+  const authwitNonce = Fr.random(); // This one doesn't go cross-chain, can be full 254-bit
+
+  console.log("\nBet Parameters:");
+  console.log("  Market ID:  ", marketId.toString());
+  console.log("  Outcome:    ", outcome === 1n ? "YES" : "NO");
+  console.log("  Amount:     ", amount.toString());
+  console.log("  Commitment: ", commitment.toString());
+  console.log("  Bet ID:     ", betId.toString());
+
+  console.log("\n🔍 Checking if bet is already processed...");
+  const isProcessedBefore = await vault.methods
+    .is_processed(betId)
+    .simulate({ from: executorAddress });
+
+  console.log("  Processed before:", isProcessedBefore);
+
+  if (isProcessedBefore) {
+    console.error("❌ Bet ID already processed. Use a different betId or generate a random one.");
+    process.exit(1);
+  }
+
+  console.log("\n💰 Checking token balance before bet...");
+  const balanceBefore = await token.methods
+    .balance_of_private(executorAddress)
+    .simulate({ from: executorAddress });
+  console.log("  Balance before: ", balanceBefore.toString());
+
+  if (balanceBefore < amount) {
+    console.error("❌ Insufficient balance. Need:", amount.toString(), "Have:", balanceBefore.toString());
+    console.error("   Run 'npm run mint:tokens' first to mint tokens.");
+    process.exit(1);
+  }
+
+  console.log("\n🔐 Creating authorization witness for token transfer...");
+  const transferAction = token.methods.transfer_private_to_private(
+    executorAddress,
+    deployerAddress,
+    amount,
+    authwitNonce,
+  );
+
+  // Create auth witness - using the correct pattern for TestWallet
+  // The wallet needs the executor to be the one creating the authwit
+  const witness = await wallet.createAuthWit(
+    executorAddress,  // The account that owns the tokens
+    {
+      caller: vaultAddr,  // The contract that will call the transfer
+      action: transferAction,
+    }
+  );
+  console.log("✅ Authorization witness created");
+
+  console.log("\n🎲 Placing bet...");
+
+  // Get sponsored payment method for fee payment
+  const sponsoredPaymentMethod = await aztecSetup.getSponsoredPaymentMethod();
+
+  // Send with fee payment method to avoid "Insufficient fee payer balance"
+  const betTx = await vault.methods
+    .bet(
+      marketId,
+      outcome,
+      amount,
+      commitment,
+      betId,
+      authwitNonce,
+      executorAddress,
+    )
+    .send({
+      from: executorAddress,
+      authWitnesses: [witness],
+      ...(sponsoredPaymentMethod ? { fee: { paymentMethod: sponsoredPaymentMethod } } : {})
+    });
+
+  console.log("   Bet transaction sent, waiting for confirmation...");
+  console.log("   (This may take several minutes on testnet)");
+
+  // Wait for transaction
+  const receipt = await betTx.wait({ timeout: 60 * 60 * 12 });
+
+  console.log("✅ Bet placed successfully!");
+  console.log("   Transaction hash:", receipt.txHash.toString());
+
+  // Check if bet is now processed
+  console.log("\n🔍 Checking if bet is now processed...");
+  const isProcessedAfter = await vault.methods
+    .is_processed(betId)
+    .simulate({ from: executorAddress });
+
+  console.log("  Processed after: ", isProcessedAfter);
+
+  if (!isProcessedAfter) {
+    console.warn("⚠️  Warning: Bet was not marked as processed!");
+  }
+
+  console.log("\n💰 Checking token balance after bet...");
+  const balanceAfter = await token.methods
+    .balance_of_private(executorAddress)
+    .simulate({ from: executorAddress });
+  console.log("  Balance after:  ", balanceAfter.toString());
+
+  const spent = balanceBefore - balanceAfter;
+  console.log("  Amount spent:   ", spent.toString());
+
+  console.log("\n=== BET SUMMARY ===");
+  console.log("  Network:          ", network);
+  console.log("  Token:            ", tokenAddress);
+  console.log("  Vault:            ", vaultAddress);
+  console.log("  Bettor:           ", executorAddress.toString());
+  console.log("  Market ID:        ", marketId.toString());
+  console.log("  Outcome:          ", outcome === 1n ? "YES" : "NO");
+  console.log("  Amount:           ", amount.toString());
+  console.log("  Bet ID:           ", betId.toString());
+  console.log("  Processed Before: ", isProcessedBefore);
+  console.log("  Processed After:  ", isProcessedAfter);
+  console.log("  Balance Before:   ", balanceBefore.toString());
+  console.log("  Balance After:    ", balanceAfter.toString());
+  console.log("  Amount Spent:     ", spent.toString());
+  console.log("===================");
+}
+
+main().catch((err) => {
+  console.error("❌ Error placing bet:", err);
+  process.exit(1);
+});

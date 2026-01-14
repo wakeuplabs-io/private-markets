@@ -1,5 +1,5 @@
 {
-  "name": "zkpassport-sdk-example",
+  "name": "private-markets-frontend",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -10,16 +10,27 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@aztec/accounts": "0.87.2",
-    "@aztec/aztec.js": "0.87.2",
-    "@aztec/noir-contracts.js": "0.87.2",
-    "@zkpassport/sdk": "0.5.0",
-    "@zkpassport/utils": "^0.13.1",
+    "@aztec/accounts": "3.0.0-devnet.5",
+    "@aztec/aztec.js": "3.0.0-devnet.5",
+    "@aztec/constants": "3.0.0-devnet.5",
+    "@aztec/foundation": "3.0.0-devnet.5",
+    "@aztec/kv-store": "3.0.0-devnet.5",
+    "@aztec/noir-contracts.js": "3.0.0-devnet.5",
+    "@aztec/pxe": "3.0.0-devnet.5",
+    "@aztec/stdlib": "3.0.0-devnet.5",
+    "@aztec/test-wallet": "3.0.0-devnet.5",
+    "@tanstack/react-query": "^5.62.0",
+    "clsx": "^2.1.1",
+    "ethers": "^6.15.0",
+    "lucide-react": "^0.546.0",
     "next": "15.1.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-qr-code": "^2.0.15",
-    "viem": "^2.27.0"
+    "swr": "^2.3.6",
+    "tailwind-merge": "^3.3.1",
+    "viem": "^2.27.0",
+    "wagmi": "^2.17.2"
   },
   "devDependencies": {
     "@types/node": "^20",

@@ -1,0 +1,49 @@
+{
+  "name": "@private-markets/avm",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "compile": "aztec-nargo compile",
+    "postprocess": "aztec-postprocess-contract",
+    "codegen": "aztec codegen target --outdir artifacts --force",
+    "build": "npm run compile && npm run postprocess && cp wormhole_target/wormhole_contracts-Wormhole.json target/ && npm run codegen",
+    "deploy:token": "node --import tsx/esm scripts/deploy/01-deploy-token.ts",
+    "deploy:vault": "node --import tsx/esm scripts/deploy/02-deploy-vault.ts",
+    "deploy:all": "npm run deploy:token && npm run deploy:vault",
+    "sandbox:deploy:token": "NODE_URL=http://localhost:8080 npm run deploy:token",
+    "sandbox:deploy:vault": "NODE_URL=http://localhost:8080 npm run deploy:vault",
+    "sandbox:deploy:all": "NODE_URL=http://localhost:8080 npm run deploy:all",
+    "interact:mint": "node --import tsx/esm scripts/interact/mint-tokens.ts",
+    "interact:bet": "node --import tsx/esm scripts/interact/place-bet.ts",
+    "interact:check": "node --import tsx/esm scripts/interact/check-accounts.ts",
+    "sandbox:interact:mint": "NODE_URL=http://localhost:8080 npm run interact:mint",
+    "sandbox:interact:bet": "NODE_URL=http://localhost:8080 npm run interact:bet",
+    "sandbox:interact:check": "NODE_URL=http://localhost:8080 npm run interact:check",
+    "export:account": "node --import tsx/esm scripts/interact/export-account.ts",
+    "sandbox:export:account": "AZTEC_NETWORK=sandbox npm run export:account",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch"
+  },
+  "dependencies": {
+    "@aztec/accounts": "3.0.0-devnet.5",
+    "@aztec/aztec.js": "3.0.0-devnet.5",
+    "@aztec/constants": "3.0.0-devnet.5",
+    "@aztec/foundation": "3.0.0-devnet.5",
+    "@aztec/kv-store": "3.0.0-devnet.5",
+    "@aztec/noir-contracts.js": "3.0.0-devnet.5",
+    "@aztec/protocol-contracts": "3.0.0-devnet.5",
+    "@aztec/pxe": "3.0.0-devnet.5",
+    "@aztec/stdlib": "3.0.0-devnet.5",
+    "@aztec/test-wallet": "3.0.0-devnet.5",
+    "dotenv": "^16.6.1"
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.9.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

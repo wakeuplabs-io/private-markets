@@ -1,0 +1,206 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {IntegrationBase} from "./IntegrationBase.sol";
+
+contract WormholeReceiverTest is IntegrationBase {
+    uint256 marketId;
+    uint256 constant TOTAL_POOL = 1000 * 10**18;
+    uint256 constant EXPIRES_AT_OFFSET = 1 days;
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        vm.startPrank(address(wormholeReceiver));
+        mockErc20.mint(address(wormholeReceiver), TOTAL_POOL);
+        mockErc20.approve(address(treasury), TOTAL_POOL);
+        marketId = predictionMarket.createMarket("Test Market", TOTAL_POOL, block.timestamp + EXPIRES_AT_OFFSET);
+        vm.stopPrank();
+    }
+
+    // Scale factor used by WormholeReceiver to restore compressed amounts
+    uint256 constant AMOUNT_SCALE_FACTOR = 65536;
+
+    /**
+     * @dev Computes the expected scaled amount after WormholeReceiver processing.
+     * WormholeReceiver reads compressed amount and multiplies by AMOUNT_SCALE_FACTOR.
+     */
+    function _computeScaledAmount(uint256 value) internal pure returns (uint256) {
+        if (value == 0) return 0;
+
+        uint256 temp = value;
+        uint256 trailingZeroBytes = 0;
+        while (temp > 0 && (temp & 0xFF) == 0) {
+            trailingZeroBytes++;
+            temp >>= 8;
+        }
+
+        uint256 compressed = value >> (trailingZeroBytes * 8);
+        return compressed * AMOUNT_SCALE_FACTOR;
+    }
+
+    // ============================================
+    // BET Message Tests (0x01) - 4 tests
+    // ============================================
+
+    function test_receiveBetMessage_processesCorrectly() public {
+        bytes32 betId = keccak256("bet1");
+        uint256 betAmount = 100 * 10**18;
+        bool outcome = true; // YES
+
+        // Create BET payload using helper (simulates Wormhole Field format)
+        bytes memory payload = createBetPayload(marketId, betId, outcome, betAmount);
+
+        bytes memory encodedVm = createMockVaa(payload);
+        wormholeReceiver.verify(encodedVm);
+
+        // Verify bet was processed (WormholeReceiver scales compressed amounts)
+        uint256 expectedAmount = _computeScaledAmount(betAmount);
+        (, , , uint256 yesTotal, , , , , ) = predictionMarket.getMarket(marketId);
+        assertEq(yesTotal, expectedAmount);
+    }
+
+    function test_receiveBetMessage_updatesMarketTotals() public {
+        // Process YES bet
+        bytes32 bet1Id = keccak256("bet1");
+        uint256 yesAmount = 150 * 10**18;
+        bytes memory payload1 = createBetPayload(marketId, bet1Id, true, yesAmount);
+        wormholeReceiver.verify(createMockVaa(payload1));
+
+        // Process NO bet
+        bytes32 bet2Id = keccak256("bet2");
+        uint256 noAmount = 100 * 10**18;
+        bytes memory payload2 = createBetPayload(marketId, bet2Id, false, noAmount);
+        wormholeReceiver.verify(createMockVaa(payload2));
+
+        // Verify totals updated correctly (WormholeReceiver scales compressed amounts)
+        uint256 expectedYes = _computeScaledAmount(yesAmount);
+        uint256 expectedNo = _computeScaledAmount(noAmount);
+        (, , , uint256 yesTotal, uint256 noTotal, , , , ) = predictionMarket.getMarket(marketId);
+        assertEq(yesTotal, expectedYes);
+        assertEq(noTotal, expectedNo);
+    }
+
+    function test_receiveBetMessage_revertsIfUnregisteredSender() public {
+        bytes32 betId = keccak256("bet1");
+        bytes memory payload = createBetPayload(marketId, betId, true, 100 * 10**18);
+
+        bytes32 unregisteredEmitter = bytes32(uint256(0x9999));
+        vm.prank(address(owner));
+        wormholeReceiver.setRegisteredSender(AZTEC_CHAIN_ID, unregisteredEmitter);
+
+        bytes memory encodedVm = createMockVaa(payload);
+
+        vm.expectRevert("Invalid emitter: source not recognized");
+        wormholeReceiver.verify(encodedVm);
+    }
+
+    function test_receiveBetMessage_revertsIfDuplicateVAA() public {
+        bytes32 betId = keccak256("bet1");
+        bytes memory payload = createBetPayload(marketId, betId, true, 100 * 10**18);
+
+        bytes memory encodedVm = createMockVaa(payload);
+
+        // First call - should succeed
+        wormholeReceiver.verify(encodedVm);
+
+        // Second call with same VAA - should revert
+        vm.expectRevert();
+        wormholeReceiver.verify(encodedVm); // DUPLICATE
+    }
+
+    // ============================================
+    // CLAIM_AUTH Message Tests (0x02) - 3 tests
+    // ============================================
+
+    function test_receiveClaimMessage_processesCorrectly() public {
+        // Setup: Process bets and resolve market
+        bytes32 bet1Id = keccak256("bet1");
+        uint256 betAmount = 150 * 10**18;
+        bytes memory betPayload = createBetPayload(marketId, bet1Id, true, betAmount);
+        wormholeReceiver.verify(createMockVaa(betPayload));
+
+        // Warp and resolve
+        vm.warp(block.timestamp + EXPIRES_AT_OFFSET + 1);
+        vm.prank(address(wormholeReceiver));
+        predictionMarket.resolveMarket(marketId, true); // YES wins
+
+        // Now process CLAIM_AUTH message
+        bytes32 nullifier = keccak256("nullifier1");
+        address recipient = user1;
+
+        bytes memory claimPayload = createClaimPayload(marketId, nullifier, betAmount, recipient);
+
+        uint256 balanceBefore = mockErc20.balanceOf(recipient);
+
+        wormholeReceiver.verify(createMockVaa(claimPayload));
+
+        // Verify payout transferred
+        uint256 balanceAfter = mockErc20.balanceOf(recipient);
+        assertGt(balanceAfter, balanceBefore); // Should receive payout
+    }
+
+    function test_receiveClaimMessage_transfersUSDC() public {
+        // Setup: Process 2 bets
+        // Bet 1: 150 YES
+        uint256 yesBet = 150 * 10**18;
+        bytes memory bet1Payload = createBetPayload(marketId, keccak256("bet1"), true, yesBet);
+        wormholeReceiver.verify(createMockVaa(bet1Payload));
+
+        // Bet 2: 100 NO
+        uint256 noBet = 100 * 10**18;
+        bytes memory bet2Payload = createBetPayload(marketId, keccak256("bet2"), false, noBet);
+        wormholeReceiver.verify(createMockVaa(bet2Payload));
+
+        // Resolve: YES wins
+        vm.warp(block.timestamp + EXPIRES_AT_OFFSET + 1);
+        vm.prank(address(wormholeReceiver));
+        predictionMarket.resolveMarket(marketId, true);
+
+        // NEW pari-mutuel formula: winners split totalBetPool (yesTotal + noTotal)
+        // scaledYes = _computeScaledAmount(150e18), scaledNo = _computeScaledAmount(100e18)
+        // totalBetPool = scaledYes + scaledNo
+        // payout = (scaledBetAmount * totalBetPool) / winningTotal
+        uint256 scaledYes = _computeScaledAmount(yesBet);
+        uint256 scaledNo = _computeScaledAmount(noBet);
+        uint256 totalBetPool = scaledYes + scaledNo;
+        uint256 scaledBetAmount = _computeScaledAmount(yesBet);
+        // Formula: (scaledBetAmount * totalBetPool) / scaledYes = totalBetPool (when sole winner)
+        uint256 expectedPayout = (scaledBetAmount * totalBetPool) / scaledYes;
+
+        bytes memory claimPayload = createClaimPayload(marketId, keccak256("nullifier1"), yesBet, user2);
+
+        uint256 balanceBefore = mockErc20.balanceOf(user2);
+
+        wormholeReceiver.verify(createMockVaa(claimPayload));
+
+        uint256 balanceAfter = mockErc20.balanceOf(user2);
+        assertEq(balanceAfter - balanceBefore, expectedPayout);
+    }
+
+    function test_receiveClaimMessage_revertsIfUnregisteredSender() public {
+        bytes memory claimPayload = createClaimPayload(marketId, keccak256("nullifier1"), 150 * 10**18, user1);
+
+        bytes32 unregisteredEmitter = bytes32(uint256(0x8888));
+        vm.prank(address(owner));
+        wormholeReceiver.setRegisteredSender(AZTEC_CHAIN_ID, unregisteredEmitter);
+
+        vm.expectRevert("Invalid emitter: source not recognized");
+        wormholeReceiver.verify(createMockVaa(claimPayload));
+    }
+
+    // ============================================
+    // Registration Test - 1 test
+    // ============================================
+
+    function test_setRegisteredSender_registersAztecEmitter() public {
+        bytes32 newEmitter = bytes32(uint256(0x12345));
+
+        vm.prank(address(owner)); // registrationOwner
+        wormholeReceiver.setRegisteredSender(AZTEC_CHAIN_ID, newEmitter);
+
+        // Verify registration
+        bytes32 registered = wormholeReceiver.registeredSenders(AZTEC_CHAIN_ID);
+        assertEq(registered, newEmitter);
+    }
+}
